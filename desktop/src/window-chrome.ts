@@ -36,7 +36,7 @@ export function platformChrome(platform: NodeJS.Platform | string): PlatformChro
     };
   }
   return {
-    backgroundColor: '#09090b',
+    backgroundColor: '#0a100e',
     // Windows and Linux otherwise carry Electron's stock File/Edit/View menu
     // permanently — none of it does anything this app needs, and it cannot be
     // dismissed (#703). Hidden rather than removed so the menu's clipboard

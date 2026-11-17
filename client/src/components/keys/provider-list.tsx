@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type CSSProperties } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { apiFetch } from '@/lib/api'
 import { Button, buttonVariants } from '@/components/ui/button'
@@ -486,7 +486,7 @@ export function ProviderList({ onAddKey }: { onAddKey: () => void }) {
             // visible, so the rest of the selection can be built without hunting.
             const groupHasSelection = group.keys.some(k => selectedKeyIds.has(k.id))
             return (
-              <div key={group.value}>
+              <div key={group.value} className="ox-enter" style={{ '--ox-i': Math.min(i, 6) } as CSSProperties}>
                 {sectionStart && (
                   <div className={`pb-2 ${i === 0 ? '' : 'pt-4'}`}>
                     <h2 className="text-[11px] font-medium uppercase tracking-wide text-muted-foreground">

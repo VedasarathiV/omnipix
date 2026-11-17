@@ -868,7 +868,9 @@
     "sortHint": "A rendezés a betöltött {count} sorra vonatkozik",
     "cacheHitRate": "Gyorsítótár-találati arány",
     "cacheSavedTokens": "{tokens} token megtakarítva",
-    "cacheHitRateHint": "{hits} találat és {misses} tévesztés a szerver indítása óta · {requests} szolgáltatóhívás megspórolva"
+    "cacheHitRateHint": "{hits} találat és {misses} tévesztés a szerver indítása óta · {requests} szolgáltatóhívás megspórolva",
+    "emptyHint": "Nothing to chart yet. Send your first request and volume, latency, tokens, and savings appear here.",
+    "emptyHintAction": "Open the Playground"
   },
   "logs": {
     "title": "Napló",

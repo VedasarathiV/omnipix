@@ -868,7 +868,9 @@
     "sortHint": "Ang pag-aayos ay para lamang sa {count} na-load na row",
     "cacheHitRate": "Cache hit rate",
     "cacheSavedTokens": "{tokens} token ang natipid",
-    "cacheHitRateHint": "{hits} hit laban sa {misses} miss mula nang magsimula ang server · {requests} tawag sa provider ang naiwasan"
+    "cacheHitRateHint": "{hits} hit laban sa {misses} miss mula nang magsimula ang server · {requests} tawag sa provider ang naiwasan",
+    "emptyHint": "Nothing to chart yet. Send your first request and volume, latency, tokens, and savings appear here.",
+    "emptyHintAction": "Open the Playground"
   },
   "logs": {
     "title": "Mga Log",

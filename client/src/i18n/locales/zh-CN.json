@@ -868,7 +868,9 @@
     "sortHint": "排序仅作用于已加载的 {count} 行",
     "cacheHitRate": "缓存命中率",
     "cacheSavedTokens": "已节省 {tokens} 词元",
-    "cacheHitRateHint": "自服务器启动以来命中 {hits} 次、未命中 {misses} 次 · 省下 {requests} 次提供方调用"
+    "cacheHitRateHint": "自服务器启动以来命中 {hits} 次、未命中 {misses} 次 · 省下 {requests} 次提供方调用",
+    "emptyHint": "Nothing to chart yet. Send your first request and volume, latency, tokens, and savings appear here.",
+    "emptyHintAction": "Open the Playground"
   },
   "logs": {
     "title": "日志",

@@ -868,7 +868,9 @@
     "sortHint": "Η ταξινόμηση ισχύει για τις {count} φορτωμένες γραμμές",
     "cacheHitRate": "Ποσοστό ευστοχίας cache",
     "cacheSavedTokens": "Εξοικονομήθηκαν {tokens} tokens",
-    "cacheHitRateHint": "{hits} ευστοχίες έναντι {misses} αστοχιών από την εκκίνηση του διακομιστή · αποφεύχθηκαν {requests} κλήσεις παρόχου"
+    "cacheHitRateHint": "{hits} ευστοχίες έναντι {misses} αστοχιών από την εκκίνηση του διακομιστή · αποφεύχθηκαν {requests} κλήσεις παρόχου",
+    "emptyHint": "Nothing to chart yet. Send your first request and volume, latency, tokens, and savings appear here.",
+    "emptyHintAction": "Open the Playground"
   },
   "logs": {
     "title": "Καταγραφές",

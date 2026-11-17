@@ -868,7 +868,9 @@
     "sortHint": "Die Sortierung gilt für die {count} geladenen Zeilen",
     "cacheHitRate": "Cache-Trefferquote",
     "cacheSavedTokens": "{tokens} Tokens gespart",
-    "cacheHitRateHint": "{hits} Treffer gegenüber {misses} Fehlschlägen seit dem Serverstart · {requests} Anbieteraufrufe vermieden"
+    "cacheHitRateHint": "{hits} Treffer gegenüber {misses} Fehlschlägen seit dem Serverstart · {requests} Anbieteraufrufe vermieden",
+    "emptyHint": "Nothing to chart yet. Send your first request and volume, latency, tokens, and savings appear here.",
+    "emptyHintAction": "Open the Playground"
   },
   "logs": {
     "title": "Protokoll",

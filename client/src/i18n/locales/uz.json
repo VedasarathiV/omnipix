@@ -868,7 +868,9 @@
     "sortHint": "Saralash faqat yuklangan {count} ta qatorga qo‘llanadi",
     "cacheHitRate": "Kesh muvaffaqiyat darajasi",
     "cacheSavedTokens": "{tokens} token tejaldi",
-    "cacheHitRateHint": "Server ishga tushganidan beri {hits} muvaffaqiyat, {misses} o‘tkazib yuborish · {requests} ta provayder so‘rovi tejaldi"
+    "cacheHitRateHint": "Server ishga tushganidan beri {hits} muvaffaqiyat, {misses} o‘tkazib yuborish · {requests} ta provayder so‘rovi tejaldi",
+    "emptyHint": "Nothing to chart yet. Send your first request and volume, latency, tokens, and savings appear here.",
+    "emptyHintAction": "Open the Playground"
   },
   "logs": {
     "title": "Jurnal",

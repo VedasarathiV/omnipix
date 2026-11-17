@@ -868,7 +868,9 @@
     "sortHint": "המיון חל על {count} השורות שנטענו בלבד",
     "cacheHitRate": "שיעור פגיעות במטמון",
     "cacheSavedTokens": "נחסכו {tokens} טוקנים",
-    "cacheHitRateHint": "{hits} פגיעות מול {misses} החטאות מאז הפעלת השרת · נחסכו {requests} קריאות לספק"
+    "cacheHitRateHint": "{hits} פגיעות מול {misses} החטאות מאז הפעלת השרת · נחסכו {requests} קריאות לספק",
+    "emptyHint": "Nothing to chart yet. Send your first request and volume, latency, tokens, and savings appear here.",
+    "emptyHintAction": "Open the Playground"
   },
   "logs": {
     "title": "יומן",

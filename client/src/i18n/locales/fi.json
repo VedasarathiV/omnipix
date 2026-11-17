@@ -868,7 +868,9 @@
     "sortHint": "Lajittelu koskee vain ladattuja {count} riviä",
     "cacheHitRate": "Välimuistin osumaprosentti",
     "cacheSavedTokens": "{tokens} tokenia säästetty",
-    "cacheHitRateHint": "{hits} osumaa vs. {misses} ohitusta palvelimen käynnistyksestä · {requests} palveluntarjoajan kutsua vältetty"
+    "cacheHitRateHint": "{hits} osumaa vs. {misses} ohitusta palvelimen käynnistyksestä · {requests} palveluntarjoajan kutsua vältetty",
+    "emptyHint": "Nothing to chart yet. Send your first request and volume, latency, tokens, and savings appear here.",
+    "emptyHintAction": "Open the Playground"
   },
   "logs": {
     "title": "Lokit",

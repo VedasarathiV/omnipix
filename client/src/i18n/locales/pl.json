@@ -868,7 +868,9 @@
     "sortHint": "Sortowanie dotyczy {count} załadowanych wierszy",
     "cacheHitRate": "Współczynnik trafień pamięci podręcznej",
     "cacheSavedTokens": "Zaoszczędzono {tokens} tokenów",
-    "cacheHitRateHint": "{hits} trafień wobec {misses} chybień od startu serwera · uniknięto {requests} wywołań dostawcy"
+    "cacheHitRateHint": "{hits} trafień wobec {misses} chybień od startu serwera · uniknięto {requests} wywołań dostawcy",
+    "emptyHint": "Nothing to chart yet. Send your first request and volume, latency, tokens, and savings appear here.",
+    "emptyHintAction": "Open the Playground"
   },
   "logs": {
     "title": "Logi",

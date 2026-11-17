@@ -868,7 +868,9 @@
     "sortHint": "Ìṣètò kan àwọn ìlà {count} tí a ti gbé sókè nìkan",
     "cacheHitRate": "Ìwọ̀n àṣeyọrí kaṣe",
     "cacheSavedTokens": "A ṣàfipamọ́ token {tokens}",
-    "cacheHitRateHint": "{hits} àṣeyọrí sí {misses} àìní láti ìgbà tí sáfà bẹ̀rẹ̀ · {requests} ìpè olùpèsè ni a yẹ̀ sílẹ̀"
+    "cacheHitRateHint": "{hits} àṣeyọrí sí {misses} àìní láti ìgbà tí sáfà bẹ̀rẹ̀ · {requests} ìpè olùpèsè ni a yẹ̀ sílẹ̀",
+    "emptyHint": "Nothing to chart yet. Send your first request and volume, latency, tokens, and savings appear here.",
+    "emptyHintAction": "Open the Playground"
   },
   "logs": {
     "title": "Àkọọlẹ",

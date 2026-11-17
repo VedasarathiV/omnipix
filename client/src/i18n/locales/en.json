@@ -907,7 +907,9 @@
     "sortHint": "Sorting applies to the {count} loaded rows",
     "cacheHitRate": "Cache hit rate",
     "cacheSavedTokens": "{tokens} tokens saved",
-    "cacheHitRateHint": "{hits} hits vs {misses} misses since the server started · {requests} provider calls avoided"
+    "cacheHitRateHint": "{hits} hits vs {misses} misses since the server started · {requests} provider calls avoided",
+    "emptyHint": "Nothing to chart yet. Send your first request and volume, latency, tokens, and savings appear here.",
+    "emptyHintAction": "Open the Playground"
   },
   "logs": {
     "title": "Logs",
@@ -1249,7 +1251,7 @@
   },
   "chains": {
     "title": "Fallback chains",
-    "description": "Named chains, each callable as auto:<name> in /v1/models.",
+    "description": "Named model lists. Use one as a model: send \"model\": \"auto:coding\" to route through the coding chain.",
     "count": "{count} chains",
     "active": "Active",
     "default": "Default",

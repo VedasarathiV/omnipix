@@ -868,7 +868,9 @@
     "sortHint": "Pengisihan hanya digunakan pada {count} baris yang dimuatkan",
     "cacheHitRate": "Kadar hit cache",
     "cacheSavedTokens": "{tokens} token dijimatkan",
-    "cacheHitRateHint": "{hits} hit berbanding {misses} miss sejak pelayan dimulakan · {requests} panggilan pembekal dielakkan"
+    "cacheHitRateHint": "{hits} hit berbanding {misses} miss sejak pelayan dimulakan · {requests} panggilan pembekal dielakkan",
+    "emptyHint": "Nothing to chart yet. Send your first request and volume, latency, tokens, and savings appear here.",
+    "emptyHintAction": "Open the Playground"
   },
   "logs": {
     "title": "Log",

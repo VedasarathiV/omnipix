@@ -868,7 +868,9 @@
     "sortHint": "Сортирање важи за {count} учитаних редова",
     "cacheHitRate": "Стопа погодака кеша",
     "cacheSavedTokens": "Уштеђено {tokens} токена",
-    "cacheHitRateHint": "{hits} погодака наспрам {misses} промашаја од покретања сервера · избегнуто {requests} позива провајдеру"
+    "cacheHitRateHint": "{hits} погодака наспрам {misses} промашаја од покретања сервера · избегнуто {requests} позива провајдеру",
+    "emptyHint": "Nothing to chart yet. Send your first request and volume, latency, tokens, and savings appear here.",
+    "emptyHintAction": "Open the Playground"
   },
   "logs": {
     "title": "Логови",

@@ -868,7 +868,9 @@
     "sortHint": "Sıralama yalnız yüklənmiş {count} sətrə tətbiq olunur",
     "cacheHitRate": "Keş uğur nisbəti",
     "cacheSavedTokens": "{tokens} token qənaət edildi",
-    "cacheHitRateHint": "Server başladığından bəri {hits} uğur, {misses} uğursuzluq · {requests} provayder sorğusundan qaçınıldı"
+    "cacheHitRateHint": "Server başladığından bəri {hits} uğur, {misses} uğursuzluq · {requests} provayder sorğusundan qaçınıldı",
+    "emptyHint": "Nothing to chart yet. Send your first request and volume, latency, tokens, and savings appear here.",
+    "emptyHintAction": "Open the Playground"
   },
   "logs": {
     "title": "Loglar",

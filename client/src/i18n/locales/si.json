@@ -868,7 +868,9 @@
     "sortHint": "පෙළගැස්වීම පූරණය කළ පේළි {count} ට පමණක් අදාළ වේ",
     "cacheHitRate": "හැඹිලි පහර අනුපාතය",
     "cacheSavedTokens": "ටෝකන {tokens}ක් ඉතිරි විය",
-    "cacheHitRateHint": "සේවාදායකය ආරම්භ වූ දා සිට පහරවල් {hits}ක්, මගහැරීම් {misses}ක් · සැපයුම්කරු ඇමතුම් {requests}ක් වළක්වා ගැනිණි"
+    "cacheHitRateHint": "සේවාදායකය ආරම්භ වූ දා සිට පහරවල් {hits}ක්, මගහැරීම් {misses}ක් · සැපයුම්කරු ඇමතුම් {requests}ක් වළක්වා ගැනිණි",
+    "emptyHint": "Nothing to chart yet. Send your first request and volume, latency, tokens, and savings appear here.",
+    "emptyHintAction": "Open the Playground"
   },
   "logs": {
     "title": "ලොග",

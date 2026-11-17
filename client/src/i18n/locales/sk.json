@@ -868,7 +868,9 @@
     "sortHint": "Zoradenie sa vzťahuje na {count} načítaných riadkov",
     "cacheHitRate": "Úspešnosť vyrovnávacej pamäte",
     "cacheSavedTokens": "Ušetrených {tokens} tokenov",
-    "cacheHitRateHint": "{hits} zásahov oproti {misses} minutiam od spustenia servera · ušetrených {requests} volaní poskytovateľa"
+    "cacheHitRateHint": "{hits} zásahov oproti {misses} minutiam od spustenia servera · ušetrených {requests} volaní poskytovateľa",
+    "emptyHint": "Nothing to chart yet. Send your first request and volume, latency, tokens, and savings appear here.",
+    "emptyHintAction": "Open the Playground"
   },
   "logs": {
     "title": "Logy",

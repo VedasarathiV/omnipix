@@ -868,7 +868,9 @@
     "sortHint": "De sortering geldt voor de {count} geladen rijen",
     "cacheHitRate": "Cache-hitratio",
     "cacheSavedTokens": "{tokens} tokens bespaard",
-    "cacheHitRateHint": "{hits} hits tegenover {misses} missers sinds de serverstart · {requests} provideraanroepen vermeden"
+    "cacheHitRateHint": "{hits} hits tegenover {misses} missers sinds de serverstart · {requests} provideraanroepen vermeden",
+    "emptyHint": "Nothing to chart yet. Send your first request and volume, latency, tokens, and savings appear here.",
+    "emptyHintAction": "Open the Playground"
   },
   "logs": {
     "title": "Logs",

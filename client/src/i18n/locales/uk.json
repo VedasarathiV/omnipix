@@ -868,7 +868,9 @@
     "sortHint": "Сортування застосовується до {count} завантажених рядків",
     "cacheHitRate": "Частка влучань у кеш",
     "cacheSavedTokens": "Заощаджено {tokens} токенів",
-    "cacheHitRateHint": "{hits} влучань проти {misses} промахів від запуску сервера · уникнено {requests} викликів до постачальника"
+    "cacheHitRateHint": "{hits} влучань проти {misses} промахів від запуску сервера · уникнено {requests} викликів до постачальника",
+    "emptyHint": "Nothing to chart yet. Send your first request and volume, latency, tokens, and savings appear here.",
+    "emptyHintAction": "Open the Playground"
   },
   "logs": {
     "title": "Журнал",

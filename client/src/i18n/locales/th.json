@@ -868,7 +868,9 @@
     "sortHint": "การเรียงลำดับใช้กับ {count} แถวที่โหลดแล้วเท่านั้น",
     "cacheHitRate": "อัตราการเข้าถึงแคช",
     "cacheSavedTokens": "ประหยัด {tokens} โทเค็น",
-    "cacheHitRateHint": "{hits} ครั้งที่พบ เทียบกับ {misses} ครั้งที่ไม่พบ นับตั้งแต่เซิร์ฟเวอร์เริ่มทำงาน · เลี่ยงการเรียกผู้ให้บริการ {requests} ครั้ง"
+    "cacheHitRateHint": "{hits} ครั้งที่พบ เทียบกับ {misses} ครั้งที่ไม่พบ นับตั้งแต่เซิร์ฟเวอร์เริ่มทำงาน · เลี่ยงการเรียกผู้ให้บริการ {requests} ครั้ง",
+    "emptyHint": "Nothing to chart yet. Send your first request and volume, latency, tokens, and savings appear here.",
+    "emptyHintAction": "Open the Playground"
   },
   "logs": {
     "title": "บันทึก",

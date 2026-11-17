@@ -868,7 +868,9 @@
     "sortHint": "ગોઠવણી ફક્ત લોડ થયેલી {count} પંક્તિઓ પર લાગુ થાય છે",
     "cacheHitRate": "કૅશ હિટ રેટ",
     "cacheSavedTokens": "{tokens} ટોકન બચ્યા",
-    "cacheHitRateHint": "સર્વર શરૂ થયા પછી {hits} હિટ સામે {misses} મિસ · {requests} પ્રોવાઇડર કૉલ ટાળ્યા"
+    "cacheHitRateHint": "સર્વર શરૂ થયા પછી {hits} હિટ સામે {misses} મિસ · {requests} પ્રોવાઇડર કૉલ ટાળ્યા",
+    "emptyHint": "Nothing to chart yet. Send your first request and volume, latency, tokens, and savings appear here.",
+    "emptyHintAction": "Open the Playground"
   },
   "logs": {
     "title": "લોગ",

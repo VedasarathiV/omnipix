@@ -868,7 +868,9 @@
     "sortHint": "Sortarea se aplică celor {count} rânduri încărcate",
     "cacheHitRate": "Rata de succes a cache-ului",
     "cacheSavedTokens": "{tokens} tokenuri economisite",
-    "cacheHitRateHint": "{hits} accesări reușite față de {misses} ratări de la pornirea serverului · {requests} apeluri către furnizor evitate"
+    "cacheHitRateHint": "{hits} accesări reușite față de {misses} ratări de la pornirea serverului · {requests} apeluri către furnizor evitate",
+    "emptyHint": "Nothing to chart yet. Send your first request and volume, latency, tokens, and savings appear here.",
+    "emptyHintAction": "Open the Playground"
   },
   "logs": {
     "title": "Jurnale",

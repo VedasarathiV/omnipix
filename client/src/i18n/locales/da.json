@@ -868,7 +868,9 @@
     "sortHint": "Sorteringen gælder de {count} indlæste rækker",
     "cacheHitRate": "Cache-hitrate",
     "cacheSavedTokens": "{tokens} tokens sparet",
-    "cacheHitRateHint": "{hits} hits mod {misses} misses siden serveren startede · {requests} udbyderkald undgået"
+    "cacheHitRateHint": "{hits} hits mod {misses} misses siden serveren startede · {requests} udbyderkald undgået",
+    "emptyHint": "Nothing to chart yet. Send your first request and volume, latency, tokens, and savings appear here.",
+    "emptyHintAction": "Open the Playground"
   },
   "logs": {
     "title": "Log",

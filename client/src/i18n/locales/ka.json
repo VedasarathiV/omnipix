@@ -868,7 +868,9 @@
     "sortHint": "დალაგება ვრცელდება მხოლოდ ჩატვირთულ {count} სტრიქონზე",
     "cacheHitRate": "ქეშის მოხვედრის მაჩვენებელი",
     "cacheSavedTokens": "დაზოგილია {tokens} ტოკენი",
-    "cacheHitRateHint": "{hits} მოხვედრა {misses} აცდენის წინააღმდეგ სერვერის გაშვებიდან · თავიდან აცილებულია {requests} მოთხოვნა პროვაიდერთან"
+    "cacheHitRateHint": "{hits} მოხვედრა {misses} აცდენის წინააღმდეგ სერვერის გაშვებიდან · თავიდან აცილებულია {requests} მოთხოვნა პროვაიდერთან",
+    "emptyHint": "Nothing to chart yet. Send your first request and volume, latency, tokens, and savings appear here.",
+    "emptyHintAction": "Open the Playground"
   },
   "logs": {
     "title": "ჟურნალი",

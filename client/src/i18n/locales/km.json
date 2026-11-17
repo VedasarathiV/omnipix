@@ -868,7 +868,9 @@
     "sortHint": "ការតម្រៀបអនុវត្តតែលើជួរ {count} ដែលបានផ្ទុកប៉ុណ្ណោះ",
     "cacheHitRate": "អត្រាជោគជ័យនៃឃ្លាំងសម្ងាត់",
     "cacheSavedTokens": "សន្សំបាន {tokens} តូខឹន",
-    "cacheHitRateHint": "{hits} ជោគជ័យ ធៀបនឹង {misses} បរាជ័យ តាំងពីម៉ាស៊ីនមេចាប់ផ្ដើម · ជៀសវាងការហៅអ្នកផ្ដល់សេវា {requests}"
+    "cacheHitRateHint": "{hits} ជោគជ័យ ធៀបនឹង {misses} បរាជ័យ តាំងពីម៉ាស៊ីនមេចាប់ផ្ដើម · ជៀសវាងការហៅអ្នកផ្ដល់សេវា {requests}",
+    "emptyHint": "Nothing to chart yet. Send your first request and volume, latency, tokens, and savings appear here.",
+    "emptyHintAction": "Open the Playground"
   },
   "logs": {
     "title": "កំណត់ហេតុ",

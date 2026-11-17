@@ -868,7 +868,9 @@
     "sortHint": "Сортировка применяется к {count} загруженным строкам",
     "cacheHitRate": "Доля попаданий в кэш",
     "cacheSavedTokens": "Сэкономлено {tokens} токенов",
-    "cacheHitRateHint": "{hits} попаданий против {misses} промахов с момента запуска сервера · сэкономлено {requests} запросов к провайдеру"
+    "cacheHitRateHint": "{hits} попаданий против {misses} промахов с момента запуска сервера · сэкономлено {requests} запросов к провайдеру",
+    "emptyHint": "Nothing to chart yet. Send your first request and volume, latency, tokens, and savings appear here.",
+    "emptyHintAction": "Open the Playground"
   },
   "logs": {
     "title": "Журнал",

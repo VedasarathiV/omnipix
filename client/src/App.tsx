@@ -128,7 +128,7 @@ function NavItem({ to, children }: { to: string; children: React.ReactNode }) {
       className={({ isActive }) =>
         `relative text-sm px-1 py-4 transition-colors ${
           isActive
-            ? 'text-foreground after:absolute after:inset-x-0 after:-bottom-px after:h-px after:bg-foreground'
+            ? 'text-primary after:absolute after:inset-x-0 after:-bottom-px after:h-0.5 after:rounded-full after:bg-primary'
             : 'text-muted-foreground hover:text-foreground'
         }`
       }
@@ -140,8 +140,14 @@ function NavItem({ to, children }: { to: string; children: React.ReactNode }) {
 
 function Brand() {
   return (
-    <Link to="/" className="flex items-center gap-2 transition-opacity hover:opacity-70">
-      <span className="inline-block size-2 rounded-full bg-foreground" />
+    <Link to="/" className="flex items-center gap-2 transition-opacity hover:opacity-70" aria-label="OmniPix home">
+      <svg width="18" height="18" viewBox="0 0 64 64" aria-hidden="true" className="shrink-0">
+        <rect width="64" height="64" rx="14" fill="var(--primary)" />
+        <circle cx="32" cy="32" r="9.5" fill="var(--primary-foreground)" />
+        <circle cx="32" cy="32" r="18" fill="none" stroke="var(--primary-foreground)" strokeOpacity=".55"
+          strokeWidth="4.5" strokeLinecap="round" strokeDasharray="86 27"
+          transform="rotate(-60 32 32)" />
+      </svg>
       <span className="font-semibold tracking-tight text-sm">OmniPix</span>
     </Link>
   )
@@ -443,8 +449,9 @@ const FULL_BLEED_ROUTES = new Set(['/playground'])
 function PageContainer({ children }: { children: ReactNode }) {
   const location = useLocation()
   const fullBleed = FULL_BLEED_ROUTES.has(location.pathname)
+  // Keyed by route so the enter animation replays on every navigation.
   return (
-    <main className={fullBleed ? 'flex min-h-0 flex-1 flex-col' : 'mx-auto w-full max-w-6xl px-6 py-8'}>
+    <main key={location.pathname} className={(fullBleed ? 'flex min-h-0 flex-1 flex-col' : 'mx-auto w-full max-w-6xl px-6 py-8') + ' ox-enter'}>
       {children}
     </main>
   )

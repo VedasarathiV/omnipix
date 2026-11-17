@@ -868,7 +868,9 @@
     "sortHint": "Tsarawar ta shafi layuka {count} da aka ɗora kawai",
     "cacheHitRate": "Yawan nasarar cache",
     "cacheSavedTokens": "An adana tokens {tokens}",
-    "cacheHitRateHint": "Nasara {hits} kan rashi {misses} tun farawar sabar · an guji kiran mai bayarwa {requests}"
+    "cacheHitRateHint": "Nasara {hits} kan rashi {misses} tun farawar sabar · an guji kiran mai bayarwa {requests}",
+    "emptyHint": "Nothing to chart yet. Send your first request and volume, latency, tokens, and savings appear here.",
+    "emptyHintAction": "Open the Playground"
   },
   "logs": {
     "title": "Logs",

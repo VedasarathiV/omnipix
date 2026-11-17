@@ -868,7 +868,9 @@
     "sortHint": "Sortiranje vrijedi za {count} učitanih redaka",
     "cacheHitRate": "Stopa pogodaka predmemorije",
     "cacheSavedTokens": "Ušteđeno {tokens} tokena",
-    "cacheHitRateHint": "{hits} pogodaka naspram {misses} promašaja od pokretanja poslužitelja · izbjegnuto {requests} poziva pružatelju"
+    "cacheHitRateHint": "{hits} pogodaka naspram {misses} promašaja od pokretanja poslužitelja · izbjegnuto {requests} poziva pružatelju",
+    "emptyHint": "Nothing to chart yet. Send your first request and volume, latency, tokens, and savings appear here.",
+    "emptyHintAction": "Open the Playground"
   },
   "logs": {
     "title": "Logovi",

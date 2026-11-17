@@ -868,7 +868,9 @@
     "sortHint": "Sorteringen gäller de {count} inlästa raderna",
     "cacheHitRate": "Cacheträffkvot",
     "cacheSavedTokens": "{tokens} tokens sparade",
-    "cacheHitRateHint": "{hits} träffar mot {misses} missar sedan servern startade · {requests} leverantörsanrop undvikna"
+    "cacheHitRateHint": "{hits} träffar mot {misses} missar sedan servern startade · {requests} leverantörsanrop undvikna",
+    "emptyHint": "Nothing to chart yet. Send your first request and volume, latency, tokens, and savings appear here.",
+    "emptyHintAction": "Open the Playground"
   },
   "logs": {
     "title": "Loggar",

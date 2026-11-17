@@ -868,7 +868,9 @@
     "sortHint": "ക്രമീകരണം ലോഡ് ചെയ്ത {count} വരികൾക്ക് മാത്രമേ ബാധകമാകൂ",
     "cacheHitRate": "കാഷ് ഹിറ്റ് നിരക്ക്",
     "cacheSavedTokens": "{tokens} ടോക്കണുകൾ ലാഭിച്ചു",
-    "cacheHitRateHint": "സെർവർ ആരംഭിച്ചതിനുശേഷം {hits} ഹിറ്റുകൾ, {misses} മിസ്സുകൾ · {requests} ദാതാവ് കോളുകൾ ഒഴിവാക്കി"
+    "cacheHitRateHint": "സെർവർ ആരംഭിച്ചതിനുശേഷം {hits} ഹിറ്റുകൾ, {misses} മിസ്സുകൾ · {requests} ദാതാവ് കോളുകൾ ഒഴിവാക്കി",
+    "emptyHint": "Nothing to chart yet. Send your first request and volume, latency, tokens, and savings appear here.",
+    "emptyHintAction": "Open the Playground"
   },
   "logs": {
     "title": "ലോഗുകൾ",

@@ -868,7 +868,9 @@
     "sortHint": "يُطبَّق الترتيب على الصفوف المحمَّلة البالغ عددها {count}",
     "cacheHitRate": "معدل إصابات التخزين المؤقت",
     "cacheSavedTokens": "تم توفير {tokens} رمز",
-    "cacheHitRateHint": "{hits} إصابة مقابل {misses} إخفاق منذ تشغيل الخادم · تم تفادي {requests} طلب للمزوّد"
+    "cacheHitRateHint": "{hits} إصابة مقابل {misses} إخفاق منذ تشغيل الخادم · تم تفادي {requests} طلب للمزوّد",
+    "emptyHint": "Nothing to chart yet. Send your first request and volume, latency, tokens, and savings appear here.",
+    "emptyHintAction": "Open the Playground"
   },
   "logs": {
     "title": "السجلات",

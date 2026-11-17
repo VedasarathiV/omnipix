@@ -868,7 +868,9 @@
     "sortHint": "Řazení se vztahuje na {count} načtených řádků",
     "cacheHitRate": "Úspěšnost cache",
     "cacheSavedTokens": "Ušetřeno {tokens} tokenů",
-    "cacheHitRateHint": "{hits} zásahů proti {misses} minutím od spuštění serveru · ušetřeno {requests} volání poskytovatele"
+    "cacheHitRateHint": "{hits} zásahů proti {misses} minutím od spuštění serveru · ušetřeno {requests} volání poskytovatele",
+    "emptyHint": "Nothing to chart yet. Send your first request and volume, latency, tokens, and savings appear here.",
+    "emptyHintAction": "Open the Playground"
   },
   "logs": {
     "title": "Logy",

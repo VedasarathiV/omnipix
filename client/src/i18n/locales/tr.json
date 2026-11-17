@@ -868,7 +868,9 @@
     "sortHint": "Sıralama yalnızca yüklenen {count} satıra uygulanır",
     "cacheHitRate": "Önbellek isabet oranı",
     "cacheSavedTokens": "{tokens} token tasarruf edildi",
-    "cacheHitRateHint": "Sunucu başlatıldığından beri {hits} isabet, {misses} ıskalama · {requests} sağlayıcı çağrısından kaçınıldı"
+    "cacheHitRateHint": "Sunucu başlatıldığından beri {hits} isabet, {misses} ıskalama · {requests} sağlayıcı çağrısından kaçınıldı",
+    "emptyHint": "Nothing to chart yet. Send your first request and volume, latency, tokens, and savings appear here.",
+    "emptyHintAction": "Open the Playground"
   },
   "logs": {
     "title": "Günlükler",

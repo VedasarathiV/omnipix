@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type CSSProperties } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { CheckCircle2, ExternalLink, Globe } from 'lucide-react'
 import { apiFetch } from '@/lib/api'
@@ -119,7 +119,7 @@ export default function AgentsPage() {
       </section>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {toolCatalog.map(tool => {
+        {toolCatalog.map((tool, i) => {
           const traffic = seen.get(analyticsIds[tool.id] ?? tool.id)
           const command = `npx omnipix ${tool.command} --url ${origin}`
           const endpoint = tool.baseUrlSupport === 'root' ? origin : `${origin}/v1`
@@ -134,7 +134,8 @@ export default function AgentsPage() {
           const descriptionKey = `agents.descriptions.${tool.id}`
           const description = t(descriptionKey)
           return (
-            <Card key={tool.id} size="sm">
+            // Stagger capped: the full catalog would ripple for over a second.
+            <Card key={tool.id} size="sm" className="ox-enter" style={{ '--ox-i': Math.min(i, 8) } as CSSProperties}>
               <CardHeader>
                 <AgentIcon id={tool.id} name={tool.name} className="mb-1.5" />
                 <CardTitle>{tool.name}</CardTitle>

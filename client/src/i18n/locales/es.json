@@ -868,7 +868,9 @@
     "sortHint": "La ordenación se aplica a las {count} filas cargadas",
     "cacheHitRate": "Tasa de aciertos de caché",
     "cacheSavedTokens": "{tokens} tokens ahorrados",
-    "cacheHitRateHint": "{hits} aciertos frente a {misses} fallos desde el arranque del servidor · {requests} llamadas al proveedor evitadas"
+    "cacheHitRateHint": "{hits} aciertos frente a {misses} fallos desde el arranque del servidor · {requests} llamadas al proveedor evitadas",
+    "emptyHint": "Nothing to chart yet. Send your first request and volume, latency, tokens, and savings appear here.",
+    "emptyHintAction": "Open the Playground"
   },
   "logs": {
     "title": "Registros",

@@ -868,7 +868,9 @@
     "sortHint": "L'ordinamento si applica alle {count} righe caricate",
     "cacheHitRate": "Tasso di hit della cache",
     "cacheSavedTokens": "{tokens} token risparmiati",
-    "cacheHitRateHint": "{hits} hit contro {misses} miss dall'avvio del server · {requests} chiamate al provider evitate"
+    "cacheHitRateHint": "{hits} hit contro {misses} miss dall'avvio del server · {requests} chiamate al provider evitate",
+    "emptyHint": "Nothing to chart yet. Send your first request and volume, latency, tokens, and savings appear here.",
+    "emptyHintAction": "Open the Playground"
   },
   "logs": {
     "title": "Log",

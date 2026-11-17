@@ -64,6 +64,7 @@ export function TokenUsageBar({ data }: { data: TokenUsageData }) {
         {rows.map(m => (
           <div
             key={`${m.platform}:${m.modelId ?? m.displayName}`}
+            className="ox-bar"
             title={`${m.displayName} (${m.platform}): ${formatTokens(m.remainingTokens)} ${t('models.remaining')}, ${formatTokens(m.usedTokens)} ${t('models.used')}`}
             style={{
               width: `${m.widthPct}%`,
@@ -74,7 +75,7 @@ export function TokenUsageBar({ data }: { data: TokenUsageData }) {
         {totalUsed > 0 && (
           <div
             title={`Used: ${formatTokens(totalUsed)}`}
-            className="bg-muted-foreground/30"
+            className="bg-muted-foreground/30 ox-bar"
             style={{ width: `${usedPct}%` }}
           />
         )}

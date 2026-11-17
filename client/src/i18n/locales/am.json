@@ -868,7 +868,9 @@
     "sortHint": "መደርደሩ የሚሠራው በተጫኑት {count} ረድፎች ላይ ብቻ ነው",
     "cacheHitRate": "የመሸጎጫ ግኝት መጠን",
     "cacheSavedTokens": "{tokens} ቶከን ተቆጥቧል",
-    "cacheHitRateHint": "አገልጋዩ ከተጀመረ ወዲህ {hits} ግኝት እና {misses} ስህተት · {requests} የአቅራቢ ጥሪዎች ተስወግደዋል"
+    "cacheHitRateHint": "አገልጋዩ ከተጀመረ ወዲህ {hits} ግኝት እና {misses} ስህተት · {requests} የአቅራቢ ጥሪዎች ተስወግደዋል",
+    "emptyHint": "Nothing to chart yet. Send your first request and volume, latency, tokens, and savings appear here.",
+    "emptyHintAction": "Open the Playground"
   },
   "logs": {
     "title": "መዝገቦች",

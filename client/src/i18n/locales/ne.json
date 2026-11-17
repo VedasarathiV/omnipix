@@ -868,7 +868,9 @@
     "sortHint": "क्रमबद्धता लोड गरिएका {count} पङ्क्तिहरूमा मात्र लागू हुन्छ",
     "cacheHitRate": "क्यास हिट दर",
     "cacheSavedTokens": "{tokens} टोकन बचत",
-    "cacheHitRateHint": "सर्भर सुरु भएदेखि {hits} हिट बनाम {misses} मिस · {requests} प्रदायक कल बचाइयो"
+    "cacheHitRateHint": "सर्भर सुरु भएदेखि {hits} हिट बनाम {misses} मिस · {requests} प्रदायक कल बचाइयो",
+    "emptyHint": "Nothing to chart yet. Send your first request and volume, latency, tokens, and savings appear here.",
+    "emptyHintAction": "Open the Playground"
   },
   "logs": {
     "title": "लग",

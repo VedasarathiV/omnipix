@@ -141,11 +141,11 @@ fs.writeFileSync(path.join(assets, 'trayTemplate.png'), render(16, trayShapes));
 fs.writeFileSync(path.join(assets, 'trayTemplate@2x.png'), render(32, trayShapes));
 
 // ── app icon (1024, HIG grid: art occupies ~824/1024 rounded rect) ────────
-// OmniPix palette: near-black tile, purple routing ring, white dot — matches
-// the #aa3bff accent used by the dashboard icon sprite.
-const BG = [0x08 / 255, 0x06 / 255, 0x0d / 255, 1]; // #08060d
+// OmniPix palette: deep green-black tile, emerald routing ring, white dot —
+// the terminal-forest brand, shared with the dashboard theme and favicon.
+const BG = [0x0a / 255, 0x10 / 255, 0x0e / 255, 1]; // #0a100e
 const FG = [0xfa / 255, 0xfa / 255, 0xfa / 255, 1]; // #fafafa
-const RING = [0xaa / 255, 0x3b / 255, 0xff / 255, 0.85]; // #aa3bff
+const RING = [0x10 / 255, 0xb9 / 255, 0x81 / 255, 0.9]; // #10b981
 const inset = 100 / 1024, rectR = 180 / 1024;
 const appShapes = [
   roundedRect(inset, inset, 1 - inset, 1 - inset, rectR, BG),

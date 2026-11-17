@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
@@ -753,6 +754,20 @@ export default function AnalyticsPage() {
           />
         }
       />
+
+      {/* First-run guidance: bare "No data yet" charts teach nothing. Once a
+          single request lands this whole banner disappears. */}
+      {!summaryLoading && (summary?.totalRequests ?? 0) === 0 && (
+        <div className="ox-enter mb-6 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-3xl border border-primary/25 bg-primary/5 px-5 py-4">
+          <Zap className="size-4 shrink-0 text-primary" aria-hidden="true" />
+          <p className="min-w-0 flex-1 text-sm text-muted-foreground">
+            {t('analytics.emptyHint')}{' '}
+            <Link to="/playground" className="font-medium text-primary underline-offset-4 hover:underline">
+              {t('analytics.emptyHintAction')}
+            </Link>
+          </p>
+        </div>
+      )}
 
       <div className="space-y-6">
         {/* Summary stats */}

@@ -868,7 +868,9 @@
     "sortHint": "ترتیب صرف لوڈ شدہ {count} قطاروں پر لاگو ہوتی ہے",
     "cacheHitRate": "کیش ہٹ ریٹ",
     "cacheSavedTokens": "{tokens} ٹوکن بچائے گئے",
-    "cacheHitRateHint": "سرور شروع ہونے کے بعد سے {hits} ہٹ بمقابلہ {misses} مِس · {requests} فراہم کنندہ کالز سے بچت"
+    "cacheHitRateHint": "سرور شروع ہونے کے بعد سے {hits} ہٹ بمقابلہ {misses} مِس · {requests} فراہم کنندہ کالز سے بچت",
+    "emptyHint": "Nothing to chart yet. Send your first request and volume, latency, tokens, and savings appear here.",
+    "emptyHintAction": "Open the Playground"
   },
   "logs": {
     "title": "لاگز",
