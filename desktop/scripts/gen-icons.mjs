@@ -141,13 +141,15 @@ fs.writeFileSync(path.join(assets, 'trayTemplate.png'), render(16, trayShapes));
 fs.writeFileSync(path.join(assets, 'trayTemplate@2x.png'), render(32, trayShapes));
 
 // ── app icon (1024, HIG grid: art occupies ~824/1024 rounded rect) ────────
-const BG = [0x09 / 255, 0x09 / 255, 0x0b / 255, 1]; // #09090b
+// OmniPix palette: near-black tile, purple routing ring, white dot — matches
+// the #aa3bff accent used by the dashboard icon sprite.
+const BG = [0x08 / 255, 0x06 / 255, 0x0d / 255, 1]; // #08060d
 const FG = [0xfa / 255, 0xfa / 255, 0xfa / 255, 1]; // #fafafa
-const FG40 = [0xfa / 255, 0xfa / 255, 0xfa / 255, 0.4];
+const RING = [0xaa / 255, 0x3b / 255, 0xff / 255, 0.85]; // #aa3bff
 const inset = 100 / 1024, rectR = 180 / 1024;
 const appShapes = [
   roundedRect(inset, inset, 1 - inset, 1 - inset, rectR, BG),
-  ring(0.5, 0.5, 232 / 1024, 45 / 1024, 45, 80, FG40),
+  ring(0.5, 0.5, 232 / 1024, 45 / 1024, 45, 80, RING),
   circle(0.5, 0.5, 122 / 1024, FG),
 ];
 fs.writeFileSync(path.join(assets, 'appicon_1024.png'), render(1024, appShapes));
