@@ -43,6 +43,7 @@ export const PLATFORMS: { value: Platform; label: string; url: string; keyless?:
   { value: 'onomeo', label: 'onomeo (30 free calls / 5 hours, shared)', url: 'https://onomeo.com/dashboard' },
   { value: 'iteracompute', label: 'IteraCompute (30M free tokens / month, shared)', url: 'https://iteracompute.com/free/' },
   { value: 'typhoon', label: 'Typhoon (free research API)', url: 'https://playground.opentyphoon.ai' },
+  { value: 'deepseek', label: 'DeepSeek (cheap API)', url: 'https://platform.deepseek.com/api_keys' },
   { value: 'plugsky', label: 'Plugsky (free chat aliases)', url: 'https://plugsky.com/dashboard' },
   { value: 'inferbase', label: 'Inferbase (shared monthly and daily allowance)', url: 'https://inferbase.ai' },
   { value: 'simplellm', label: 'SimpleLLM (shared hourly and daily free quota)', url: 'https://app.simplellm.eu' },

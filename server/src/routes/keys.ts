@@ -61,6 +61,7 @@ const PLATFORMS = [
   'kenari',
   'kiosapi',
   'typhoon',
+  'deepseek',
   'plugsky',
   'inferbase',
   'simplellm',

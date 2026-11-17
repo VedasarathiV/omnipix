@@ -87,6 +87,9 @@ export type Platform =
   | 'iteracompute'
   // Ongoing free research API for chat and speech recognition; catalog only.
   | 'typhoon'
+  // DeepSeek platform API (paid, cheapest reasoning tier); OpenAI-compatible,
+  // no /v1 path segment. Thinking on by default; reasoning_effort forwarded.
+  | 'deepseek'
   // Permanent free chat aliases, shared fair-use quota; signed catalog only.
   | 'plugsky'
   // Catalog-only free chat gateways; shared monthly/daily account allowances.

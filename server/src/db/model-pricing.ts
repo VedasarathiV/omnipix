@@ -75,6 +75,10 @@ export const MODEL_PRICING: PricingRow[] = [
   ['huggingface', 'moonshotai/Kimi-K2.6', 0.684, 3.42],
   ['huggingface', 'accounts/fireworks/models/llama-v3p3-70b-instruct', 0.10, 0.32], // legacy
 
+  // DeepSeek platform (Nov 2026 docs, peak cache-miss rates)
+  ['deepseek', 'deepseek-flash', 0.30, 1.20],
+  ['deepseek', 'deepseek-v4-pro', 1.32, 3.96],
+
   // Kilo (Nov 2026 refresh — no confirmed paid equivalents yet)
   ['kilo', 'kilo-auto/free', null, null],
   ['kilo', 'particle-ai/particle-1:free', null, null],

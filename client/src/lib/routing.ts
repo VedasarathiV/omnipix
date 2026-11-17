@@ -425,6 +425,7 @@ export const platformColors: Record<string, string> = {
   kenari:      '#d97706',
   kiosapi:     '#15803d',
   typhoon:     '#e11d48',
+  deepseek:     '#536af5',
   plugsky:     '#0284c7',
   inferbase:   '#2563eb',
   simplellm:   '#0d9488',

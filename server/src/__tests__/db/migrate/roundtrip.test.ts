@@ -56,6 +56,7 @@ const KEY_VERIFICATION_BASIS_FILENAME = '20261105_000001_key_verification_basis.
 const MODEL_MONTHLY_USAGE_FILENAME = '20261111_000001_model_monthly_usage.ts';
 const PROFILE_ROUTING_STRATEGY_FILENAME = '20261111_000002_profile_routing_strategy.ts';
 const KILO_FREE_REFRESH_FILENAME = '20261117_000001_kilo_free_refresh.ts';
+const DEEPSEEK_PROVIDER_FILENAME = '20261117_000002_deepseek_provider.ts';
 
 interface SchemaRow {
   type: string;
@@ -159,6 +160,7 @@ describe('migration round trip', () => {
         MODEL_MONTHLY_USAGE_FILENAME,
         PROFILE_ROUTING_STRATEGY_FILENAME,
         KILO_FREE_REFRESH_FILENAME,
+        DEEPSEEK_PROVIDER_FILENAME,
       ]);
     } finally {
       db.close();
