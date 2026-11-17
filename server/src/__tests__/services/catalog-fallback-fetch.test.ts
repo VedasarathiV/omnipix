@@ -1,4 +1,4 @@
-import { describe, it, expect, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { catalogFetch, setCatalogFallbackFetch, validateLicenseKey } from '../../services/catalog-sync.js';
 
 // Node's fetch failing the TLS handshake surfaces as TypeError('fetch failed')
@@ -15,10 +15,17 @@ function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
 }
 
+beforeEach(() => {
+  // validateLicenseKey short-circuits with no feed configured; these tests
+  // exercise the licensed path, so point the feed at the stubbed fetch.
+  process.env.CATALOG_BASE_URL = 'https://catalog.test';
+});
+
 afterEach(() => {
   setCatalogFallbackFetch(null);
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
+  delete process.env.CATALOG_BASE_URL;
 });
 
 describe('catalogFetch', () => {
