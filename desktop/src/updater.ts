@@ -12,6 +12,8 @@
 // automatically" setting is on, a found update is fetched in the background and
 // the app says it is ready. It still never restarts on its own — agents are
 // routed through this process, and a restart drops their in-flight requests.
+import fs from 'node:fs';
+import path from 'node:path';
 import { app, BrowserWindow, dialog, Notification, shell } from 'electron';
 import electronUpdater from 'electron-updater';
 import { dt, type NativeLocale } from './i18n.js';
@@ -21,7 +23,10 @@ export type { UpdateState };
 
 const { autoUpdater } = electronUpdater;
 
-const RELEASES_URL = 'https://github.com/tashfeenahmed/freellmapi/releases/latest';
+// "Download manually" / release-notes page. Empty unless the operator sets
+// OMNIPIX_RELEASES_URL — standalone builds have no releases page, and both
+// call sites below no-op (or explain) when it is empty.
+const RELEASES_URL = process.env.OMNIPIX_RELEASES_URL?.trim() ?? '';
 // The Store's own page for this app: Store installs get their updates there.
 const STORE_URL = 'ms-windows-store://pdp/?productid=9PBN6G8K2B7F';
 const BACKGROUND_INTERVAL_MS = 6 * 60 * 60 * 1000;
@@ -86,10 +91,21 @@ export function getUpdateState(): UpdateState {
   return state;
 }
 
+/** True when the packaged app embeds an electron-updater feed manifest. */
+function packagedFeedExists(): boolean {
+  try {
+    const resources = (process as { resourcesPath?: string }).resourcesPath;
+    if (!resources) return false;
+    return fs.existsSync(path.join(resources, 'app-update.yml'));
+  } catch {
+    return false;
+  }
+}
+
 function setState(next: UpdateState): void {
   state = next;
   for (const window of BrowserWindow.getAllWindows()) {
-    if (!window.isDestroyed()) window.webContents.send('freeapi:update-state', state);
+    if (!window.isDestroyed()) window.webContents.send('omnipix:update-state', state);
   }
   hooks?.onChange?.(state);
 }
@@ -123,7 +139,7 @@ export function initUpdater(options: UpdaterHooks): void {
     platform: process.platform,
     execPath: process.execPath,
     appImage: process.env.APPIMAGE,
-    feed: process.env.FREEAPI_UPDATE_FEED,
+    feed: process.env.OMNIPIX_UPDATE_FEED,
     productName: app.getName(),
     // Electron sets this when the app runs from an MSIX/AppX package.
     windowsStore: process.windowsStore === true,
@@ -133,9 +149,18 @@ export function initUpdater(options: UpdaterHooks): void {
     return;
   }
 
-  if (process.env.FREEAPI_UPDATE_FEED) {
+  // OmniPix ships with no update feed (no publish block in
+  // electron-builder.yml). Without an explicit OMNIPIX_UPDATE_FEED or a baked
+  // app-update.yml there is nothing to check, so report unsupported here
+  // instead of failing the first manual check with a confusing error.
+  if (!process.env.OMNIPIX_UPDATE_FEED && !packagedFeedExists()) {
+    state = { phase: 'unsupported', reason: 'package' };
+    return;
+  }
+
+  if (process.env.OMNIPIX_UPDATE_FEED) {
     autoUpdater.forceDevUpdateConfig = true;
-    autoUpdater.setFeedURL({ provider: 'generic', url: process.env.FREEAPI_UPDATE_FEED });
+    autoUpdater.setFeedURL({ provider: 'generic', url: process.env.OMNIPIX_UPDATE_FEED });
   }
   autoUpdater.logger = console;
   autoUpdater.autoDownload = false;
@@ -255,7 +280,15 @@ export async function installUpdate(): Promise<UpdateState> {
 export async function checkFromTray(): Promise<void> {
   const locale = hooks?.getLocale() ?? 'en';
   if (state.phase === 'unsupported') {
-    await shell.openExternal(state.reason === 'store' ? STORE_URL : RELEASES_URL);
+    if (state.reason === 'store') {
+      await shell.openExternal(STORE_URL);
+      return;
+    }
+    if (RELEASES_URL) {
+      await shell.openExternal(RELEASES_URL);
+      return;
+    }
+    await dialog.showMessageBox({ type: 'info', message: 'No update feed is configured for this build.' });
     return;
   }
   if (state.phase === 'ready') {
@@ -277,7 +310,7 @@ export async function checkFromTray(): Promise<void> {
     if (response === 0) {
       const downloaded = await downloadUpdate();
       if (downloaded.phase === 'ready') await offerRestart(locale, downloaded.version);
-    } else if (response === 1) {
+    } else if (response === 1 && RELEASES_URL) {
       await shell.openExternal(RELEASES_URL);
     }
   } else if (result.phase === 'error') {

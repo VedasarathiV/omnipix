@@ -79,6 +79,24 @@ export default function PremiumPage() {
     )
   }
 
+  // Standalone builds have no license service: explain instead of rendering
+  // activation forms that could never succeed. Plain English on purpose —
+  // this branch only exists until the operator enables premium.
+  if (!data.enabled) {
+    return (
+      <div>
+        <PageHeader title={t('premium.title')} description={t('premium.description')} />
+        <div className="rounded-3xl border bg-card p-5">
+          <p className="text-sm font-medium">Premium is not enabled in this build</p>
+          <p className="text-xs text-muted-foreground mt-1">
+            This install runs standalone with no license service. Set OMNIPIX_PREMIUM_ENABLED=1
+            and CATALOG_BASE_URL to connect your own feed and license server.
+          </p>
+        </div>
+      </div>
+    )
+  }
+
   const { hasKey, maskedKey, license, catalog, siteUrl } = data
   const live = catalog.appliedTier === 'live'
   return (
@@ -193,7 +211,7 @@ export default function PremiumPage() {
                   <Input
                     value={keyInput}
                     onChange={(e) => setKeyInput(e.target.value)}
-                    placeholder="fla_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
+                    placeholder="omk_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX"
                     className="font-mono text-xs"
                     autoComplete="off"
                     aria-invalid={activateAttempted && !keyInput.trim()}

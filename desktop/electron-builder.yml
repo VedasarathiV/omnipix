@@ -1,5 +1,5 @@
-appId: com.freellmapi.desktop
-productName: FreeLLMAPI
+appId: com.omnipix.desktop
+productName: OmniPix
 directories:
   output: dist-electron
 files:
@@ -7,17 +7,16 @@ files:
   - renderer/**/*
   - assets/**/*
   - "!**/*.map"
-# Update metadata. With a publish provider configured, electron-builder emits
-# latest.yml / latest-mac.yml next to the installers — the manifest ANY updater
-# (electron-updater or otherwise) reads to learn what the newest version is and
-# where to fetch it. Releases up to v0.6.6 shipped installers only, so nothing
-# could tell an installed app that a newer one exists. Uploading stays OFF
-# (--publish never in the scripts and the workflow); the release workflow
-# attaches the files itself. See #703.
-publish:
-  provider: github
-  owner: tashfeenahmed
-  repo: freellmapi
+# Update metadata. OmniPix ships with NO publish provider: electron-builder
+# emits no latest*.yml, the packaged app embeds no feed, and updater.ts
+# reports updates as unsupported. To enable in-app updates, point a publish
+# block at your own repo, e.g.:
+#   publish:
+#     provider: github
+#     owner: YOUR-GITHUB-USER
+#     repo: omnipix
+# and set OMNIPIX_RELEASES_URL for the "download manually" links. Keep
+# --publish never in the scripts; attach files to the release yourself.
 asar: true
 # Linux chrome-sandbox must be mode 4755 (setuid) in the .deb; otherwise
 # Electron aborts at launch (#1229). Path is relative to desktop/.
@@ -81,11 +80,11 @@ win:
 # upload. Tile images live in store-assets/appx (the store build points
 # buildResources there, because build/ here is compiled app code).
 appx:
-  identityName: TashAhmed.FreeLLMAPI
+  identityName: TashAhmed.OmniPix
   publisher: CN=157744EA-1B8F-40BE-9B6E-1FE92036B40F
-  publisherDisplayName: Tash Ahmed
-  applicationId: FreeLLMAPI
-  displayName: FreeLLMAPI
+  publisherDisplayName: OmniPix
+  applicationId: OmniPix
+  displayName: OmniPix
   backgroundColor: transparent
   languages:
     - en-US
@@ -114,7 +113,7 @@ linux:
       arch:
         - x64
 nsis:
-  # electron-builder's default NSIS name has spaces ("FreeLLMAPI Setup x.y.z.exe")
+  # electron-builder's default NSIS name has spaces ("OmniPix Setup x.y.z.exe")
   # and latest.yml records it with dashes, while GitHub stores the upload with
   # dots — so the updater asked for a file the release did not have. A name with
   # no spaces is the same string in all three places.

@@ -6,7 +6,7 @@ import { MEDIA_PLATFORMS, TRANSCRIPTION_PLATFORMS, VIDEO_PLATFORMS } from './med
 import { SEARCH_ENGINE_PLATFORMS, SEARCH_MODALITY } from './search.js';
 import { DECISION_MODALITY, CATALOG_DECISION_PLATFORMS } from './decision.js';
 import { EMBEDDING_PLATFORMS } from './embeddings.js';
-import type { Platform } from '@freellmapi/shared/types.js';
+import type { Platform } from '@omnipix/shared/types.js';
 import type { Scheduler } from '../lib/scheduler.js';
 import {
   applyAllModelOverrides,
@@ -25,13 +25,16 @@ const MEDIA_MODALITIES = new Set(['image', 'audio']);
 /**
  * catalog-sync — keeps the local model catalog in step with the published one.
  *
- * Twice a day (and on demand) the server pulls the signed catalog from the
- * catalog service. A valid Premium license key (Bearer) gets the live tier,
- * refreshed every 2-3 days; everyone else gets the monthly snapshot — so free
- * installs still self-heal, just on a slower cadence. The response is verified
- * against a pinned Ed25519 public key over the exact bytes received; anything
- * unsigned or tampered with is discarded, which means a compromised CDN or
- * MITM cannot inject models or quirks into the router.
+ * OmniPix runs standalone by default: with no CATALOG_BASE_URL configured the
+ * router serves the bundled catalog from its migrations and every sync call
+ * below is a graceful no-op — nothing ever phones home. Point CATALOG_BASE_URL
+ * (plus CATALOG_PUBKEY) at your own signed feed to re-enable live updates:
+ * twice a day (and on demand) the server then pulls the signed catalog, with
+ * a valid Premium license key (Bearer) selecting the live tier and everyone
+ * else the monthly snapshot. The response is verified against the Ed25519
+ * public key over the exact bytes received; anything unsigned or tampered
+ * with is discarded, which means a compromised CDN or MITM cannot inject
+ * models or quirks into the router.
  *
  * The bundled migrations remain the baseline: a fetched catalog is applied
  * only when it is NEWER than what the binary shipped with (MIN_CATALOG_VERSION
@@ -39,7 +42,9 @@ const MEDIA_MODALITIES = new Set(['image', 'audio']);
  * app version added via migrations.
  */
 
-const DEFAULT_BASE_URL = 'https://api.freellmapi.co';
+// Empty by design: standalone installs have no catalog service. Set
+// CATALOG_BASE_URL to enable the feed (see the module comment above).
+const DEFAULT_BASE_URL = '';
 
 // The Ed25519 public key the production catalog is signed with. The private
 // half was generated on the catalog host and has never left it. Self-hosters
@@ -78,7 +83,7 @@ let fallbackFetch: FetchLike | null = null;
  * Register a second network stack for calls to the catalog service. The
  * desktop app passes Electron's net.fetch (Chromium: the OS certificate
  * verifier and system proxy, same as a browser). On some Windows PCs Node's
- * fetch could not complete the TLS handshake to api.freellmapi.co, so license
+ * fetch could not complete the TLS handshake to the catalog service, so license
  * activation always showed "HTTP 502" while the same URL opened fine in a
  * browser. Server and Docker installs never set this.
  */
@@ -1062,6 +1067,12 @@ function applyCatalogInner(db: Db, catalog: Catalog): NonNullable<SyncResult['co
  * added or removed, where the tier can change without the version changing.
  */
 export async function syncCatalog(force = false): Promise<SyncResult> {
+  // Standalone mode: no feed configured, so there is nothing to fetch. This
+  // is a quiet no-op — no network, no error rows — so the scheduled poll and
+  // manual callers can run unconditionally.
+  if (!catalogBaseUrl()) {
+    return { ok: false, action: 'error', detail: 'Catalog feed is not configured (set CATALOG_BASE_URL to enable it).' };
+  }
   const db = getDb();
   const key = getSetting(SETTING_LICENSE_KEY);
   const applied = getSetting(SETTING_APPLIED_VERSION);
@@ -1153,6 +1164,9 @@ export interface LicenseActivation {
  * POST /api/premium/key and declarative `license` config.
  */
 export async function validateLicenseKey(key: string, timeoutMs = FETCH_TIMEOUT_MS): Promise<LicenseActivation | null> {
+  // Standalone mode: no license service exists to ask. Null reads as
+  // "unreachable" to callers, which already handle that without failing.
+  if (!catalogBaseUrl()) return null;
   try {
     const res = await catalogFetch(`${catalogBaseUrl()}/v1/license/activate`, {
       method: 'POST',
@@ -1171,6 +1185,8 @@ export async function validateLicenseKey(key: string, timeoutMs = FETCH_TIMEOUT_
 export async function refreshLicenseStatus(): Promise<LicenseStatus | null> {
   const key = getSetting(SETTING_LICENSE_KEY);
   if (!key) return null;
+  // Standalone mode: keep the cached status; there is no service to re-check.
+  if (!catalogBaseUrl()) return getCachedLicenseStatus();
   try {
     const res = await catalogFetch(`${catalogBaseUrl()}/v1/license/check`, {
       headers: { Authorization: `Bearer ${key}` },
@@ -1269,7 +1285,12 @@ export function startCatalogSync(scheduler: Scheduler): void {
   };
   cancelBootTimer = scheduler.after(BOOT_DELAY_MS, run);
   cancelInterval = scheduler.every(SYNC_INTERVAL_MS, run);
-  console.log(`[catalog-sync] polling ${catalogBaseUrl()} every ${SYNC_INTERVAL_MS / 3600000}h`);
+  const base = catalogBaseUrl();
+  console.log(
+    base
+      ? `[catalog-sync] polling ${base} every ${SYNC_INTERVAL_MS / 3600000}h`
+      : '[catalog-sync] no feed configured (CATALOG_BASE_URL unset) — serving the bundled catalog',
+  );
 }
 
 export function stopCatalogSync(): void {

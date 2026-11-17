@@ -1,6 +1,6 @@
 # Security Policy
 
-FreeLLMAPI holds real credentials: your provider API keys (encrypted at rest in
+OmniPix holds real credentials: your provider API keys (encrypted at rest in
 SQLite), a unified `/v1` bearer token, and a dashboard account. Bugs that expose
 any of those are taken seriously. Thanks for reporting them responsibly.
 
@@ -8,22 +8,21 @@ any of those are taken seriously. Thanks for reporting them responsibly.
 
 | Version | Supported |
 | ------- | --------- |
-| 0.13.x (current) | Yes — security fixes land here |
-| 0.12.x | Best effort; please upgrade |
-| 0.11.x and older | No |
+| 0.1.x (current) | Yes — security fixes land here |
+| pre-0.1 / upstream | No — track the OmniPix release line |
 
 Fixes ship on the latest release line. There are no backported patch releases for
-older lines, so the fastest way to stay patched is to track `0.13.x` (Docker users:
+older lines, so the fastest way to stay patched is to track `0.1.x` (Docker users:
 re-pull `:latest`).
 
 ## Reporting a vulnerability
 
 **Preferred:** GitHub private vulnerability reporting — go to the
-[Security tab](https://github.com/tashfeenahmed/freellmapi/security) and click
+[Security tab](https://github.com/YOUR-GITHUB-USER/omnipix/security) and click
 **Report a vulnerability**. That opens a private thread with the maintainer and
 keeps the details out of public issues.
 
-**Alternate:** email **support@freellmapi.co** with `[freellmapi security]` in the
+**Alternate:** email **YOUR-EMAIL-HERE** with `[omnipix security]` in the
 subject.
 
 Please do not open a public issue, PR, or discussion for a security bug until a
@@ -54,7 +53,7 @@ In scope:
 
 - The router server and its `/v1` proxy, `/api/*` admin routes, and `/mcp` endpoint.
 - Dashboard authentication — the email + password account (scrypt, session tokens)
-  and the unified `freellmapi-…` API key.
+  and the unified `omnipix-…` API key.
 - Key handling: AES-256-GCM encryption at rest, `ENCRYPTION_KEY` usage, encrypted
   DB backups, key import/export.
 - The Electron desktop app and its local data directory.
@@ -67,7 +66,7 @@ Out of scope:
 - Vulnerabilities in upstream LLM providers themselves. Report those to the
   provider. Bugs in *how this router talks to them* are in scope.
 - Anything that requires the operator to deliberately expose the server to the
-  public internet. FreeLLMAPI is a single-user, trusted-network tool: it binds
+  public internet. OmniPix is a single-user, trusted-network tool: it binds
   `127.0.0.1` by default, `HOST_BIND=0.0.0.0` is a documented opt-in with a
   warning attached, and there is no multi-tenant auth by design. "I put it on a
   public IP and someone used my quota" is expected behaviour, not a vulnerability.

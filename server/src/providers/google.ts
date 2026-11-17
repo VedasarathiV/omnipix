@@ -6,7 +6,7 @@ import type {
   ChatToolChoice,
   ChatToolDefinition,
   TokenUsage,
-} from '@freellmapi/shared/types.js';
+} from '@omnipix/shared/types.js';
 import { BaseProvider, providerHttpError, type CompletionOptions, type KeyValidationResult } from './base.js';
 import { contentToString } from '../lib/content.js';
 import { proxyFetch } from '../lib/proxy.js';
@@ -350,7 +350,7 @@ const IMAGE_REDIRECT_STATUSES = new Set([301, 302, 303, 307, 308]);
 // providers get (#1881): every hop, the first URL and each redirect target, is
 // classified before it is requested, so an image URL (or a public host that
 // redirects) cannot reach cloud metadata or link-local addresses, or private
-// ones when FREEAPI_BLOCK_PRIVATE_PROVIDER_URLS is set. Redirects are followed
+// ones when OMNIPIX_BLOCK_PRIVATE_PROVIDER_URLS is set. Redirects are followed
 // by hand for that reason, a few hops at most, since image hosts and CDNs often
 // redirect. Returns null when blocked or failed.
 async function fetchImageChecked(rawUrl: string): Promise<Response | null> {

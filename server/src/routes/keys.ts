@@ -32,7 +32,7 @@ import {
   triggerBuiltinModelDiscovery,
 } from '../services/builtin-model-discovery.js';
 import type { Db } from '../db/types.js';
-import type { Platform } from '@freellmapi/shared/types.js';
+import type { Platform } from '@omnipix/shared/types.js';
 import { parseModelScope } from '../lib/model-scope.js';
 import { KEY_PROXY_URL_ERROR, KEY_PROXY_URL_MAX, decryptProxyUrl, encryptProxyUrl, isValidKeyProxyUrl, maskProxyUrl } from '../lib/key-proxy.js';
 import { isLoopbackRequest } from '../lib/loopback.js';
@@ -606,7 +606,7 @@ const isLoopbackRemote = (req: Request): boolean => isLoopbackRequest(req);
 // bind 0.0.0.0 through its LAN-access toggle, and a remote viewer on that LAN
 // still has to prove the password before it can lift a key.
 function skipsReauth(req: Request): boolean {
-  return process.env.FREEAPI_DESKTOP === '1' && isLoopbackRemote(req);
+  return process.env.OMNIPIX_DESKTOP === '1' && isLoopbackRemote(req);
 }
 
 // Re-verify the dashboard password for a plaintext-key endpoint (export,
@@ -707,7 +707,7 @@ keysRouter.get('/export', (req: Request, res: Response) => {
     });
     const content = lines.join('\n\n') + '\n';
     res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-    res.setHeader('Content-Disposition', 'attachment; filename="freellmapi-keys.env"');
+    res.setHeader('Content-Disposition', 'attachment; filename="omnipix-keys.env"');
     res.send(content);
     return;
   }
@@ -734,7 +734,7 @@ keysRouter.get('/export', (req: Request, res: Response) => {
     );
     const content = [header, ...lines].join('\n') + '\n';
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-    res.setHeader('Content-Disposition', 'attachment; filename="freellmapi-keys.csv"');
+    res.setHeader('Content-Disposition', 'attachment; filename="omnipix-keys.csv"');
     res.send(content);
     return;
   }
@@ -743,11 +743,11 @@ keysRouter.get('/export', (req: Request, res: Response) => {
   const jsonExport = {
     version: 1,
     exportedAt: new Date().toISOString(),
-    source: 'freellmapi',
+    source: 'omnipix',
     keys: decryptedKeys,
   };
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
-  res.setHeader('Content-Disposition', 'attachment; filename="freellmapi-keys.json"');
+  res.setHeader('Content-Disposition', 'attachment; filename="omnipix-keys.json"');
   res.json(jsonExport);
 });
 
@@ -1077,7 +1077,7 @@ async function registerImportedModels(
 
 // SSRF guard (#440): a base_url is the one user-controlled outbound target.
 // Cloud metadata / link-local addresses are rejected outright; private ranges
-// too when FREEAPI_BLOCK_PRIVATE_PROVIDER_URLS is set. Re-checked at request
+// too when OMNIPIX_BLOCK_PRIVATE_PROVIDER_URLS is set. Re-checked at request
 // time in proxyFetch for URLs already in the DB.
 async function rejectUnsafeBaseUrl(baseUrl: string, res: Response): Promise<boolean> {
   const verdict = await assessProviderUrl(baseUrl, { allowUnresolved: true });

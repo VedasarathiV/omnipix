@@ -2,12 +2,12 @@
 // popover UI needs — no Node access in the renderer.
 import { contextBridge, ipcRenderer } from 'electron';
 
-contextBridge.exposeInMainWorld('freeapi', {
-  snapshot: () => ipcRenderer.invoke('freeapi:snapshot'),
-  openDashboard: () => ipcRenderer.invoke('freeapi:open-dashboard'),
-  copyBaseUrl: (kind: 'openai' | 'anthropic') => ipcRenderer.invoke('freeapi:copy-base-url', kind),
-  copyApiKey: () => ipcRenderer.invoke('freeapi:copy-api-key'),
-  setLoginItem: (open: boolean) => ipcRenderer.invoke('freeapi:set-login-item', open),
-  quit: () => ipcRenderer.invoke('freeapi:quit'),
-  onRefresh: (cb: () => void) => ipcRenderer.on('freeapi:refresh', cb),
+contextBridge.exposeInMainWorld('omnipix', {
+  snapshot: () => ipcRenderer.invoke('omnipix:snapshot'),
+  openDashboard: () => ipcRenderer.invoke('omnipix:open-dashboard'),
+  copyBaseUrl: (kind: 'openai' | 'anthropic') => ipcRenderer.invoke('omnipix:copy-base-url', kind),
+  copyApiKey: () => ipcRenderer.invoke('omnipix:copy-api-key'),
+  setLoginItem: (open: boolean) => ipcRenderer.invoke('omnipix:set-login-item', open),
+  quit: () => ipcRenderer.invoke('omnipix:quit'),
+  onRefresh: (cb: () => void) => ipcRenderer.on('omnipix:refresh', cb),
 });

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 // The "Start on system startup" row in the Settings dialog's General section:
-// it only appears inside a desktop build (the __FREEAPI_LOGIN_ITEM__ bridge),
+// it only appears inside a desktop build (the __OMNIPIX_LOGIN_ITEM__ bridge),
 // reads the OS flag on open, and calls back into the shell when toggled.
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { act } from 'react'
@@ -16,13 +16,13 @@ let bridge: { get: ReturnType<typeof vi.fn>; set: ReturnType<typeof vi.fn> }
 beforeAll(() => { (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true })
 beforeEach(() => {
   bridge = { get: vi.fn(async () => true), set: vi.fn(async () => {}) }
-  ;(window as { __FREEAPI_LOGIN_ITEM__?: typeof bridge }).__FREEAPI_LOGIN_ITEM__ = bridge
+  ;(window as { __OMNIPIX_LOGIN_ITEM__?: typeof bridge }).__OMNIPIX_LOGIN_ITEM__ = bridge
   window.matchMedia = window.matchMedia ?? (() => ({ matches: false, addEventListener: () => {}, removeEventListener: () => {} })) as unknown as typeof window.matchMedia
   container = document.createElement('div'); document.body.appendChild(container); root = createRoot(container)
 })
 afterEach(() => {
   act(() => root.unmount())
-  delete (window as { __FREEAPI_LOGIN_ITEM__?: unknown }).__FREEAPI_LOGIN_ITEM__
+  delete (window as { __OMNIPIX_LOGIN_ITEM__?: unknown }).__OMNIPIX_LOGIN_ITEM__
   container.remove(); document.body.innerHTML = ''
 })
 
@@ -50,7 +50,7 @@ describe('settings dialog — start on system startup', () => {
   })
 
   it('hides the row in a plain browser (no bridge)', async () => {
-    delete (window as { __FREEAPI_LOGIN_ITEM__?: unknown }).__FREEAPI_LOGIN_ITEM__
+    delete (window as { __OMNIPIX_LOGIN_ITEM__?: unknown }).__OMNIPIX_LOGIN_ITEM__
     await render()
     expect(switchLabel().length).toBe(0)
     expect(bridge.get).not.toHaveBeenCalled()

@@ -95,7 +95,7 @@ export function togglePopover(tray: Tray): void {
     ? Math.round(b.y + b.height + 6)
     : Math.round(b.y - HEIGHT - 6); // Windows tray sits at the bottom
   popover.setPosition(x, y, false);
-  popover.webContents.send('freeapi:refresh');
+  popover.webContents.send('omnipix:refresh');
   popover.show();
   popover.focus();
 }

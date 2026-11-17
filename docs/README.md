@@ -1,4 +1,4 @@
-# FreeLLMAPI documentation
+# OmniPix documentation
 
 Pick a language:
 

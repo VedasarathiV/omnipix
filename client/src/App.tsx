@@ -142,7 +142,7 @@ function Brand() {
   return (
     <Link to="/" className="flex items-center gap-2 transition-opacity hover:opacity-70">
       <span className="inline-block size-2 rounded-full bg-foreground" />
-      <span className="font-semibold tracking-tight text-sm">FreeLLMAPI</span>
+      <span className="font-semibold tracking-tight text-sm">OmniPix</span>
     </Link>
   )
 }
@@ -151,10 +151,10 @@ function Brand() {
 // sets this). The navbar then doubles as the window title bar: draggable,
 // padded for the macOS traffic lights, and without the web-only Sign out.
 const isDesktopApp = typeof window !== 'undefined'
-  && (window as Window & { __FREEAPI_DESKTOP__?: boolean }).__FREEAPI_DESKTOP__ === true
+  && (window as Window & { __OMNIPIX_DESKTOP__?: boolean }).__OMNIPIX_DESKTOP__ === true
 
 const desktopPlatform = typeof window !== 'undefined'
-  ? (window as Window & { __FREEAPI_PLATFORM__?: string }).__FREEAPI_PLATFORM__
+  ? (window as Window & { __OMNIPIX_PLATFORM__?: string }).__OMNIPIX_PLATFORM__
   : undefined
 
 const isMacDesktop = isDesktopApp && (
@@ -252,7 +252,11 @@ function Navbar() {
   }, [])
   const [credentialsMode, setCredentialsMode] = useState<'password' | 'email' | null>(null)
   const { data: premium, licensed, isLoading: premiumLoading, isError: premiumError } = usePremium()
-  const showUpgrade = Boolean(premium) && !licensed && !premiumLoading && !premiumError
+  // Standalone builds ship with premium off: the nav entry, upgrade prompts
+  // and palette command all hide until the server says it is enabled.
+  const premiumEnabled = premium?.enabled === true
+  const visibleNavItems = navItems.filter((item) => item.to !== '/premium' || premiumEnabled)
+  const showUpgrade = Boolean(premium) && premiumEnabled && !licensed && !premiumLoading && !premiumError
 
   return (
     <>
@@ -274,7 +278,7 @@ function Navbar() {
             className="ms-10 hidden items-center gap-6 md:flex"
             style={isDesktopApp ? ({ WebkitAppRegion: 'no-drag' } as React.CSSProperties) : undefined}
           >
-            {navItems.map((item) => {
+            {visibleNavItems.map((item) => {
               const menu = navMenus[item.to]
               return menu ? (
                 // Split control: the label navigates, the chevron reveals the
@@ -352,7 +356,7 @@ function Navbar() {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-52">
                 <DropdownMenuGroup>
-                  {navItems.map((item) => {
+                  {visibleNavItems.map((item) => {
                     const menu = navMenus[item.to]
                     return menu ? (
                       <DropdownMenuSub key={item.to}>

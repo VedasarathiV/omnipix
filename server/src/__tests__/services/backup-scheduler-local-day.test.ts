@@ -67,14 +67,14 @@ describe('backup scheduler local day (#1888)', () => {
 
   beforeAll(() => {
     process.env.ENCRYPTION_KEY = '0'.repeat(64);
-    dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'freeapi-backup-day-'));
-    process.env.FREEAPI_DB_PATH = path.join(dataDir, 'freeapi.db');
+    dataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'omnipix-backup-day-'));
+    process.env.OMNIPIX_DB_PATH = path.join(dataDir, 'omnipix.db');
     initDb(':memory:');
   });
 
   afterAll(() => {
     restoreTz();
-    delete process.env.FREEAPI_DB_PATH;
+    delete process.env.OMNIPIX_DB_PATH;
     fs.rmSync(dataDir, { recursive: true, force: true });
   });
 

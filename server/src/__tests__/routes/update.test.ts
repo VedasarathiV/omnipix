@@ -92,11 +92,13 @@ function createTestApp(overrides: Parameters<typeof createUpdateRouter>[0] = {})
   const execMock = overrides.execFile ?? vi.fn(async () => ({ stdout: `${LOCAL_SHA}\n` }));
   const logger = overrides.logger ?? { error: vi.fn(), log: vi.fn() };
   app.use('/api/update', createUpdateRouter({
-    env: {},
     cwd: '/worktree/server',
     now: () => NOW,
     version: () => VERSION,
     ...overrides,
+    // The fixture repo stays unless a test overrides or blanks it, so the
+    // update-enabled path is the default under test.
+    env: { OMNIPIX_UPDATE_REPO: 'omnipix/omnipix', ...overrides.env },
     fetch: fetchMock,
     execFile: execMock,
     logger,
@@ -128,7 +130,7 @@ describe('Update API', () => {
         checkedAt: '2026-07-28T14:00:00.000Z',
       });
       expect(fetchMock).toHaveBeenCalledWith(
-        `https://api.github.com/repos/tashfeenahmed/freellmapi/compare/${LOCAL_SHA}...main`,
+        `https://api.github.com/repos/omnipix/omnipix/compare/${LOCAL_SHA}...main`,
         expect.any(Object),
       );
     });
@@ -136,13 +138,13 @@ describe('Update API', () => {
     it('prefers a validated packaged-build identity and truncates commit messages', async () => {
       const longMessage = 'x'.repeat(250);
       const fetchMock = vi.fn(async (url: string | URL | RequestInfo) => (String(url).includes('/releases/latest')
-        ? response({ tag_name: 'v0.12.0', html_url: 'https://github.com/tashfeenahmed/freellmapi/releases/tag/v0.12.0' })
+        ? response({ tag_name: 'v0.12.0', html_url: 'https://github.com/omnipix/omnipix/releases/tag/v0.12.0' })
         : response(compareBody('ahead', longMessage))));
       const execMock = vi.fn(async () => ({ stdout: `${REMOTE_SHA}\n` }));
       const { app } = createTestApp({
         env: {
-          FREELLMAPI_COMMIT_SHA: LOCAL_SHA.toUpperCase(),
-          FREELLMAPI_INSTALL_METHOD: 'docker',
+          OMNIPIX_COMMIT_SHA: LOCAL_SHA.toUpperCase(),
+          OMNIPIX_INSTALL_METHOD: 'docker',
         },
         fetch: fetchMock,
         execFile: execMock,
@@ -158,7 +160,7 @@ describe('Update API', () => {
     it('uses an explicitly configured update-check token for authenticated rate limits', async () => {
       const fetchMock = vi.fn(async () => response(compareBody('identical')));
       const { app } = createTestApp({
-        env: { FREELLMAPI_UPDATE_GITHUB_TOKEN: 'test-token' },
+        env: { OMNIPIX_UPDATE_GITHUB_TOKEN: 'test-token' },
         fetch: fetchMock,
       });
 
@@ -191,13 +193,13 @@ describe('Update API', () => {
           if (String(url).includes('/releases/latest')) {
             return response({
               tag_name: 'v0.11.0',
-              html_url: 'https://github.com/tashfeenahmed/freellmapi/releases/tag/v0.11.0',
+              html_url: 'https://github.com/omnipix/omnipix/releases/tag/v0.11.0',
             });
           }
           return response(compareBody('identical'));
         });
         const { app } = createTestApp({
-          env: { FREELLMAPI_INSTALL_METHOD: installation, FREELLMAPI_COMMIT_SHA: LOCAL_SHA },
+          env: { OMNIPIX_INSTALL_METHOD: installation, OMNIPIX_COMMIT_SHA: LOCAL_SHA },
           fetch: fetchMock,
         });
 
@@ -205,7 +207,7 @@ describe('Update API', () => {
 
         expect(result.body).toMatchObject({ status: 'current', installation });
         expect(fetchMock).toHaveBeenCalledWith(
-          `https://api.github.com/repos/tashfeenahmed/freellmapi/compare/${LOCAL_SHA}...v0.11.0`,
+          `https://api.github.com/repos/omnipix/omnipix/compare/${LOCAL_SHA}...v0.11.0`,
           expect.any(Object),
         );
         // 'identical' against the tag: no update offered for untagged main commits.
@@ -217,13 +219,13 @@ describe('Update API', () => {
           if (String(url).includes('/releases/latest')) {
             return response({
               tag_name: 'v0.12.0',
-              html_url: 'https://github.com/tashfeenahmed/freellmapi/releases/tag/v0.12.0',
+              html_url: 'https://github.com/omnipix/omnipix/releases/tag/v0.12.0',
             });
           }
           return response(compareBody('ahead'));
         });
         const { app } = createTestApp({
-          env: { FREELLMAPI_INSTALL_METHOD: installation, FREELLMAPI_COMMIT_SHA: LOCAL_SHA },
+          env: { OMNIPIX_INSTALL_METHOD: installation, OMNIPIX_COMMIT_SHA: LOCAL_SHA },
           fetch: fetchMock,
         });
 
@@ -238,7 +240,7 @@ describe('Update API', () => {
           return response(compareBody('ahead'));
         });
         const { app } = createTestApp({
-          env: { FREELLMAPI_INSTALL_METHOD: installation, FREELLMAPI_COMMIT_SHA: LOCAL_SHA },
+          env: { OMNIPIX_INSTALL_METHOD: installation, OMNIPIX_COMMIT_SHA: LOCAL_SHA },
           fetch: fetchMock,
         });
 
@@ -254,13 +256,13 @@ describe('Update API', () => {
           if (String(url).includes('/releases/latest')) {
             return response({
               tag_name: 'v0.11.0',
-              html_url: 'https://github.com/tashfeenahmed/freellmapi/releases/tag/v0.11.0',
+              html_url: 'https://github.com/omnipix/omnipix/releases/tag/v0.11.0',
             });
           }
           return response({ message: 'rate limited' }, 403);
         });
         const { app } = createTestApp({
-          env: { FREELLMAPI_INSTALL_METHOD: installation, FREELLMAPI_COMMIT_SHA: LOCAL_SHA },
+          env: { OMNIPIX_INSTALL_METHOD: installation, OMNIPIX_COMMIT_SHA: LOCAL_SHA },
           fetch: fetchMock,
         });
 
@@ -277,7 +279,7 @@ describe('Update API', () => {
       const fetchMock = vi.fn();
       const execMock = vi.fn(async () => ({ stdout: `${LOCAL_SHA}\n` }));
       const { app, logger } = createTestApp({
-        env: { FREELLMAPI_UPDATE_CHECK: ' OFF ' },
+        env: { OMNIPIX_UPDATE_CHECK: ' OFF ' },
         fetch: fetchMock,
         execFile: execMock,
       });
@@ -324,7 +326,7 @@ describe('Update API', () => {
       });
       expect(fetchMock).toHaveBeenNthCalledWith(
         2,
-        'https://github.com/tashfeenahmed/freellmapi/commits/main.atom',
+        'https://github.com/omnipix/omnipix/commits/main.atom',
         expect.any(Object),
       );
     });
@@ -450,7 +452,7 @@ describe('Update API', () => {
     it('resolves Git identity lazily from the current working directory', async () => {
       const execMock = vi.fn(async () => ({ stdout: `${LOCAL_SHA}\n` }));
       const { app } = createTestApp({
-        env: { FREELLMAPI_COMMIT_SHA: 'invalid' },
+        env: { OMNIPIX_COMMIT_SHA: 'invalid' },
         execFile: execMock,
       });
       expect(execMock).not.toHaveBeenCalled();
@@ -502,7 +504,7 @@ describe('Update API', () => {
       const fetchMock = vi.fn();
       const execMock = vi.fn(async () => ({ stdout: `${LOCAL_SHA}\n` }));
       const { app } = createTestApp({
-        env: { FREELLMAPI_INSTALL_METHOD: 'docker' },
+        env: { OMNIPIX_INSTALL_METHOD: 'docker' },
         fetch: fetchMock,
         execFile: execMock,
       });
@@ -579,7 +581,7 @@ describe('Update API', () => {
       const fetchMock = vi.fn();
       const execMock = vi.fn(async () => ({ stdout: `${LOCAL_SHA}\n` }));
       const { app } = createTestApp({
-        env: { FREELLMAPI_UPDATE_CHECK: 'off' },
+        env: { OMNIPIX_UPDATE_CHECK: 'off' },
         fetch: fetchMock,
         execFile: execMock,
       });
@@ -592,6 +594,23 @@ describe('Update API', () => {
         version: null,
       });
       expect(execMock).not.toHaveBeenCalled();
+      expect(fetchMock).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['blank', ''],
+      ['malformed', 'not-a-repo'],
+    ])('reports disabled when OMNIPIX_UPDATE_REPO is %s, without any network request', async (_label, repo) => {
+      const fetchMock = vi.fn();
+      const execMock = vi.fn(async () => ({ stdout: `${LOCAL_SHA}\n` }));
+      const { app } = createTestApp({
+        env: { OMNIPIX_UPDATE_REPO: repo },
+        fetch: fetchMock,
+        execFile: execMock,
+      });
+
+      expect((await httpGet(app, '/api/update/status')).body.status).toBe('disabled');
+      expect((await httpGet(app, '/api/update/check')).body.status).toBe('disabled');
       expect(fetchMock).not.toHaveBeenCalled();
     });
 
@@ -737,16 +756,16 @@ describe('Update API', () => {
 
   describe('POST /api/update/apply (Docker self-update)', () => {
     const sidecar = {
-      FREELLMAPI_INSTALL_METHOD: 'docker',
-      FREELLMAPI_COMMIT_SHA: LOCAL_SHA,
-      FREELLMAPI_SELF_UPDATE_URL: 'http://watchtower:8080/',
-      FREELLMAPI_SELF_UPDATE_TOKEN: 'wt-token',
+      OMNIPIX_INSTALL_METHOD: 'docker',
+      OMNIPIX_COMMIT_SHA: LOCAL_SHA,
+      OMNIPIX_SELF_UPDATE_URL: 'http://watchtower:8080/',
+      OMNIPIX_SELF_UPDATE_TOKEN: 'wt-token',
     };
 
     it.each([
-      ['a source install', { FREELLMAPI_SELF_UPDATE_URL: 'http://watchtower:8080', FREELLMAPI_SELF_UPDATE_TOKEN: 'wt-token' }],
-      ['a container without the sidecar', { FREELLMAPI_INSTALL_METHOD: 'docker', FREELLMAPI_COMMIT_SHA: LOCAL_SHA }],
-      ['a container with a URL but no token', { FREELLMAPI_INSTALL_METHOD: 'docker', FREELLMAPI_SELF_UPDATE_URL: 'http://watchtower:8080' }],
+      ['a source install', { OMNIPIX_SELF_UPDATE_URL: 'http://watchtower:8080', OMNIPIX_SELF_UPDATE_TOKEN: 'wt-token' }],
+      ['a container without the sidecar', { OMNIPIX_INSTALL_METHOD: 'docker', OMNIPIX_COMMIT_SHA: LOCAL_SHA }],
+      ['a container with a URL but no token', { OMNIPIX_INSTALL_METHOD: 'docker', OMNIPIX_SELF_UPDATE_URL: 'http://watchtower:8080' }],
     ])('refuses %s without calling anything', async (_label, env) => {
       const fetchMock = vi.fn(async () => response({}, 202));
       const { app } = createTestApp({ env, fetch: fetchMock });
@@ -785,7 +804,7 @@ describe('Update API', () => {
       const { app } = createTestApp({ env: sidecar });
       expect((await httpGet(app, '/api/update/status')).body.selfUpdate).toBe(true);
 
-      const { app: plain } = createTestApp({ env: { FREELLMAPI_INSTALL_METHOD: 'docker', FREELLMAPI_COMMIT_SHA: LOCAL_SHA } });
+      const { app: plain } = createTestApp({ env: { OMNIPIX_INSTALL_METHOD: 'docker', OMNIPIX_COMMIT_SHA: LOCAL_SHA } });
       expect((await httpGet(plain, '/api/update/status')).body).not.toHaveProperty('selfUpdate');
     });
   });

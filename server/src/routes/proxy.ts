@@ -2,7 +2,7 @@ import crypto from 'crypto';
 import { Router } from 'express';
 import type { Request, Response } from 'express';
 import { z } from 'zod';
-import type { ChatMessage, ChatToolCall, TokenUsage } from '@freellmapi/shared/types.js';
+import type { ChatMessage, ChatToolCall, TokenUsage } from '@omnipix/shared/types.js';
 import { type RouteResult, type ResolvedChain, type ChainRow, routeRequest, resolveRoutingChain, resolveModelGroupCandidates, resolveStickyPreference, hasEnabledVisionModel, hasEnabledToolsModel, routingReserveTokens, failureAttributionFor } from '../services/router.js';
 import { secondsUntilNextMonth, nextMonthResetAt } from '../services/key-budget.js';
 import { runEmbeddings, EmbeddingsError } from '../services/embeddings.js';
@@ -34,7 +34,7 @@ import { routedViaValue, safeHeaderValue } from '../lib/header-value.js';
 import { applyTokenBudget, tokenBudgetMessage } from '../lib/guardrails.js';
 import { samplingParamSchemaFields, pickSamplingParams, supportedParametersForPlatforms } from '../lib/sampling-params.js';
 import { enforceJsonContent } from '../lib/structured-output.js';
-import type { Platform } from '@freellmapi/shared/types.js';
+import type { Platform } from '@omnipix/shared/types.js';
 import { inferQuotaPoolKey, type QuotaObservationContext } from '../services/provider-quota.js';
 import { isUnifyEnabled, getModelGroups, resolveRequestedIdForDispatch } from '../services/model-groups.js';
 import { advertisedContextWindow, buildModelListing, servableContextWindow, type NormalizedModel } from '../services/model-listing.js';
@@ -47,7 +47,7 @@ import { startStreamKeepalive, streamKeepaliveMs } from '../lib/stream-keepalive
 export const proxyRouter = Router();
 
 // Virtual "auto" model. Clients like Hermes require a non-empty `model` field
-// on every request, but freellmapi's whole point is to pick the model itself.
+// on every request, but omnipix's whole point is to pick the model itself.
 // Requesting this id means "let the router decide" — identical to omitting
 // `model` entirely.
 const AUTO_MODEL_ID = 'auto';
@@ -460,7 +460,7 @@ function buildCatalogEntries(filters: { onlyAvailable?: boolean; executionStatus
         id: a.id,
         object: 'model' as const,
         created: 0,
-        owned_by: 'freellmapi',
+        owned_by: 'omnipix',
         name: a.displayName,
         context_window: autoContextWindow,
         context_length: autoContextWindow,
@@ -491,7 +491,7 @@ function buildCatalogEntries(filters: { onlyAvailable?: boolean; executionStatus
       id: AUTO_MODEL_ID,
       object: 'model',
       created: 0,
-      owned_by: 'freellmapi',
+      owned_by: 'omnipix',
       name: 'Auto (router picks the best available model)',
       context_window: autoContextWindow,
       // `context_length` is OpenRouter's field name and the one most
@@ -505,7 +505,7 @@ function buildCatalogEntries(filters: { onlyAvailable?: boolean; executionStatus
       id: FUSION_MODEL_ID,
       object: 'model',
       created: 0,
-      owned_by: 'freellmapi',
+      owned_by: 'omnipix',
       name: 'Fusion (panel of models answer in parallel, a judge synthesizes one answer)',
       context_window: autoContextWindow,
       context_length: autoContextWindow,
@@ -520,7 +520,7 @@ function buildCatalogEntries(filters: { onlyAvailable?: boolean; executionStatus
         id: `auto:${p.name.toLowerCase()}`,
         object: 'model',
         created: 0,
-        owned_by: 'freellmapi',
+        owned_by: 'omnipix',
         name: `Auto: ${p.name} (named fallback chain)`,
         context_window: ctx,
         context_length: ctx,
@@ -2034,12 +2034,12 @@ proxyRouter.post('/chat/completions', async (req: Request, res: Response) => {
     }
   });
   const compressionResult = compressRequest(messages, {
-    header: req.headers['x-freellm-compress'],
+    header: req.headers['x-omnipix-compress'],
     tools,
     cacheControlPrefixLength,
   });
   messages = compressionResult.messages;
-  res.setHeader('X-FreeLLM-Compress', formatCompressionHeader(compressionResult));
+  res.setHeader('X-OmniPix-Compress', formatCompressionHeader(compressionResult));
 
   // Server-enforced system prompt (#411): injected AFTER compression so it is
   // never compressed away, and FIRST in the list so a caller-supplied system
@@ -2276,9 +2276,9 @@ proxyRouter.post('/chat/completions', async (req: Request, res: Response) => {
   // message + sampling-param normalization but before any routing/session work,
   // so a hit short-circuits the whole pipeline. Only NON-streaming requests at a
   // cacheable temperature are eligible (v1 scope: streaming always bypasses); a
-  // per-request `X-FreeLLM-Cache` header can force or bypass. Off unless enabled
+  // per-request `X-OmniPix-Cache` header can force or bypass. Off unless enabled
   // via the RESPONSE_CACHE env var or the response_cache_enabled setting.
-  const cacheDirective = parseCacheDirective(req.headers['x-freellm-cache'], req.headers['cache-control']);
+  const cacheDirective = parseCacheDirective(req.headers['x-omnipix-cache'], req.headers['cache-control']);
   // Streaming requests participate in the cache too: same canonical key (the
   // request content is identical), but hits are looked up in the streaming
   // store and replayed as SSE rather than JSON (see below).
@@ -2322,7 +2322,7 @@ proxyRouter.post('/chat/completions', async (req: Request, res: Response) => {
         res.setHeader('Cache-Control', 'no-cache');
         res.setHeader('Connection', 'keep-alive');
         res.setHeader('X-Routed-Via', 'cache');
-        res.setHeader('X-FreeLLM-Cache', 'HIT');
+        res.setHeader('X-OmniPix-Cache', 'HIT');
         res.write(streamHit.sse);
         res.end();
         return;
@@ -2334,7 +2334,7 @@ proxyRouter.post('/chat/completions', async (req: Request, res: Response) => {
         // deliberately skipped and the reply is not re-logged as provider usage.
         // The savings are reported separately by GET /api/cache/stats.
         res.setHeader('X-Routed-Via', 'cache');
-        res.setHeader('X-FreeLLM-Cache', 'HIT');
+        res.setHeader('X-OmniPix-Cache', 'HIT');
         res.json(withExecutionId(hit.body, requestGroupId));
         return;
       }
@@ -2545,7 +2545,7 @@ proxyRouter.post('/chat/completions', async (req: Request, res: Response) => {
   // this turn routes with. Skipped when the client pinned a model or the
   // conversation is sticky to one. Any doubt routes as Balanced.
   const routingPick = await applyDecisionRouting(messages, { pinned: pinnedModelId != null || preferredModel != null, preset: resolvedChain?.strategyOverride, signal: clientAbort.signal });
-  if (routingPick && !res.headersSent) res.setHeader('X-FreeLLM-Routing-Strategy', routingStrategyHeader(routingPick));
+  if (routingPick && !res.headersSent) res.setHeader('X-OmniPix-Routing-Strategy', routingStrategyHeader(routingPick));
 
   await runFallbackLoop({
     maxRetries: MAX_RETRIES,
@@ -2676,7 +2676,7 @@ proxyRouter.post('/chat/completions', async (req: Request, res: Response) => {
           res.setHeader('Cache-Control', 'no-cache');
           res.setHeader('Connection', 'keep-alive');
           res.setHeader('X-Routed-Via', routedViaValue(route.platform, route.modelId));
-          res.setHeader('X-FreeLLM-Cache', cacheKey ? 'MISS' : 'OFF');
+          res.setHeader('X-OmniPix-Cache', cacheKey ? 'MISS' : 'OFF');
           setFallbackHeaders(res, attempt, attemptLog);
           headersSentEarly = true;
         };
@@ -3277,7 +3277,7 @@ proxyRouter.post('/chat/completions', async (req: Request, res: Response) => {
         setFallbackHeaders(res, attempt, attemptLog);
         // Normalize array-shaped message.content to a string on the way out (#166).
         const outboundBody = sanitizeResponse(normalizeOutboundContent(result));
-        res.setHeader('X-FreeLLM-Cache', cacheKey ? 'MISS' : 'OFF');
+        res.setHeader('X-OmniPix-Cache', cacheKey ? 'MISS' : 'OFF');
 
         // #1084: agents show zero context usage when the upstream omits
         // `usage` (many free-tier providers do). Fall back to the same

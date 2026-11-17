@@ -28,6 +28,7 @@ import { COMMAND_PALETTE_EVENT } from '@/components/command-palette-state'
 import { useI18n } from '@/i18n'
 import type { FallbackEntry } from '@/lib/routing'
 import { useTheme } from '@/theme-context'
+import { usePremium } from '@/hooks/use-premium'
 
 interface Command {
   id: string
@@ -104,6 +105,8 @@ export function CommandPalette() {
     queryFn: () => apiFetch('/api/settings/api-key'),
     enabled: open,
   })
+  const { data: premium } = usePremium()
+  const premiumEnabled = premium?.enabled === true
 
   const commands = useMemo<Command[]>(() => {
     const go = (to: string) => () => navigate(to)
@@ -120,7 +123,9 @@ export function CommandPalette() {
       { id: 'p-keys', group: 'pages', label: t('nav.keys'), keywords: 'keys providers api tokens', icon: KeyRound, run: go('/keys') },
       { id: 'p-agents', group: 'pages', label: t('nav.agents'), keywords: 'agents claude codex cline ollama gemini', icon: Bot, run: go('/agents') },
       { id: 'p-analytics', group: 'pages', label: t('nav.analytics'), keywords: 'analytics usage stats savings latency', icon: ChartColumn, run: go('/analytics') },
-      { id: 'p-premium', group: 'pages', label: t('nav.premium'), keywords: 'premium catalog license subscription', icon: Sparkles, run: go('/premium') },
+      ...(premiumEnabled
+        ? [{ id: 'p-premium', group: 'pages', label: t('nav.premium'), keywords: 'premium catalog license subscription', icon: Sparkles, run: go('/premium') } as Command]
+        : []),
     ]
     const actions: Command[] = [
       {
@@ -174,7 +179,7 @@ export function CommandPalette() {
       })
     }
     return [...pages, ...actions, ...models]
-  }, [entries, keyData, navigate, resolvedDark, setTheme, t])
+  }, [entries, keyData, navigate, premiumEnabled, resolvedDark, setTheme, t])
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()

@@ -15,6 +15,15 @@ import {
 
 export const premiumRouter = Router();
 
+/**
+ * Premium (license activation + live catalog billing) is opt-in. OmniPix runs
+ * standalone with no license service, so every mutating endpoint below 404s
+ * until the operator sets OMNIPIX_PREMIUM_ENABLED=1 alongside CATALOG_BASE_URL.
+ */
+export function isPremiumEnabled(): boolean {
+  return process.env.OMNIPIX_PREMIUM_ENABLED === '1';
+}
+
 function maskKey(key: string): string {
   if (key.length <= 10) return key;
   return `${key.slice(0, 7)}…${key.slice(-4)}`;
@@ -23,13 +32,21 @@ function maskKey(key: string): string {
 function statusPayload() {
   const key = getSetting(SETTING_LICENSE_KEY);
   return {
+    enabled: isPremiumEnabled(),
     hasKey: Boolean(key),
     maskedKey: key ? maskKey(key) : null,
     license: getCachedLicenseStatus(),
     catalog: getSyncState(),
-    // Where "Go Premium" / "recover key" links point. Overridable for forks.
-    siteUrl: (process.env.PREMIUM_SITE_URL ?? 'https://freellmapi.co').replace(/\/$/, ''),
+    // Where "Go Premium" / "recover key" links point. Empty unless the
+    // operator runs a storefront (PREMIUM_SITE_URL).
+    siteUrl: (process.env.PREMIUM_SITE_URL ?? '').replace(/\/$/, ''),
   };
+}
+
+function requirePremium(_req: Request, res: Response): boolean {
+  if (isPremiumEnabled()) return true;
+  res.status(404).json({ error: 'Premium is not enabled in this build.' });
+  return false;
 }
 
 /** GET /api/premium — everything the Premium page renders. */
@@ -44,6 +61,7 @@ premiumRouter.get('/', (_req: Request, res: Response) => {
  * visible within seconds, not at the next 12h poll.
  */
 premiumRouter.post('/key', async (req: Request, res: Response) => {
+  if (!requirePremium(req, res)) return;
   const key = typeof req.body?.key === 'string' ? req.body.key.trim() : '';
   if (key.length < 8) {
     res.status(400).json({ error: 'Enter the license key from your purchase email.' });
@@ -75,6 +93,7 @@ premiumRouter.post('/key', async (req: Request, res: Response) => {
 
 /** DELETE /api/premium/key — deactivate locally (the purchase itself is untouched). */
 premiumRouter.delete('/key', async (_req: Request, res: Response) => {
+  if (!requirePremium(_req, res)) return;
   const db = getDb();
   db.prepare('DELETE FROM settings WHERE key IN (?, ?)').run(SETTING_LICENSE_KEY, SETTING_LICENSE_STATUS);
   // Drop back to the free tier in the background; failure just means the next
@@ -85,6 +104,7 @@ premiumRouter.delete('/key', async (_req: Request, res: Response) => {
 
 /** POST /api/premium/sync — manual "check for updates now". */
 premiumRouter.post('/sync', async (_req: Request, res: Response) => {
+  if (!requirePremium(_req, res)) return;
   await refreshLicenseStatus();
   const sync = await syncCatalog(true);
   res.json({ ...statusPayload(), sync });
@@ -96,6 +116,7 @@ premiumRouter.post('/sync', async (_req: Request, res: Response) => {
  * entirely self-serve.
  */
 premiumRouter.post('/portal', async (_req: Request, res: Response) => {
+  if (!requirePremium(_req, res)) return;
   const key = getSetting(SETTING_LICENSE_KEY);
   if (!key) {
     res.status(400).json({ error: 'No license key configured.' });

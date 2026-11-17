@@ -8,7 +8,7 @@ interface DesktopLoginItemBridge {
 
 function bridge(): DesktopLoginItemBridge | null {
   if (typeof window === 'undefined') return null
-  return (window as { __FREEAPI_LOGIN_ITEM__?: DesktopLoginItemBridge }).__FREEAPI_LOGIN_ITEM__ ?? null
+  return (window as { __OMNIPIX_LOGIN_ITEM__?: DesktopLoginItemBridge }).__OMNIPIX_LOGIN_ITEM__ ?? null
 }
 
 /** True when this page runs in a desktop build that exposes the login-item bridge. */

@@ -19,7 +19,7 @@ import net from 'node:net';
 //     credential-theft vector.
 //   - Loopback and RFC1918/ULA private ranges: allowed by default so
 //     existing local setups keep working, but blocked when the operator
-//     sets FREEAPI_BLOCK_PRIVATE_PROVIDER_URLS=true (recommended for
+//     sets OMNIPIX_BLOCK_PRIVATE_PROVIDER_URLS=true (recommended for
 //     instances hosted on a VPS where the dashboard is exposed).
 //   - Everything else (public addresses): allowed.
 //
@@ -205,7 +205,7 @@ async function defaultResolve(hostname: string): Promise<string[]> {
 }
 
 function blockPrivateEnabled(): boolean {
-  return /^(1|true|yes)$/i.test(process.env.FREEAPI_BLOCK_PRIVATE_PROVIDER_URLS ?? '');
+  return /^(1|true|yes)$/i.test(process.env.OMNIPIX_BLOCK_PRIVATE_PROVIDER_URLS ?? '');
 }
 
 /**
@@ -263,7 +263,7 @@ export async function assessProviderUrl(rawUrl: string, opts: AssessOptions = {}
     if (blockPrivate && (cls === 'loopback' || cls === 'private')) {
       return {
         allowed: false,
-        reason: `resolves to a private address (${address}) and FREEAPI_BLOCK_PRIVATE_PROVIDER_URLS is set`,
+        reason: `resolves to a private address (${address}) and OMNIPIX_BLOCK_PRIVATE_PROVIDER_URLS is set`,
       };
     }
   }

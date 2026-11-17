@@ -8,7 +8,7 @@ import { describe, expect, it } from 'vitest';
 // GitHub rewrites spaces in an uploaded asset's name to dots while
 // electron-builder writes them into the manifest as dashes, so any installer
 // name with a space is one the updater can never fetch (v0.13.4's
-// "FreeLLMAPI.Setup.0.13.4.exe" vs latest.yml's "FreeLLMAPI-Setup-0.13.4.exe").
+// "OmniPix.Setup.0.13.4.exe" vs latest.yml's "OmniPix-Setup-0.13.4.exe").
 
 const yaml = createRequire(import.meta.url)('js-yaml');
 const desktopRoot = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
@@ -33,12 +33,12 @@ describe('updater artifact names', () => {
   });
 
   it('names the Windows installer the way latest.yml will', () => {
-    expect(expand(config.nsis.artifactName)).toBe('FreeLLMAPI-Setup-1.2.3.exe');
+    expect(expand(config.nsis.artifactName)).toBe('OmniPix-Setup-1.2.3.exe');
   });
 
   it.each(['arm64', 'x64'])('identifies macOS %s downloads by platform and architecture', (arch) => {
     for (const ext of ['zip', 'dmg']) {
-      expect(expand(config.mac.artifactName, arch, ext)).toBe(`FreeLLMAPI-1.2.3-macos-${arch}.${ext}`);
+      expect(expand(config.mac.artifactName, arch, ext)).toBe(`OmniPix-1.2.3-macos-${arch}.${ext}`);
     }
   });
 });

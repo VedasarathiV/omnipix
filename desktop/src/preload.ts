@@ -5,11 +5,11 @@
 // which avoids templating strings into executeJavaScript.
 import { contextBridge, ipcRenderer } from 'electron';
 
-const TOKEN_KEY = 'freellmapi_dashboard_token';
-const arg = process.argv.find((a) => a.startsWith('--freeapi-token='));
+const TOKEN_KEY = 'omnipix_dashboard_token';
+const arg = process.argv.find((a) => a.startsWith('--omnipix-token='));
 if (arg) {
   try {
-    window.localStorage.setItem(TOKEN_KEY, arg.slice('--freeapi-token='.length));
+    window.localStorage.setItem(TOKEN_KEY, arg.slice('--omnipix-token='.length));
   } catch {
     // localStorage unavailable — the dashboard will show its login screen.
   }
@@ -17,8 +17,8 @@ if (arg) {
 
 // Lets the client adapt its chrome (drag region, traffic-light padding,
 // no Sign out) when running inside the desktop shell.
-contextBridge.exposeInMainWorld('__FREEAPI_DESKTOP__', true);
-contextBridge.exposeInMainWorld('__FREEAPI_PLATFORM__', process.platform);
+contextBridge.exposeInMainWorld('__OMNIPIX_DESKTOP__', true);
+contextBridge.exposeInMainWorld('__OMNIPIX_PLATFORM__', process.platform);
 
 // The dashboard window signs in as the hidden machine account, whose password
 // is random and never shown, so it must never land on the login form. When the
@@ -28,7 +28,7 @@ contextBridge.exposeInMainWorld('__FREEAPI_PLATFORM__', process.platform);
 // and every extra capability handed to that world is one an XSS could use —
 // this one only ever hands back a session for the account the window already
 // runs as.
-contextBridge.exposeInMainWorld('__FREEAPI_SESSION__', () => ipcRenderer.invoke('freeapi:session-token'));
+contextBridge.exposeInMainWorld('__OMNIPIX_SESSION__', () => ipcRenderer.invoke('omnipix:session-token'));
 
 // "Start on system startup" for the dashboard's Settings dialog. Mirrors the
 // popover's login-item toggle, but as a narrow get/set pair the dashboard can
@@ -37,9 +37,9 @@ contextBridge.exposeInMainWorld('__FREEAPI_SESSION__', () => ipcRenderer.invoke(
 // only work on macOS and Windows; on Linux setLoginItemSettings is a no-op, so
 // the bridge is not exposed there and the dashboard hides the switch.
 if (process.platform === 'darwin' || process.platform === 'win32') {
-  contextBridge.exposeInMainWorld('__FREEAPI_LOGIN_ITEM__', {
-    get: () => ipcRenderer.invoke('freeapi:get-login-item'),
-    set: (open: boolean) => ipcRenderer.invoke('freeapi:set-login-item', open),
+  contextBridge.exposeInMainWorld('__OMNIPIX_LOGIN_ITEM__', {
+    get: () => ipcRenderer.invoke('omnipix:get-login-item'),
+    set: (open: boolean) => ipcRenderer.invoke('omnipix:set-login-item', open),
   });
 }
 
@@ -47,25 +47,25 @@ if (process.platform === 'darwin' || process.platform === 'win32') {
 // offer a check against the published releases (#703). Arrives the same way the
 // token does; absent in a browser, where the dashboard simply omits the row
 // rather than guessing from the server's own (unrelated) package version.
-const versionArg = process.argv.find((a) => a.startsWith('--freeapi-version='));
+const versionArg = process.argv.find((a) => a.startsWith('--omnipix-version='));
 contextBridge.exposeInMainWorld(
-  '__FREEAPI_VERSION__',
-  versionArg ? versionArg.slice('--freeapi-version='.length) : null,
+  '__OMNIPIX_VERSION__',
+  versionArg ? versionArg.slice('--omnipix-version='.length) : null,
 );
 
 // The in-app updater (the Settings update dialog and the update reminder). Like the session bridge above, deliberately
 // narrow: it can only check for, download and install the release published at
-// tashfeenahmed/freellmapi — the feed URL and signature checks live in the main
+// the configured feed — the feed URL and signature checks live in the main
 // process and nothing here can point them anywhere else.
-contextBridge.exposeInMainWorld('__FREEAPI_UPDATER__', {
-  state: () => ipcRenderer.invoke('freeapi:update-state'),
-  check: () => ipcRenderer.invoke('freeapi:update-check'),
-  download: () => ipcRenderer.invoke('freeapi:update-download'),
-  install: () => ipcRenderer.invoke('freeapi:update-install'),
+contextBridge.exposeInMainWorld('__OMNIPIX_UPDATER__', {
+  state: () => ipcRenderer.invoke('omnipix:update-state'),
+  check: () => ipcRenderer.invoke('omnipix:update-check'),
+  download: () => ipcRenderer.invoke('omnipix:update-download'),
+  install: () => ipcRenderer.invoke('omnipix:update-install'),
   subscribe: (listener: (state: unknown) => void) => {
     const handler = (_event: unknown, state: unknown) => listener(state);
-    ipcRenderer.on('freeapi:update-state', handler);
-    return () => { ipcRenderer.removeListener('freeapi:update-state', handler); };
+    ipcRenderer.on('omnipix:update-state', handler);
+    return () => { ipcRenderer.removeListener('omnipix:update-state', handler); };
   },
 });
 
@@ -92,7 +92,7 @@ try {
 // worlds into localStorage. The choice lets the main process hand
 // nativeTheme.themeSource back to the OS when the user picks System.
 function reportTheme() {
-  ipcRenderer.send('freeapi:theme-changed', {
+  ipcRenderer.send('omnipix:theme-changed', {
     resolved: document.documentElement.classList.contains('dark') ? 'dark' : 'light',
     choice: document.documentElement.dataset.themeChoice,
   });
@@ -104,7 +104,7 @@ function reportTheme() {
 // localStorage from this preload world.
 function reportLocale() {
   const lang = document.documentElement.lang;
-  if (lang) ipcRenderer.send('freeapi:locale-changed', lang);
+  if (lang) ipcRenderer.send('omnipix:locale-changed', lang);
 }
 window.addEventListener('DOMContentLoaded', () => {
   applyDesktopClass();

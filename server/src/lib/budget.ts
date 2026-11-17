@@ -3,9 +3,8 @@
 // quota math (headroom guardrail, token-usage bar). Returns 0 for unknown/empty
 // labels, which callers treat as "no budget info".
 //
-// Two label shapes the live catalog carries (checked against the signed
-// catalog at api.freellmapi.co/v1/latest, 2026-10-04) need more than the bare
-// number+unit match:
+// Two label shapes the live catalog carries (checked against a signed
+// catalog feed, 2026-10-04) need more than the bare number+unit match:
 //
 //   - request counts that ride on a K/M unit: 'free · 14.4K rpd',
 //     '1K calls/mo shared'. These count requests, not tokens. The old parse

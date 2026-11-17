@@ -1,13 +1,13 @@
 {
-  "name": "freellmapi-desktop",
-  "version": "0.16.30",
-  "description": "FreeLLMAPI menu-bar app — local OpenAI-compatible LLM router",
+  "name": "omnipix-desktop",
+  "version": "0.1.0",
+  "description": "OmniPix menu-bar app — local OpenAI-compatible LLM router",
   "author": {
-    "name": "tashfeenahmed",
-    "email": "tashfene@gmail.com",
-    "url": "https://github.com/tashfeenahmed"
+    "name": "OmniPix",
+    "email": "YOUR-EMAIL-HERE",
+    "url": "https://github.com/YOUR-GITHUB-USER/omnipix"
   },
-  "homepage": "https://freellmapi.co/",
+  "homepage": "https://github.com/YOUR-GITHUB-USER/omnipix",
   "private": true,
   "type": "module",
   "main": "build/main.mjs",

@@ -1,6 +1,6 @@
 {
-  "name": "@freellmapi/server",
-  "version": "0.2.1",
+  "name": "@omnipix/server",
+  "version": "0.1.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -21,7 +21,7 @@
     "db:migration:create": "tsx src/db/migrate/cli.ts create"
   },
   "dependencies": {
-    "@freellmapi/shared": "*",
+    "@omnipix/shared": "*",
     "ajv": "^8.20.0",
     "compression": "^1.8.0",
     "cors": "^2.8.5",

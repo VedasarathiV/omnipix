@@ -97,7 +97,8 @@ const adminSchema = z.object({
 
 const declarativeConfigSchema = z.object({
   admin: adminSchema.optional(),
-  // Premium license key (freellmapi.co). Same minimum as the dashboard's
+  // Premium license key for the operator's own license service. Ignored
+  // unless OMNIPIX_PREMIUM_ENABLED=1. Same minimum as the dashboard's
   // POST /api/premium/key length gate.
   license: z.string().min(8).optional(),
   keys: z.array(keySchema).optional(),
@@ -149,10 +150,10 @@ interface NormalizedCustomModel {
 }
 
 function readConfigFromEnv(): { source: string; value: unknown } | null {
-  const inline = process.env.FREEAPI_CONFIG_JSON?.trim();
-  if (inline) return { source: 'FREEAPI_CONFIG_JSON', value: JSON.parse(inline) };
+  const inline = process.env.OMNIPIX_CONFIG_JSON?.trim();
+  if (inline) return { source: 'OMNIPIX_CONFIG_JSON', value: JSON.parse(inline) };
 
-  const configPath = process.env.FREEAPI_CONFIG_PATH?.trim();
+  const configPath = process.env.OMNIPIX_CONFIG_PATH?.trim();
   if (configPath) return { source: configPath, value: JSON.parse(fs.readFileSync(configPath, 'utf8')) };
 
   return null;
@@ -546,6 +547,12 @@ export async function activateConfiguredLicense(key: string): Promise<void> {
   const trimmed = key.trim();
   try {
     if (getSetting(SETTING_LICENSE_KEY) === trimmed) return;
+    // Standalone builds have no license service: say so once instead of
+    // attempting activation against an unconfigured feed.
+    if (process.env.OMNIPIX_PREMIUM_ENABLED !== '1') {
+      console.warn('[config] license: premium is not enabled in this build — key left unconfigured');
+      return;
+    }
     const result = await validateLicenseKey(trimmed);
     if (result === null) {
       console.warn('[config] license: could not reach the license service — key left unconfigured');

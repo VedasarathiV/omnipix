@@ -27,7 +27,7 @@ function isNetworkError(message: string): boolean {
 }
 
 const DOCKER_COMMAND = 'docker compose pull && docker compose up -d'
-const SOURCE_COMMAND = 'git fetch https://github.com/tashfeenahmed/freellmapi.git main && git merge --ff-only FETCH_HEAD && npm ci && npm run build'
+const SOURCE_COMMAND = 'git pull --ff-only && npm ci && npm run build'
 
 /**
  * The one place updates live: opened from the ⋯ menu or the update pill.
@@ -51,7 +51,7 @@ function UpdatesContent() {
   const desktop = useDesktopUpdater()
   const docker = useDockerUpdate()
   const shellVersion = typeof window !== 'undefined'
-    ? (window as { __FREEAPI_VERSION__?: string | null }).__FREEAPI_VERSION__ ?? null
+    ? (window as { __OMNIPIX_VERSION__?: string | null }).__OMNIPIX_VERSION__ ?? null
     : null
   const [result, setResult] = useState<CheckResult | null>(null)
   const [checking, setChecking] = useState(true)
@@ -109,13 +109,13 @@ function UpdatesContent() {
   }
 
   const version = shellVersion ?? result?.version ?? serverVersion
-  const subtitle = version ? `FreeLLMAPI v${version}` : result?.localSha ? `FreeLLMAPI ${result.localSha}` : 'FreeLLMAPI'
-  const releaseNotes = (
+  const subtitle = version ? `OmniPix v${version}` : result?.localSha ? `OmniPix ${result.localSha}` : 'OmniPix'
+  const releaseNotes = RELEASES_URL ? (
     <a href={RELEASES_URL} target="_blank" rel="noreferrer noopener" className="inline-flex items-center gap-0.5 text-xs text-muted-foreground underline-offset-4 hover:text-foreground hover:underline">
       {t('updates.releaseNotes')}
       <ArrowUpRight className="size-3" aria-hidden />
     </a>
-  )
+  ) : null
   const retryButton = (
     <Button size="sm" variant="outline" onClick={retry}>{t('updates.tryAgain')}</Button>
   )
@@ -212,12 +212,12 @@ function UpdatesContent() {
           <Status
             icon="new"
             title={t('settings.updateAvailable')}
-            action={(
+            action={RELEASES_URL ? (
               <a href={RELEASES_URL} target="_blank" rel="noreferrer noopener" className={buttonVariants({ size: 'sm' })}>
                 {t('updates.releaseNotes')}
                 <ArrowUpRight aria-hidden />
               </a>
-            )}
+            ) : undefined}
           />
         )
       case 'ahead':
@@ -226,6 +226,10 @@ function UpdatesContent() {
         return <Status icon="info" title={t('settings.buildDiverged')} />
       case 'unknown':
         return <Status icon="info" title={t('settings.buildUnknown')} detail={releaseNotes} />
+      case 'disabled':
+        // No update repo configured (OMNIPIX_UPDATE_REPO unset): report the
+        // state without a release-notes link that would go nowhere.
+        return <Status icon="info" title={t('settings.notGitInstall')} />
       default:
         return <Status icon="info" title={t('settings.notGitInstall')} detail={releaseNotes} />
     }

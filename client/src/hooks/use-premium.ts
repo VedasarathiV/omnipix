@@ -20,6 +20,7 @@ export interface CatalogSyncState {
 }
 
 export interface PremiumStatus {
+  enabled: boolean
   hasKey: boolean
   maskedKey: string | null
   license: LicenseStatus | null

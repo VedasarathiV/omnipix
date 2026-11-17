@@ -301,7 +301,7 @@ const MAX_MEDIA_DOWNLOAD_REDIRECTS = 3;
  * Download a media file from a URL named by an upstream response (#1880). The
  * address is classified before every hop, and redirects are followed by hand
  * (a few at most) so a public result URL cannot bounce the request to a
- * metadata, link-local or (with FREEAPI_BLOCK_PRIVATE_PROVIDER_URLS) private
+ * metadata, link-local or (with OMNIPIX_BLOCK_PRIVATE_PROVIDER_URLS) private
  * address. The body is read up to maxBytes and no further. No credentials are
  * sent.
  */

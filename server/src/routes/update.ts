@@ -7,8 +7,16 @@ import { getAppVersion } from '../lib/app-version.js';
 
 const execFileAsync = promisify(nodeExecFile);
 
-const REPOSITORY = 'tashfeenahmed/freellmapi';
-const RELEASES_URL = `https://github.com/${REPOSITORY}/releases`;
+/**
+ * Which GitHub repo the update checker compares against. OmniPix ships with
+ * NO repo configured: an empty or malformed OMNIPIX_UPDATE_REPO (expected
+ * form "owner/name") disables every check below, so a fresh install never
+ * phones any GitHub repo — including upstream's.
+ */
+function updateRepository(env: NodeJS.ProcessEnv): string {
+  const repo = env.OMNIPIX_UPDATE_REPO?.trim() ?? '';
+  return /^[^/\s]+\/[^/\s]+$/.test(repo) ? repo : '';
+}
 const CACHE_TTL_MS = 5 * 60 * 1000;
 /**
  * The automatic release check is opt-in (see UPDATE_CHECK_SETTING), and even
@@ -354,12 +362,14 @@ export function createUpdateRouter(options: UpdateRouterOptions = {}): Router {
   const logger = options.logger ?? console;
   const appVersion = options.version ?? getAppVersion;
   const autoCheckEnabled = options.autoCheckEnabled ?? isAutoUpdateCheckEnabled;
-  const updateCheckDisabled = env.FREELLMAPI_UPDATE_CHECK?.trim().toLowerCase() === 'off';
-  const githubToken = env.FREELLMAPI_UPDATE_GITHUB_TOKEN?.trim();
+  const repository = updateRepository(env);
+  const releasesUrl = repository ? `https://github.com/${repository}/releases` : '';
+  const updateCheckDisabled = env.OMNIPIX_UPDATE_CHECK?.trim().toLowerCase() === 'off' || repository === '';
+  const githubToken = env.OMNIPIX_UPDATE_GITHUB_TOKEN?.trim();
   // docker-compose.yml's opt-in `autoupdate` profile runs a Watchtower sidecar
   // with only its token-protected update endpoint enabled; these point at it.
-  const selfUpdateUrl = env.FREELLMAPI_SELF_UPDATE_URL?.trim().replace(/\/+$/, '');
-  const selfUpdateToken = env.FREELLMAPI_SELF_UPDATE_TOKEN?.trim();
+  const selfUpdateUrl = env.OMNIPIX_SELF_UPDATE_URL?.trim().replace(/\/+$/, '');
+  const selfUpdateToken = env.OMNIPIX_SELF_UPDATE_TOKEN?.trim();
   const selfUpdateConfigured = Boolean(selfUpdateUrl && selfUpdateToken);
   const canSelfUpdate = (installation: Installation) => installation === 'docker' && selfUpdateConfigured;
 
@@ -374,7 +384,7 @@ export function createUpdateRouter(options: UpdateRouterOptions = {}): Router {
   function githubHeaders(accept: string): Record<string, string> {
     return {
       Accept: accept,
-      'User-Agent': 'freellmapi-update-checker',
+      'User-Agent': 'omnipix-update-checker',
       'X-GitHub-Api-Version': '2022-11-28',
       ...(githubToken ? { Authorization: `Bearer ${githubToken}` } : {}),
     };
@@ -386,8 +396,8 @@ export function createUpdateRouter(options: UpdateRouterOptions = {}): Router {
   async function resolveIdentity(): Promise<Identity> {
     if (identity) return identity;
 
-    const environmentSha = validSha(env.FREELLMAPI_COMMIT_SHA);
-    const installMethod = env.FREELLMAPI_INSTALL_METHOD;
+    const environmentSha = validSha(env.OMNIPIX_COMMIT_SHA);
+    const installMethod = env.OMNIPIX_INSTALL_METHOD;
     if (installMethod === 'docker' || installMethod === 'desktop') {
       // Deliberately before the SHA check: a self-built image without
       // --build-arg has no embedded SHA, and it is still a container install.
@@ -438,7 +448,7 @@ export function createUpdateRouter(options: UpdateRouterOptions = {}): Router {
       }
     }
 
-    const url = `https://api.github.com/repos/${REPOSITORY}/compare/${currentIdentity.sha}...${compareTarget}`;
+    const url = `https://api.github.com/repos/${repository}/compare/${currentIdentity.sha}...${compareTarget}`;
     const response = await fetchImpl(url, {
       headers: githubHeaders('application/vnd.github+json'),
       signal: AbortSignal.timeout(10_000),
@@ -453,10 +463,10 @@ export function createUpdateRouter(options: UpdateRouterOptions = {}): Router {
       if (releaseOnly) {
         throw new Error(`GitHub compare request returned HTTP ${response.status}`);
       }
-      const atomResponse = await fetchImpl(`https://github.com/${REPOSITORY}/commits/main.atom`, {
+      const atomResponse = await fetchImpl(`https://github.com/${repository}/commits/main.atom`, {
         headers: {
           Accept: 'application/atom+xml',
-          'User-Agent': 'freellmapi-update-checker',
+          'User-Agent': 'omnipix-update-checker',
         },
         signal: AbortSignal.timeout(10_000),
       });
@@ -515,7 +525,7 @@ export function createUpdateRouter(options: UpdateRouterOptions = {}): Router {
   }
 
   async function performReleaseCheck(): Promise<LatestRelease> {
-    const response = await fetchImpl(`https://api.github.com/repos/${REPOSITORY}/releases/latest`, {
+    const response = await fetchImpl(`https://api.github.com/repos/${repository}/releases/latest`, {
       headers: githubHeaders('application/vnd.github+json'),
       signal: AbortSignal.timeout(10_000),
     });
@@ -532,9 +542,9 @@ export function createUpdateRouter(options: UpdateRouterOptions = {}): Router {
     // The release notes are rendered as Markdown in the dashboard, so the body
     // is capped rather than trusted at whatever length GitHub returns, and the
     // link is only honoured when it points back at this repository.
-    const htmlUrl = typeof body.html_url === 'string' && body.html_url.startsWith(`${RELEASES_URL}/`)
+    const htmlUrl = typeof body.html_url === 'string' && body.html_url.startsWith(`${releasesUrl}/`)
       ? body.html_url
-      : RELEASES_URL;
+      : releasesUrl;
 
     return {
       tagName: body.tag_name.trim().slice(0, MAX_TAG_LENGTH),
