@@ -293,7 +293,8 @@
     "disableAll": "全部停用",
     "enableAllHint": "啟用所有顯示的模型，然後儲存",
     "disableAllHint": "停用所有顯示的模型，然後儲存",
-    "enabledOfShown": "顯示的 {shown} 個模型中有 {enabled} 個在鏈中"
+    "enabledOfShown": "顯示的 {shown} 個模型中有 {enabled} 個在鏈中",
+    "arenaTab": "Arena"
   },
   "strategies": {
     "explore": "探索未測模型",
@@ -1354,5 +1355,20 @@
     "tryConfidence": "信心 {value}%",
     "tryServedBy": "{model} · {latency} ms",
     "exampleTitle": "請求範例"
+  },
+  "arena": {
+    "title": "Arena",
+    "description": "One prompt, many models. Compare answers side by side with latency and token counts.",
+    "promptLabel": "Prompt",
+    "promptPlaceholder": "Ask anything — every selected model answers the same prompt…",
+    "modelsLabel": "Models ({selected}/{max})",
+    "searchPlaceholder": "Filter models…",
+    "noKeyedModels": "No keyed models yet. Add API keys on the Keys page first.",
+    "run": "Run arena",
+    "running": "Racing…",
+    "selectAtLeastTwo": "Select at least two models to compare.",
+    "latency": "{ms} ms",
+    "tokens": "↑{prompt} ↓{completion}",
+    "failed": "Failed"
   }
 }

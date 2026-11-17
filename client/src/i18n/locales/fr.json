@@ -293,7 +293,8 @@
     "disableAll": "Tout désactiver",
     "enableAllHint": "Activer tous les modèles affichés, puis enregistrer",
     "disableAllHint": "Désactiver tous les modèles affichés, puis enregistrer",
-    "enabledOfShown": "{enabled} des {shown} modèles affichés sont dans la chaîne"
+    "enabledOfShown": "{enabled} des {shown} modèles affichés sont dans la chaîne",
+    "arenaTab": "Arena"
   },
   "strategies": {
     "explore": "Explorer les modèles non mesurés",
@@ -1354,5 +1355,20 @@
     "tryConfidence": "Confiance : {value} %",
     "tryServedBy": "{model} · {latency} ms",
     "exampleTitle": "Exemple de requête"
+  },
+  "arena": {
+    "title": "Arena",
+    "description": "One prompt, many models. Compare answers side by side with latency and token counts.",
+    "promptLabel": "Prompt",
+    "promptPlaceholder": "Ask anything — every selected model answers the same prompt…",
+    "modelsLabel": "Models ({selected}/{max})",
+    "searchPlaceholder": "Filter models…",
+    "noKeyedModels": "No keyed models yet. Add API keys on the Keys page first.",
+    "run": "Run arena",
+    "running": "Racing…",
+    "selectAtLeastTwo": "Select at least two models to compare.",
+    "latency": "{ms} ms",
+    "tokens": "↑{prompt} ↓{completion}",
+    "failed": "Failed"
   }
 }

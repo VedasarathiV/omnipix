@@ -293,7 +293,8 @@
     "disableAll": "Nonaktifkan semua",
     "enableAllHint": "Aktifkan semua model yang tampil, lalu simpan",
     "disableAllHint": "Nonaktifkan semua model yang tampil, lalu simpan",
-    "enabledOfShown": "{enabled} dari {shown} model yang tampil ada di rantai"
+    "enabledOfShown": "{enabled} dari {shown} model yang tampil ada di rantai",
+    "arenaTab": "Arena"
   },
   "strategies": {
     "explore": "Jelajahi model yang belum terukur",
@@ -1354,5 +1355,20 @@
     "tryConfidence": "Yakin {value}%",
     "tryServedBy": "{model} · {latency} ms",
     "exampleTitle": "Contoh permintaan"
+  },
+  "arena": {
+    "title": "Arena",
+    "description": "One prompt, many models. Compare answers side by side with latency and token counts.",
+    "promptLabel": "Prompt",
+    "promptPlaceholder": "Ask anything — every selected model answers the same prompt…",
+    "modelsLabel": "Models ({selected}/{max})",
+    "searchPlaceholder": "Filter models…",
+    "noKeyedModels": "No keyed models yet. Add API keys on the Keys page first.",
+    "run": "Run arena",
+    "running": "Racing…",
+    "selectAtLeastTwo": "Select at least two models to compare.",
+    "latency": "{ms} ms",
+    "tokens": "↑{prompt} ↓{completion}",
+    "failed": "Failed"
   }
 }

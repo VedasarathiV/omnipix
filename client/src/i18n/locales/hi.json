@@ -293,7 +293,8 @@
     "disableAll": "सभी बंद करें",
     "enableAllHint": "दिखाए गए सभी मॉडल चालू करें, फिर सहेजें",
     "disableAllHint": "दिखाए गए सभी मॉडल बंद करें, फिर सहेजें",
-    "enabledOfShown": "दिखाए गए {shown} में से {enabled} मॉडल चेन में हैं"
+    "enabledOfShown": "दिखाए गए {shown} में से {enabled} मॉडल चेन में हैं",
+    "arenaTab": "Arena"
   },
   "strategies": {
     "explore": "बिना मापे गए मॉडल एक्सप्लोर करें",
@@ -1354,5 +1355,20 @@
     "tryConfidence": "{value}% आश्वस्त",
     "tryServedBy": "{model} · {latency} ms",
     "exampleTitle": "उदाहरण अनुरोध"
+  },
+  "arena": {
+    "title": "Arena",
+    "description": "One prompt, many models. Compare answers side by side with latency and token counts.",
+    "promptLabel": "Prompt",
+    "promptPlaceholder": "Ask anything — every selected model answers the same prompt…",
+    "modelsLabel": "Models ({selected}/{max})",
+    "searchPlaceholder": "Filter models…",
+    "noKeyedModels": "No keyed models yet. Add API keys on the Keys page first.",
+    "run": "Run arena",
+    "running": "Racing…",
+    "selectAtLeastTwo": "Select at least two models to compare.",
+    "latency": "{ms} ms",
+    "tokens": "↑{prompt} ↓{completion}",
+    "failed": "Failed"
   }
 }

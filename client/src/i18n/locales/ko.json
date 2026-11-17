@@ -293,7 +293,8 @@
     "disableAll": "전체 해제",
     "enableAllHint": "표시된 모델을 모두 켠 뒤 저장하세요",
     "disableAllHint": "표시된 모델을 모두 끈 뒤 저장하세요",
-    "enabledOfShown": "표시된 {shown}개 중 {enabled}개가 체인에 있습니다"
+    "enabledOfShown": "표시된 {shown}개 중 {enabled}개가 체인에 있습니다",
+    "arenaTab": "Arena"
   },
   "strategies": {
     "explore": "미측정 모델 탐색",
@@ -1354,5 +1355,20 @@
     "tryConfidence": "확신도 {value}%",
     "tryServedBy": "{model} · {latency} ms",
     "exampleTitle": "요청 예시"
+  },
+  "arena": {
+    "title": "Arena",
+    "description": "One prompt, many models. Compare answers side by side with latency and token counts.",
+    "promptLabel": "Prompt",
+    "promptPlaceholder": "Ask anything — every selected model answers the same prompt…",
+    "modelsLabel": "Models ({selected}/{max})",
+    "searchPlaceholder": "Filter models…",
+    "noKeyedModels": "No keyed models yet. Add API keys on the Keys page first.",
+    "run": "Run arena",
+    "running": "Racing…",
+    "selectAtLeastTwo": "Select at least two models to compare.",
+    "latency": "{ms} ms",
+    "tokens": "↑{prompt} ↓{completion}",
+    "failed": "Failed"
   }
 }

@@ -297,6 +297,9 @@ export async function runModelCall(
   // Why the call failed when no route was ever available. Defaults to
   // rate_limited (every key cooling down or over quota).
   noRouteFailure: () => CallFailure = () => 'rate_limited',
+  // Request-log tag for these rows. Fusion callers keep the default; the
+  // arena reuses this runner with its own tag so analytics can tell them apart.
+  tag: string = FUSION_TAG,
 ): Promise<CallOutcome> {
   const skipKeys = new Set<string>();
   const skipModels = new Set<number>();
@@ -331,7 +334,7 @@ export async function runModelCall(
 
       if (!text && !hasToolCalls) {
         // Empty completion — fail over like the main proxy path does.
-        logRequest(route.platform, route.modelId, route.keyId, 'error', 0, 0, Date.now() - startedAt, 'empty completion (fusion)', null, FUSION_TAG, null, 'http');
+        logRequest(route.platform, route.modelId, route.keyId, 'error', 0, 0, Date.now() - startedAt, `empty completion (${tag})`, null, tag, null, 'http');
         skipKeys.add(`${route.platform}:${route.modelId}:${route.keyId}`);
         setCooldown(route.platform, route.modelId, route.keyId, getCooldownDurationForLimit(route.platform, route.modelId, route.keyId, { rpd: route.rpdLimit, tpd: route.tpdLimit }));
         recordRateLimitHit(route.modelDbId);
@@ -344,7 +347,7 @@ export async function runModelCall(
       recordRequest(route.platform, route.modelId, route.keyId);
       recordTokens(route.platform, route.modelId, route.keyId, usage.total_tokens);
       recordSuccess(route.modelDbId);
-      logRequest(route.platform, route.modelId, route.keyId, 'success', usage.prompt_tokens ?? 0, usage.completion_tokens ?? 0, Date.now() - startedAt, null, null, FUSION_TAG, null, 'http');
+      logRequest(route.platform, route.modelId, route.keyId, 'success', usage.prompt_tokens ?? 0, usage.completion_tokens ?? 0, Date.now() - startedAt, null, null, tag, null, 'http');
       return {
         ok: true,
         route,
@@ -361,7 +364,7 @@ export async function runModelCall(
       // but the model's rate-limit penalty is skipped and the log row is
       // tagged so the stats cache excludes it.
       const attribution = failureAttributionFor(err);
-      logRequest(route.platform, route.modelId, route.keyId, 'error', 0, 0, Date.now() - startedAt, safe, null, FUSION_TAG, null, 'http', attribution);
+      logRequest(route.platform, route.modelId, route.keyId, 'error', 0, 0, Date.now() - startedAt, safe, null, tag, null, 'http', attribution);
       lastError = safe;
       failure = mergeCallFailure(failure, classifyCallFailure(err));
 

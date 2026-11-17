@@ -293,7 +293,8 @@
     "disableAll": "Tümünü kapat",
     "enableAllHint": "Gösterilen tüm modelleri açın, sonra kaydedin",
     "disableAllHint": "Gösterilen tüm modelleri kapatın, sonra kaydedin",
-    "enabledOfShown": "Gösterilen {shown} modelden {enabled} tanesi zincirde"
+    "enabledOfShown": "Gösterilen {shown} modelden {enabled} tanesi zincirde",
+    "arenaTab": "Arena"
   },
   "strategies": {
     "explore": "Ölçülmemiş modelleri keşfet",
@@ -1354,5 +1355,20 @@
     "tryConfidence": "%{value} emin",
     "tryServedBy": "{model} · {latency} ms",
     "exampleTitle": "Örnek istek"
+  },
+  "arena": {
+    "title": "Arena",
+    "description": "One prompt, many models. Compare answers side by side with latency and token counts.",
+    "promptLabel": "Prompt",
+    "promptPlaceholder": "Ask anything — every selected model answers the same prompt…",
+    "modelsLabel": "Models ({selected}/{max})",
+    "searchPlaceholder": "Filter models…",
+    "noKeyedModels": "No keyed models yet. Add API keys on the Keys page first.",
+    "run": "Run arena",
+    "running": "Racing…",
+    "selectAtLeastTwo": "Select at least two models to compare.",
+    "latency": "{ms} ms",
+    "tokens": "↑{prompt} ↓{completion}",
+    "failed": "Failed"
   }
 }

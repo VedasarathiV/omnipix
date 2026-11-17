@@ -18,6 +18,7 @@ import {
   Search,
   Sparkles,
   SquareTerminal,
+  Swords,
   Zap,
 } from 'lucide-react'
 import { apiFetch } from '@/lib/api'
@@ -119,6 +120,7 @@ export function CommandPalette() {
       { id: 'p-decision', group: 'pages', label: t('decision.tab'), keywords: 'models decision classify choice yes no score clef mercury', icon: Scale, run: go('/models/decision') },
       { id: 'p-search', group: 'pages', label: t('search.tab'), keywords: 'models search web tavily exa firecrawl linkup parallel keenable', icon: Globe, run: go('/models/search') },
       { id: 'p-fusion', group: 'pages', label: t('models.fusionTab'), keywords: 'models fusion synthesis panel judge', icon: Zap, run: go('/models/fusion') },
+      { id: 'p-arena', group: 'pages', label: t('models.arenaTab'), keywords: 'models arena compare side by side race', icon: Swords, run: go('/models/arena') },
       { id: 'p-playground', group: 'pages', label: t('nav.playground'), keywords: 'playground test chat try', icon: SquareTerminal, run: go('/playground') },
       { id: 'p-keys', group: 'pages', label: t('nav.keys'), keywords: 'keys providers api tokens', icon: KeyRound, run: go('/keys') },
       { id: 'p-agents', group: 'pages', label: t('nav.agents'), keywords: 'agents claude codex cline ollama gemini', icon: Bot, run: go('/agents') },

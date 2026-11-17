@@ -293,7 +293,8 @@
     "disableAll": "すべて無効化",
     "enableAllHint": "表示中のモデルをすべて有効にして保存します",
     "disableAllHint": "表示中のモデルをすべて無効にして保存します",
-    "enabledOfShown": "表示中の {shown} 件のうち {enabled} 件がチェーンに入っています"
+    "enabledOfShown": "表示中の {shown} 件のうち {enabled} 件がチェーンに入っています",
+    "arenaTab": "Arena"
   },
   "strategies": {
     "explore": "未計測のモデルを探索",
@@ -1354,5 +1355,20 @@
     "tryConfidence": "確信度 {value}%",
     "tryServedBy": "{model} · {latency} ms",
     "exampleTitle": "リクエスト例"
+  },
+  "arena": {
+    "title": "Arena",
+    "description": "One prompt, many models. Compare answers side by side with latency and token counts.",
+    "promptLabel": "Prompt",
+    "promptPlaceholder": "Ask anything — every selected model answers the same prompt…",
+    "modelsLabel": "Models ({selected}/{max})",
+    "searchPlaceholder": "Filter models…",
+    "noKeyedModels": "No keyed models yet. Add API keys on the Keys page first.",
+    "run": "Run arena",
+    "running": "Racing…",
+    "selectAtLeastTwo": "Select at least two models to compare.",
+    "latency": "{ms} ms",
+    "tokens": "↑{prompt} ↓{completion}",
+    "failed": "Failed"
   }
 }

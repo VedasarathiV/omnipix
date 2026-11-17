@@ -293,7 +293,8 @@
     "disableAll": "Вимкнути всі",
     "enableAllHint": "Увімкніть усі показані моделі, потім збережіть",
     "disableAllHint": "Вимкніть усі показані моделі, потім збережіть",
-    "enabledOfShown": "У ланцюжку {enabled} із {shown} показаних моделей"
+    "enabledOfShown": "У ланцюжку {enabled} із {shown} показаних моделей",
+    "arenaTab": "Arena"
   },
   "strategies": {
     "explore": "Досліджувати невиміряні моделі",
@@ -1354,5 +1355,20 @@
     "tryConfidence": "Впевненість {value}%",
     "tryServedBy": "{model} · {latency} мс",
     "exampleTitle": "Приклад запиту"
+  },
+  "arena": {
+    "title": "Arena",
+    "description": "One prompt, many models. Compare answers side by side with latency and token counts.",
+    "promptLabel": "Prompt",
+    "promptPlaceholder": "Ask anything — every selected model answers the same prompt…",
+    "modelsLabel": "Models ({selected}/{max})",
+    "searchPlaceholder": "Filter models…",
+    "noKeyedModels": "No keyed models yet. Add API keys on the Keys page first.",
+    "run": "Run arena",
+    "running": "Racing…",
+    "selectAtLeastTwo": "Select at least two models to compare.",
+    "latency": "{ms} ms",
+    "tokens": "↑{prompt} ↓{completion}",
+    "failed": "Failed"
   }
 }

@@ -29,8 +29,15 @@ export function up(db: Db): void {
       INSERT OR IGNORE INTO models (id, platform, model_id, display_name, intelligence_rank, speed_rank, size_label, monthly_token_budget, context_window, supports_vision, supports_tools)
       VALUES (?, 'deepseek', ?, ?, ?, ?, 'Frontier', '~pay-as-you-go', 1048576, ?, 1)
     `);
+    // A legacy DB can already carry these rows at other ids (re-inserted
+    // without ids by a previous partial run); always resolve the live id and
+    // re-assert the flags rather than assuming the fixed ones.
+    const findId = db.prepare("SELECT id FROM models WHERE platform = 'deepseek' AND model_id = ?");
+    const flag = db.prepare('UPDATE models SET supports_vision = ?, supports_tools = ? WHERE id = ?');
     for (const row of ROWS) {
       insert.run(row.id, row.modelId, row.display, row.intel, row.speed, row.vision);
+      const live = findId.get(row.modelId) as { id: number } | undefined;
+      if (live) flag.run(row.vision ? 1 : 0, 1, live.id);
     }
     const maxPriority = (db.prepare('SELECT COALESCE(MAX(priority), 0) AS mx FROM fallback_config').get() as { mx: number }).mx;
     const existing = new Set(
@@ -38,7 +45,8 @@ export function up(db: Db): void {
     );
     const addFb = db.prepare('INSERT OR IGNORE INTO fallback_config (id, model_db_id, priority, enabled) VALUES (?, ?, ?, 1)');
     ROWS.forEach((row, i) => {
-      if (!existing.has(row.id)) addFb.run(row.fbId, row.id, maxPriority + i + 1);
+      const live = findId.get(row.modelId) as { id: number } | undefined;
+      if (live && !existing.has(live.id)) addFb.run(row.fbId, live.id, maxPriority + i + 1);
     });
   });
   apply();
@@ -46,8 +54,11 @@ export function up(db: Db): void {
 
 export function down(db: Db): void {
   const apply = db.transaction(() => {
-    db.prepare('DELETE FROM fallback_config WHERE model_db_id IN (900001, 900002)').run();
-    db.prepare('DELETE FROM models WHERE id IN (900001, 900002)').run();
+    // By identity, not by id: a legacy DB may carry these rows at other ids.
+    db.prepare(`DELETE FROM fallback_config WHERE model_db_id IN (
+      SELECT id FROM models WHERE platform = 'deepseek' AND model_id IN ('deepseek-flash', 'deepseek-v4-pro')
+    )`).run();
+    db.prepare("DELETE FROM models WHERE platform = 'deepseek' AND model_id IN ('deepseek-flash', 'deepseek-v4-pro')").run();
   });
   apply();
 }
