@@ -548,7 +548,6 @@
     "filterIssues": "ಸಮಸ್ಯೆಗಳು",
     "filterDisabled": "ನಿಷ್ಕ್ರಿಯಗೊಳಿಸಲಾಗಿದೆ",
     "noFilterMatch": "ನಿಮ್ಮ ಫಿಲ್ಟರ್‌ಗಳಿಗೆ ಯಾವುದೇ ಪೂರೈಕೆದಾರರು ಹೊಂದಿಕೆಯಾಗುವುದಿಲ್ಲ.",
-    "providerCountSummary": "{providers} ಪೂರೈಕೆದಾರರು · {keys} ಕೀಗಳು",
     "summaryHealthy": "{count} ಆರೋಗ್ಯಕರ",
     "summaryIssueOne": "{count} ಸಂಚಿಕೆ",
     "summaryIssueOther": "{count} ಸಮಸ್ಯೆಗಳು",
@@ -743,7 +742,11 @@
     "groupHandleCopyFailed": "Couldn't copy to the clipboard",
     "capUsagePercent": "{used} of {cap} ({pct}%)",
     "capWarning80": "Over 80% of this cap — the server logs a budget alert at this point.",
-    "capExhaustedWarning": "Cap reached — new requests are rejected until the monthly reset."
+    "capExhaustedWarning": "Cap reached — new requests are rejected until the monthly reset.",
+    "providerOne": "provider",
+    "providerOther": "providers",
+    "keyOne": "key",
+    "keyOther": "keys"
   },
   "backups": {
     "title": "Backups",

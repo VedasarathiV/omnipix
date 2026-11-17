@@ -548,7 +548,6 @@
     "filterIssues": "సమస్యలు",
     "filterDisabled": "వికలాంగుడు",
     "noFilterMatch": "మీ ఫిల్టర్‌లకు ఏ ప్రొవైడర్‌లు సరిపోలలేదు.",
-    "providerCountSummary": "{providers} ప్రొవైడర్లు · {keys} కీలు",
     "summaryHealthy": "{count} ఆరోగ్యంగా ఉంది",
     "summaryIssueOne": "{count} సంచిక",
     "summaryIssueOther": "{count} సమస్యలు",
@@ -743,7 +742,11 @@
     "groupHandleCopyFailed": "Couldn't copy to the clipboard",
     "capUsagePercent": "{used} of {cap} ({pct}%)",
     "capWarning80": "Over 80% of this cap — the server logs a budget alert at this point.",
-    "capExhaustedWarning": "Cap reached — new requests are rejected until the monthly reset."
+    "capExhaustedWarning": "Cap reached — new requests are rejected until the monthly reset.",
+    "providerOne": "provider",
+    "providerOther": "providers",
+    "keyOne": "key",
+    "keyOther": "keys"
   },
   "backups": {
     "title": "Backups",

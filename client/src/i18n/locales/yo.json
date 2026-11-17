@@ -548,7 +548,6 @@
     "filterIssues": "Awọn ọrọ",
     "filterDisabled": "Alaabo",
     "noFilterMatch": "Ko si olupese ti o baamu awọn asẹ rẹ.",
-    "providerCountSummary": "Awọn olupese {providers} · awọn bọtini {keys}",
     "summaryHealthy": "{count} ni ilera",
     "summaryIssueOne": "{count} atejade",
     "summaryIssueOther": "{count} oran",
@@ -743,7 +742,11 @@
     "groupHandleCopyFailed": "Couldn't copy to the clipboard",
     "capUsagePercent": "{used} of {cap} ({pct}%)",
     "capWarning80": "Over 80% of this cap — the server logs a budget alert at this point.",
-    "capExhaustedWarning": "Cap reached — new requests are rejected until the monthly reset."
+    "capExhaustedWarning": "Cap reached — new requests are rejected until the monthly reset.",
+    "providerOne": "provider",
+    "providerOther": "providers",
+    "keyOne": "key",
+    "keyOther": "keys"
   },
   "backups": {
     "title": "Backups",

@@ -548,7 +548,6 @@
     "filterIssues": "പ്രശ്നങ്ങൾ",
     "filterDisabled": "അപ്രാപ്തമാക്കി",
     "noFilterMatch": "നിങ്ങളുടെ ഫിൽട്ടറുകളുമായി ഒരു ദാതാക്കളും പൊരുത്തപ്പെടുന്നില്ല.",
-    "providerCountSummary": "{providers} ദാതാക്കൾ · {keys} കീകൾ",
     "summaryHealthy": "{count} ആരോഗ്യകരമാണ്",
     "summaryIssueOne": "{count} ഇഷ്യു",
     "summaryIssueOther": "{count} ലക്കങ്ങൾ",
@@ -743,7 +742,11 @@
     "groupHandleCopyFailed": "Couldn't copy to the clipboard",
     "capUsagePercent": "{used} of {cap} ({pct}%)",
     "capWarning80": "Over 80% of this cap — the server logs a budget alert at this point.",
-    "capExhaustedWarning": "Cap reached — new requests are rejected until the monthly reset."
+    "capExhaustedWarning": "Cap reached — new requests are rejected until the monthly reset.",
+    "providerOne": "provider",
+    "providerOther": "providers",
+    "keyOne": "key",
+    "keyOther": "keys"
   },
   "backups": {
     "title": "Backups",

@@ -75,11 +75,11 @@ export const MODEL_PRICING: PricingRow[] = [
   ['huggingface', 'moonshotai/Kimi-K2.6', 0.684, 3.42],
   ['huggingface', 'accounts/fireworks/models/llama-v3p3-70b-instruct', 0.10, 0.32], // legacy
 
-  // Kilo (Poolside Laguna is stealth — no paid equivalent)
-  ['kilo', 'nvidia/nemotron-3-super-120b-a12b:free', 0.09, 0.45],
-  ['kilo', 'poolside/laguna-m.1:free', null, null],
-  ['kilo', 'poolside/laguna-xs.2:free', null, null],
-  ['kilo', 'stepfun/step-3.7-flash:free', 0.20, 1.15],
+  // Kilo (Nov 2026 refresh — no confirmed paid equivalents yet)
+  ['kilo', 'kilo-auto/free', null, null],
+  ['kilo', 'particle-ai/particle-1:free', null, null],
+  ['kilo', 'reflection/beam-free', null, null],
+  ['kilo', 'liquid/lfm-3-1.7b:free', null, null],
 
   // LLM7
   ['llm7', 'codestral-latest', 0.30, 0.90],

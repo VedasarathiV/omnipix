@@ -548,7 +548,6 @@
     "filterIssues": "Masuala",
     "filterDisabled": "Imezimwa",
     "noFilterMatch": "Hakuna watoa huduma wanaolingana na vichujio vyako.",
-    "providerCountSummary": "Watoa huduma wa {providers} · funguo za {keys}",
     "summaryHealthy": "{count} afya",
     "summaryIssueOne": "Toleo la {count}",
     "summaryIssueOther": "Maswala ya {count}",
@@ -743,7 +742,11 @@
     "groupHandleCopyFailed": "Couldn't copy to the clipboard",
     "capUsagePercent": "{used} of {cap} ({pct}%)",
     "capWarning80": "Over 80% of this cap — the server logs a budget alert at this point.",
-    "capExhaustedWarning": "Cap reached — new requests are rejected until the monthly reset."
+    "capExhaustedWarning": "Cap reached — new requests are rejected until the monthly reset.",
+    "providerOne": "provider",
+    "providerOther": "providers",
+    "keyOne": "key",
+    "keyOther": "keys"
   },
   "backups": {
     "title": "Backups",

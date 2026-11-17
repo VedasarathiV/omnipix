@@ -548,7 +548,6 @@
     "filterIssues": "ပြဿနာများ",
     "filterDisabled": "မသန်စွမ်းသူ",
     "noFilterMatch": "မည်သည့် ဝန်ဆောင်မှုပေးသူမှ သင့်စစ်ထုတ်မှုများနှင့် ကိုက်ညီမှု မရှိပါ။",
-    "providerCountSummary": "{providers} ပံ့ပိုးသူများ · {keys}",
     "summaryHealthy": "{count}",
     "summaryIssueOne": "{count}",
     "summaryIssueOther": "{count} ပြဿနာများ",
@@ -743,7 +742,11 @@
     "groupHandleCopyFailed": "Couldn't copy to the clipboard",
     "capUsagePercent": "{used} of {cap} ({pct}%)",
     "capWarning80": "Over 80% of this cap — the server logs a budget alert at this point.",
-    "capExhaustedWarning": "Cap reached — new requests are rejected until the monthly reset."
+    "capExhaustedWarning": "Cap reached — new requests are rejected until the monthly reset.",
+    "providerOne": "provider",
+    "providerOther": "providers",
+    "keyOne": "key",
+    "keyOther": "keys"
   },
   "backups": {
     "title": "Backups",

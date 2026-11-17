@@ -548,7 +548,6 @@
     "filterIssues": "vấn đề",
     "filterDisabled": "Đã tắt",
     "noFilterMatch": "Không có nhà cung cấp nào phù hợp với bộ lọc của bạn.",
-    "providerCountSummary": "Nhà cung cấp {providers} · Khóa {keys}",
     "summaryHealthy": "{count} khỏe mạnh",
     "summaryIssueOne": "Sự cố {count}",
     "summaryIssueOther": "Các vấn đề về {count}",
@@ -743,7 +742,11 @@
     "groupHandleCopyFailed": "Couldn't copy to the clipboard",
     "capUsagePercent": "{used} of {cap} ({pct}%)",
     "capWarning80": "Over 80% of this cap — the server logs a budget alert at this point.",
-    "capExhaustedWarning": "Cap reached — new requests are rejected until the monthly reset."
+    "capExhaustedWarning": "Cap reached — new requests are rejected until the monthly reset.",
+    "providerOne": "provider",
+    "providerOther": "providers",
+    "keyOne": "key",
+    "keyOther": "keys"
   },
   "backups": {
     "title": "Backups",

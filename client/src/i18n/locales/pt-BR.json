@@ -548,7 +548,6 @@
     "filterIssues": "Com problemas",
     "filterDisabled": "Desabilitados",
     "noFilterMatch": "Nenhum provedor corresponde aos seus filtros.",
-    "providerCountSummary": "{providers} provedores · {keys} chaves",
     "summaryHealthy": "{count} saudáveis",
     "summaryIssueOne": "{count} problema",
     "summaryIssueOther": "{count} problemas",
@@ -743,7 +742,11 @@
     "groupHandleCopyFailed": "Couldn't copy to the clipboard",
     "capUsagePercent": "{used} of {cap} ({pct}%)",
     "capWarning80": "Over 80% of this cap — the server logs a budget alert at this point.",
-    "capExhaustedWarning": "Cap reached — new requests are rejected until the monthly reset."
+    "capExhaustedWarning": "Cap reached — new requests are rejected until the monthly reset.",
+    "providerOne": "provider",
+    "providerOther": "providers",
+    "keyOne": "key",
+    "keyOther": "keys"
   },
   "backups": {
     "title": "Backups",

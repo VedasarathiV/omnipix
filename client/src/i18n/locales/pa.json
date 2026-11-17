@@ -548,7 +548,6 @@
     "filterIssues": "ਮੁੱਦੇ",
     "filterDisabled": "ਅਯੋਗ",
     "noFilterMatch": "ਕੋਈ ਵੀ ਪ੍ਰਦਾਤਾ ਤੁਹਾਡੇ ਫਿਲਟਰਾਂ ਨਾਲ ਮੇਲ ਨਹੀਂ ਖਾਂਦਾ।",
-    "providerCountSummary": "{providers} ਪ੍ਰਦਾਤਾ · {keys} ਕੁੰਜੀਆਂ",
     "summaryHealthy": "{count} ਸਿਹਤਮੰਦ",
     "summaryIssueOne": "{count} ਮੁੱਦਾ",
     "summaryIssueOther": "{count} ਮੁੱਦੇ",
@@ -743,7 +742,11 @@
     "groupHandleCopyFailed": "Couldn't copy to the clipboard",
     "capUsagePercent": "{used} of {cap} ({pct}%)",
     "capWarning80": "Over 80% of this cap — the server logs a budget alert at this point.",
-    "capExhaustedWarning": "Cap reached — new requests are rejected until the monthly reset."
+    "capExhaustedWarning": "Cap reached — new requests are rejected until the monthly reset.",
+    "providerOne": "provider",
+    "providerOther": "providers",
+    "keyOne": "key",
+    "keyOther": "keys"
   },
   "backups": {
     "title": "Backups",

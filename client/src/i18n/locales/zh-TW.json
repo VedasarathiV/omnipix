@@ -552,7 +552,6 @@
     "filterIssues": "有問題",
     "filterDisabled": "已停用",
     "noFilterMatch": "沒有符合篩選條件的提供者。",
-    "providerCountSummary": "{providers} 個提供者 · {keys} 個金鑰",
     "summaryHealthy": "{count} 個健康",
     "summaryIssueOne": "{count} 個問題",
     "summaryIssueOther": "{count} 個問題",
@@ -743,7 +742,11 @@
     "groupHandleCopyFailed": "Couldn't copy to the clipboard",
     "capUsagePercent": "{used} of {cap} ({pct}%)",
     "capWarning80": "Over 80% of this cap — the server logs a budget alert at this point.",
-    "capExhaustedWarning": "Cap reached — new requests are rejected until the monthly reset."
+    "capExhaustedWarning": "Cap reached — new requests are rejected until the monthly reset.",
+    "providerOne": "provider",
+    "providerOther": "providers",
+    "keyOne": "key",
+    "keyOther": "keys"
   },
   "backups": {
     "title": "Backups",

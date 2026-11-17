@@ -56,7 +56,7 @@ MCowBQYDK2VwAyEAq9yv4+3EeyMHKsfVYBhkcz1lYgIXSUeHNnN6tNgYX3k=
 
 // Catalogs older than this are ignored. Bump to today's date whenever a model
 // migration lands, so the bundled DB is always the floor.
-export const MIN_CATALOG_VERSION = '2026.06.07';
+export const MIN_CATALOG_VERSION = '2026.11.17';
 
 const SYNC_INTERVAL_MS = 12 * 60 * 60 * 1000; // twice daily
 const BOOT_DELAY_MS = 10 * 1000; // let the server settle before first sync

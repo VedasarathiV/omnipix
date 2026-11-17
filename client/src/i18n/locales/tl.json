@@ -548,7 +548,6 @@
     "filterIssues": "Mga Isyu",
     "filterDisabled": "May kapansanan",
     "noFilterMatch": "Walang provider na tumutugma sa iyong mga filter.",
-    "providerCountSummary": "{providers} mga tagapagbigay · {keys} keys",
     "summaryHealthy": "{count} malusog",
     "summaryIssueOne": "{count} isyu",
     "summaryIssueOther": "{count} mga isyu",
@@ -743,7 +742,11 @@
     "groupHandleCopyFailed": "Couldn't copy to the clipboard",
     "capUsagePercent": "{used} of {cap} ({pct}%)",
     "capWarning80": "Over 80% of this cap — the server logs a budget alert at this point.",
-    "capExhaustedWarning": "Cap reached — new requests are rejected until the monthly reset."
+    "capExhaustedWarning": "Cap reached — new requests are rejected until the monthly reset.",
+    "providerOne": "provider",
+    "providerOther": "providers",
+    "keyOne": "key",
+    "keyOther": "keys"
   },
   "backups": {
     "title": "Backups",

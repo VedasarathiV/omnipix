@@ -548,7 +548,6 @@
     "filterIssues": "ইস্যু",
     "filterDisabled": "অক্ষম",
     "noFilterMatch": "কোনো প্রদানকারী আপনার ফিল্টার মেলে না.",
-    "providerCountSummary": "{providers} প্রদানকারী · {keys} কী",
     "summaryHealthy": "{count} সুস্থ",
     "summaryIssueOne": "{count} সমস্যা",
     "summaryIssueOther": "{count} সমস্যা",
@@ -743,7 +742,11 @@
     "groupHandleCopyFailed": "Couldn't copy to the clipboard",
     "capUsagePercent": "{used} of {cap} ({pct}%)",
     "capWarning80": "Over 80% of this cap — the server logs a budget alert at this point.",
-    "capExhaustedWarning": "Cap reached — new requests are rejected until the monthly reset."
+    "capExhaustedWarning": "Cap reached — new requests are rejected until the monthly reset.",
+    "providerOne": "provider",
+    "providerOther": "providers",
+    "keyOne": "key",
+    "keyOther": "keys"
   },
   "backups": {
     "title": "Backups",

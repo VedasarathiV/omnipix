@@ -466,7 +466,8 @@ export function ProviderList({ onAddKey }: { onAddKey: () => void }) {
         />
         <span className="flex-1" />
         <span className="text-xs text-muted-foreground tabular-nums">
-          {t('keys.providerCountSummary', { providers: totalProviders, keys: totalKeys })}
+          {totalProviders} {totalProviders === 1 ? t('keys.providerOne') : t('keys.providerOther')}
+          {' · '}{totalKeys} {totalKeys === 1 ? t('keys.keyOne') : t('keys.keyOther')}
         </span>
       </div>
 

@@ -548,7 +548,6 @@
     "filterIssues": "मुद्दे",
     "filterDisabled": "विकलांग",
     "noFilterMatch": "कोई भी प्रदाता आपके फ़िल्टर से मेल नहीं खाता।",
-    "providerCountSummary": "{providers} प्रदाता · {keys} कुंजियाँ",
     "summaryHealthy": "{count} स्वस्थ",
     "summaryIssueOne": "{count} मुद्दा",
     "summaryIssueOther": "{count} मुद्दे",
@@ -743,7 +742,11 @@
     "groupHandleCopyFailed": "Couldn't copy to the clipboard",
     "capUsagePercent": "{used} of {cap} ({pct}%)",
     "capWarning80": "Over 80% of this cap — the server logs a budget alert at this point.",
-    "capExhaustedWarning": "Cap reached — new requests are rejected until the monthly reset."
+    "capExhaustedWarning": "Cap reached — new requests are rejected until the monthly reset.",
+    "providerOne": "provider",
+    "providerOther": "providers",
+    "keyOne": "key",
+    "keyOther": "keys"
   },
   "backups": {
     "title": "Backups",
