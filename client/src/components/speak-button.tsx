@@ -1,15 +1,12 @@
-import { useEffect, useRef, useState } from 'react'
 import { Loader2, Volume2 } from 'lucide-react'
 import { useI18n } from '@/i18n'
 import { toast } from '@/lib/toast'
-
-const BASE = import.meta.env.BASE_URL.replace(/\/$/, '');
-const MAX_CHARS = 2000;
+import { getSpeakState, speakText, stopSpeech, toSpokenText, useSpeakState, useVoiceSettings } from '@/lib/speech'
 
 /**
- * Voice-out button: sends text to the gateway's OpenAI-compatible TTS
- * endpoint and plays the returned audio. One utterance at a time per
- * button; object URLs and playback release on unmount or replay.
+ * Voice-out button: speaks text through the gateway TTS endpoint using the
+ * voice settings (model + voice). One utterance app-wide — pressing another
+ * speak button stops this one. Markdown is rewritten for the ear first.
  */
 export function SpeakButton({
   text,
@@ -21,68 +18,22 @@ export function SpeakButton({
   className?: string;
 }) {
   const { t } = useI18n()
-  const [state, setState] = useState<'idle' | 'loading' | 'playing'>('idle')
-  const audioRef = useRef<HTMLAudioElement | null>(null)
-  const urlRef = useRef<string | null>(null)
-
-  function release() {
-    audioRef.current?.pause()
-    audioRef.current = null
-    if (urlRef.current) {
-      URL.revokeObjectURL(urlRef.current)
-      urlRef.current = null
-    }
-  }
-
-  useEffect(() => release, [])
+  const state = useSpeakState()
+  const { data: voice } = useVoiceSettings()
 
   async function speak() {
-    if (state !== 'idle') {
-      release()
-      setState('idle')
+    if (getSpeakState() !== 'idle') {
+      stopSpeech()
       return
     }
     if (!apiKey) {
       toast.error(t('speech.noKey'))
       return
     }
-    const input = text.trim().slice(0, MAX_CHARS)
-    if (!input) return
-    setState('loading')
+    if (!toSpokenText(text).trim()) return
     try {
-      const res = await fetch(`${BASE}/v1/audio/speech`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
-        body: JSON.stringify({ input }),
-      })
-      if (!res.ok) {
-        // Surface the gateway's reason (e.g. no speech-capable key) instead
-        // of a dead-end toast — it names the fix.
-        const detail = await res.json().then(
-          (data: unknown) => (data as { error?: { message?: string } })?.error?.message,
-          () => undefined,
-        ).catch(() => undefined)
-        throw new Error(detail || t('speech.failed'))
-      }
-      const blob = await res.blob()
-      const url = URL.createObjectURL(blob)
-      urlRef.current = url
-      const audio = new Audio(url)
-      audioRef.current = audio
-      audio.onended = () => {
-        release()
-        setState('idle')
-      }
-      audio.onerror = () => {
-        release()
-        setState('idle')
-        toast.error(t('speech.failed'))
-      }
-      setState('playing')
-      await audio.play()
+      await speakText(text, { apiKey, model: voice?.ttsModel, voice: voice?.ttsVoice })
     } catch (err) {
-      release()
-      setState('idle')
       toast.error(err instanceof Error ? err.message : t('speech.failed'))
     }
   }

@@ -172,7 +172,18 @@
     "updateNow": "Actualizează acum",
     "updatingContainer": "Se descarcă noua imagine și se repornește. Pagina se reîncarcă când OmniPix revine.",
     "updateNowFailed": "Actualizatorul nu a acceptat cererea. Verifică dacă containerul watchtower rulează.",
-    "updateNowTimeout": "OmniPix nu a repornit după 5 minute. Verifică jurnalele containerului watchtower."
+    "updateNowTimeout": "OmniPix nu a repornit după 5 minute. Verifică jurnalele containerului watchtower.",
+    "sectionVoice": "Voice",
+    "voiceDescription": "Speech models and hands-free reading for chat and agent runs.",
+    "ttsModel": "Speech voice model",
+    "ttsVoice": "Voice",
+    "ttsVoicePlaceholder": "Provider default",
+    "ttsVoiceHint": "Provider voice id (e.g. nova). Blank uses the default voice.",
+    "sttModel": "Dictation model",
+    "autoSpeakChat": "Read chat replies aloud",
+    "autoSpeakRuns": "Announce agent run results",
+    "testVoice": "Test",
+    "voiceSample": "Hello! This is how I sound."
   },
   "models": {
     "title": "Modele",
@@ -1443,7 +1454,10 @@
       "compactionsHint": "Summarize-and-continue cycles after the step budget exhausts. 0 keeps the hard cap.",
       "searchPlaceholder": "Search past runs…",
       "searchClear": "Clear search",
-      "searchEmpty": "No runs match."
+      "searchEmpty": "No runs match.",
+      "voiceDone": "Run finished.",
+      "voiceFailed": "Run failed: {error}",
+      "voiceApproval": "Approval needed. The run is waiting for your decision."
     },
     "skills": {
       "title": "Skills",

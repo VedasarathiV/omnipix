@@ -172,7 +172,18 @@
     "updateNow": "Cập nhật ngay",
     "updatingContainer": "Đang kéo image mới và khởi động lại. Trang này sẽ tải lại khi OmniPix hoạt động trở lại.",
     "updateNowFailed": "Trình cập nhật không chấp nhận yêu cầu. Hãy kiểm tra container watchtower đang chạy.",
-    "updateNowTimeout": "OmniPix chưa khởi động lại sau 5 phút. Hãy xem nhật ký của container watchtower."
+    "updateNowTimeout": "OmniPix chưa khởi động lại sau 5 phút. Hãy xem nhật ký của container watchtower.",
+    "sectionVoice": "Voice",
+    "voiceDescription": "Speech models and hands-free reading for chat and agent runs.",
+    "ttsModel": "Speech voice model",
+    "ttsVoice": "Voice",
+    "ttsVoicePlaceholder": "Provider default",
+    "ttsVoiceHint": "Provider voice id (e.g. nova). Blank uses the default voice.",
+    "sttModel": "Dictation model",
+    "autoSpeakChat": "Read chat replies aloud",
+    "autoSpeakRuns": "Announce agent run results",
+    "testVoice": "Test",
+    "voiceSample": "Hello! This is how I sound."
   },
   "models": {
     "title": "Người mẫu",
@@ -1443,7 +1454,10 @@
       "compactionsHint": "Summarize-and-continue cycles after the step budget exhausts. 0 keeps the hard cap.",
       "searchPlaceholder": "Search past runs…",
       "searchClear": "Clear search",
-      "searchEmpty": "No runs match."
+      "searchEmpty": "No runs match.",
+      "voiceDone": "Run finished.",
+      "voiceFailed": "Run failed: {error}",
+      "voiceApproval": "Approval needed. The run is waiting for your decision."
     },
     "skills": {
       "title": "Skills",

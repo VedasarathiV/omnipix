@@ -172,7 +172,18 @@
     "updateNow": "இப்போது புதுப்பி",
     "updatingContainer": "புதிய image-ஐப் பெற்று மறுதொடக்கம் செய்கிறது. OmniPix திரும்பியதும் இந்தப் பக்கம் மீண்டும் ஏற்றப்படும்.",
     "updateNowFailed": "புதுப்பிப்பான் கோரிக்கையை ஏற்கவில்லை. watchtower கொள்கலன் இயங்குகிறதா எனச் சரிபார்க்கவும்.",
-    "updateNowTimeout": "5 நிமிடங்களுக்குப் பிறகும் OmniPix மறுதொடக்கம் ஆகவில்லை. watchtower கொள்கலனின் பதிவுகளைப் பார்க்கவும்."
+    "updateNowTimeout": "5 நிமிடங்களுக்குப் பிறகும் OmniPix மறுதொடக்கம் ஆகவில்லை. watchtower கொள்கலனின் பதிவுகளைப் பார்க்கவும்.",
+    "sectionVoice": "Voice",
+    "voiceDescription": "Speech models and hands-free reading for chat and agent runs.",
+    "ttsModel": "Speech voice model",
+    "ttsVoice": "Voice",
+    "ttsVoicePlaceholder": "Provider default",
+    "ttsVoiceHint": "Provider voice id (e.g. nova). Blank uses the default voice.",
+    "sttModel": "Dictation model",
+    "autoSpeakChat": "Read chat replies aloud",
+    "autoSpeakRuns": "Announce agent run results",
+    "testVoice": "Test",
+    "voiceSample": "Hello! This is how I sound."
   },
   "models": {
     "title": "மாதிரிகள்",
@@ -1443,7 +1454,10 @@
       "compactionsHint": "Summarize-and-continue cycles after the step budget exhausts. 0 keeps the hard cap.",
       "searchPlaceholder": "Search past runs…",
       "searchClear": "Clear search",
-      "searchEmpty": "No runs match."
+      "searchEmpty": "No runs match.",
+      "voiceDone": "Run finished.",
+      "voiceFailed": "Run failed: {error}",
+      "voiceApproval": "Approval needed. The run is waiting for your decision."
     },
     "skills": {
       "title": "Skills",

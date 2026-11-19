@@ -172,7 +172,18 @@
     "updateNow": "ਹੁਣੇ ਅੱਪਡੇਟ ਕਰੋ",
     "updatingContainer": "ਨਵੀਂ ਇਮੇਜ ਖਿੱਚੀ ਜਾ ਰਹੀ ਹੈ ਅਤੇ ਮੁੜ ਚਾਲੂ ਹੋ ਰਿਹਾ ਹੈ। OmniPix ਵਾਪਸ ਆਉਣ 'ਤੇ ਇਹ ਪੰਨਾ ਮੁੜ ਲੋਡ ਹੋਵੇਗਾ।",
     "updateNowFailed": "ਅੱਪਡੇਟਰ ਨੇ ਬੇਨਤੀ ਸਵੀਕਾਰ ਨਹੀਂ ਕੀਤੀ। ਜਾਂਚੋ ਕਿ watchtower ਕੰਟੇਨਰ ਚੱਲ ਰਿਹਾ ਹੈ।",
-    "updateNowTimeout": "5 ਮਿੰਟ ਬਾਅਦ ਵੀ OmniPix ਮੁੜ ਚਾਲੂ ਨਹੀਂ ਹੋਇਆ। watchtower ਕੰਟੇਨਰ ਦੇ ਲੌਗ ਵੇਖੋ।"
+    "updateNowTimeout": "5 ਮਿੰਟ ਬਾਅਦ ਵੀ OmniPix ਮੁੜ ਚਾਲੂ ਨਹੀਂ ਹੋਇਆ। watchtower ਕੰਟੇਨਰ ਦੇ ਲੌਗ ਵੇਖੋ।",
+    "sectionVoice": "Voice",
+    "voiceDescription": "Speech models and hands-free reading for chat and agent runs.",
+    "ttsModel": "Speech voice model",
+    "ttsVoice": "Voice",
+    "ttsVoicePlaceholder": "Provider default",
+    "ttsVoiceHint": "Provider voice id (e.g. nova). Blank uses the default voice.",
+    "sttModel": "Dictation model",
+    "autoSpeakChat": "Read chat replies aloud",
+    "autoSpeakRuns": "Announce agent run results",
+    "testVoice": "Test",
+    "voiceSample": "Hello! This is how I sound."
   },
   "models": {
     "title": "ਮਾਡਲ",
@@ -1443,7 +1454,10 @@
       "compactionsHint": "Summarize-and-continue cycles after the step budget exhausts. 0 keeps the hard cap.",
       "searchPlaceholder": "Search past runs…",
       "searchClear": "Clear search",
-      "searchEmpty": "No runs match."
+      "searchEmpty": "No runs match.",
+      "voiceDone": "Run finished.",
+      "voiceFailed": "Run failed: {error}",
+      "voiceApproval": "Approval needed. The run is waiting for your decision."
     },
     "skills": {
       "title": "Skills",

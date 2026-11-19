@@ -72,6 +72,8 @@ beforeEach(() => {
     if (path === '/api/skills') return { skills: [{ name: 'planner', enabled: 1 }] } as never
     if (path === '/api/mcp/tools') return { tools: [] } as never
     if (path === '/api/agents/sessions?limit=30') return { sessions: [] } as never
+    if (path === '/api/settings/voice') return { ttsModel: 'auto', ttsVoice: '', sttModel: 'auto', autoSpeakChat: false, autoSpeakRuns: false } as never
+    if (path === '/api/media') return { models: [] } as never
     if (path.startsWith('/api/agents/runs')) return { runs: [] } as never
     throw new Error(`unexpected ${path}`)
   })
@@ -101,6 +103,8 @@ it('posts the run and shows the empty history hint', async () => {
     if (path === '/api/agents/sessions?limit=30') return { sessions: [] } as never
     if (path === '/api/agents/runs' && options?.method === 'POST') return { ...RUN, id: 7 } as never
     if (path === '/api/agents/runs?limit=30') return { runs: [] } as never
+    if (path === '/api/settings/voice') return { ttsModel: 'auto', ttsVoice: '', sttModel: 'auto', autoSpeakChat: false, autoSpeakRuns: false } as never
+    if (path === '/api/media') return { models: [] } as never
     throw new Error(`unexpected ${path}`)
   })
   render()
@@ -425,4 +429,46 @@ it('disables restore while the run is live', async () => {
   const restoreBtn = Array.from(container.querySelectorAll('button')).find(b => b.textContent === 'Restore') as HTMLButtonElement
   expect(restoreBtn.disabled).toBe(true)
   expect(restoreBtn.title).toContain('Stop the run')
+})
+
+it('announces a finished run aloud when auto-speak is on', async () => {
+  const ttsPosts: string[] = []
+  const realFetch = globalThis.fetch
+  globalThis.fetch = (async (url: string, init?: RequestInit) => {
+    if (String(url).includes('/v1/audio/speech')) {
+      ttsPosts.push(String(init?.body))
+      return new Response(new Blob(['audio']), { status: 200 })
+    }
+    return realFetch(url, init)
+  }) as unknown as typeof fetch
+  vi.stubGlobal('Audio', class {
+    onended: (() => void) | null = null
+    onerror: (() => void) | null = null
+    constructor(public src: string) {}
+    async play() { queueMicrotask(() => this.onended?.()) }
+    pause() {}
+  } as unknown as typeof Audio)
+  try {
+    mocked.mockImplementation(async (path: string) => {
+      if (path === '/api/models') return MODELS as never
+      if (path === '/api/settings/api-key') return { apiKey: 'u-key' } as never
+      if (path === '/api/skills') return { skills: [] } as never
+      if (path === '/api/mcp/tools') return { tools: [] } as never
+      if (path === '/api/agents/sessions?limit=30') return { sessions: [] } as never
+      if (path === '/api/settings/voice') return { ttsModel: 'auto', ttsVoice: '', sttModel: 'auto', autoSpeakChat: false, autoSpeakRuns: true } as never
+      if (path === '/api/media') return { models: [] } as never
+      if (path === '/api/agents/runs?limit=30') return { runs: [RUN] } as never
+      throw new Error(`unexpected ${path}`)
+    })
+    render()
+    await flush()
+    const row = Array.from(container.querySelectorAll('button')).find(b => b.textContent?.includes('What is 2 + 2?')) as HTMLButtonElement
+    await act(async () => { row.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+    await flush()
+    expect(ttsPosts).toHaveLength(1)
+    expect(JSON.parse(ttsPosts[0]).input).toContain('The answer is 4.')
+  } finally {
+    globalThis.fetch = realFetch
+    vi.unstubAllGlobals()
+  }
 })

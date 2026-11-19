@@ -11,6 +11,7 @@ import {
   Search,
   SlidersHorizontal,
   Sun,
+  Volume2,
   Wrench,
   X,
 } from 'lucide-react'
@@ -27,6 +28,7 @@ import { SUPPORTED_LOCALES, type Locale, useI18n } from '@/i18n'
 import { type Theme, useTheme } from '@/theme-context'
 import { apiFetch } from '@/lib/api'
 import { useDesktopLoginItem } from '@/lib/desktop-login-item'
+import { VoiceSection } from '@/components/voice-section'
 
 // Small info affordance used next to labels a first-time user can't be expected
 // to understand. It's a real <button> so it reaches the tooltip by keyboard
@@ -280,10 +282,11 @@ const ENGINES = [
   { id: 'hard-budget', tKey: 'engineHardBudget', lossless: false },
 ] as const
 
-type SectionId = 'general' | 'compression' | 'advanced' | 'preview'
+type SectionId = 'general' | 'compression' | 'advanced' | 'preview' | 'voice'
 
 const SECTIONS = [
   { id: 'general', tKey: 'sectionGeneral', icon: SlidersHorizontal },
+  { id: 'voice', tKey: 'sectionVoice', icon: Volume2 },
   { id: 'compression', tKey: 'sectionCompression', icon: Gauge },
   { id: 'advanced', tKey: 'sectionAdvanced', icon: Wrench },
   { id: 'preview', tKey: 'sectionPreview', icon: FlaskConical },
@@ -602,7 +605,7 @@ export function SettingsDialog({
   const [section, setSection] = useState<SectionId>('general')
   const state = useCompressionSettings(open)
   const { config, busy, error, save } = state
-  const compressionSection = section !== 'general'
+  const compressionSection = section !== 'general' && section !== 'voice'
   const loading = compressionSection && !config && busy === 'load'
 
   return (
@@ -650,6 +653,7 @@ export function SettingsDialog({
           {/* min-height keeps the popup from resizing as sections are switched. */}
           <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:min-h-[27rem] sm:px-6 sm:py-6">
             {section === 'general' && <GeneralSection />}
+            {section === 'voice' && <VoiceSection />}
             {loading && (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Loader2 className="size-4 animate-spin" />

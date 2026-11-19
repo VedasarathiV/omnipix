@@ -172,7 +172,18 @@
     "updateNow": "Update now",
     "updatingContainer": "Pulling the new image and restarting. This page reloads when OmniPix is back.",
     "updateNowFailed": "The updater did not accept the request. Check that the watchtower container is running.",
-    "updateNowTimeout": "OmniPix has not restarted after 5 minutes. Check the watchtower container's logs."
+    "updateNowTimeout": "OmniPix has not restarted after 5 minutes. Check the watchtower container's logs.",
+    "sectionVoice": "Voice",
+    "voiceDescription": "Speech models and hands-free reading for chat and agent runs.",
+    "ttsModel": "Speech voice model",
+    "ttsVoice": "Voice",
+    "ttsVoicePlaceholder": "Provider default",
+    "ttsVoiceHint": "Provider voice id (e.g. nova). Blank uses the default voice.",
+    "sttModel": "Dictation model",
+    "autoSpeakChat": "Read chat replies aloud",
+    "autoSpeakRuns": "Announce agent run results",
+    "testVoice": "Test",
+    "voiceSample": "Hello! This is how I sound."
   },
   "models": {
     "title": "Models",
@@ -1017,7 +1028,10 @@
         "restoreConfirm": "Restore this snapshot? Current workspace files will be replaced.",
         "liveBlocked": "Stop the run before restoring.",
         "failed": "Snapshot failed: {error}"
-      }
+      },
+      "voiceDone": "Run finished.",
+      "voiceFailed": "Run failed: {error}",
+      "voiceApproval": "Approval needed. The run is waiting for your decision."
     },
     "hooks": {
       "title": "Hooks",

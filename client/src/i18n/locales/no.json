@@ -172,7 +172,18 @@
     "updateNow": "Oppdater nå",
     "updatingContainer": "Henter det nye imaget og starter på nytt. Siden lastes inn på nytt når OmniPix er tilbake.",
     "updateNowFailed": "Oppdateringstjenesten godtok ikke forespørselen. Sjekk at watchtower-containeren kjører.",
-    "updateNowTimeout": "OmniPix har ikke startet på nytt etter 5 minutter. Sjekk loggene til watchtower-containeren."
+    "updateNowTimeout": "OmniPix har ikke startet på nytt etter 5 minutter. Sjekk loggene til watchtower-containeren.",
+    "sectionVoice": "Voice",
+    "voiceDescription": "Speech models and hands-free reading for chat and agent runs.",
+    "ttsModel": "Speech voice model",
+    "ttsVoice": "Voice",
+    "ttsVoicePlaceholder": "Provider default",
+    "ttsVoiceHint": "Provider voice id (e.g. nova). Blank uses the default voice.",
+    "sttModel": "Dictation model",
+    "autoSpeakChat": "Read chat replies aloud",
+    "autoSpeakRuns": "Announce agent run results",
+    "testVoice": "Test",
+    "voiceSample": "Hello! This is how I sound."
   },
   "models": {
     "title": "Modeller",
@@ -1443,7 +1454,10 @@
       "compactionsHint": "Summarize-and-continue cycles after the step budget exhausts. 0 keeps the hard cap.",
       "searchPlaceholder": "Search past runs…",
       "searchClear": "Clear search",
-      "searchEmpty": "No runs match."
+      "searchEmpty": "No runs match.",
+      "voiceDone": "Run finished.",
+      "voiceFailed": "Run failed: {error}",
+      "voiceApproval": "Approval needed. The run is waiting for your decision."
     },
     "skills": {
       "title": "Skills",

@@ -37,6 +37,7 @@ import { getHeadroomThresholds, setHeadroomThresholds, getTaskWeightShare, setTa
 import { MCP_ENABLED_SETTING, isMcpServerEnabled } from './mcp.js';
 import { z } from 'zod';
 import { getAppVersion } from '../lib/app-version.js';
+import { getVoiceSettings, setVoiceSettings, voiceSettingsSchema } from '../services/voice-settings.js';
 import {
   UNIFIED_MAX_TOKENS_SETTING,
   UNIFIED_MAX_TOKENS_AUTO,
@@ -531,6 +532,20 @@ settingsRouter.put('/content-guard', (req: Request, res: Response) => {
     blockedPatterns: getBlockedPatternSources(),
     stats: getContentGuardStats(),
   });
+});
+
+// Voice-agent preferences: speech models and auto-speak behavior.
+settingsRouter.get('/voice', (_req: Request, res: Response) => {
+  res.json(getVoiceSettings());
+});
+
+settingsRouter.put('/voice', (req: Request, res: Response) => {
+  const parsed = voiceSettingsSchema.partial().safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: { message: 'Invalid voice settings', type: 'invalid_request_error' } });
+    return;
+  }
+  res.json(setVoiceSettings(parsed.data));
 });
 
 // Get the unified API key

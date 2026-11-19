@@ -39,6 +39,7 @@ import {
   type IngestedDoc,
 } from '@/lib/attachments'
 import { readChatStream } from '@/lib/playground-stream'
+import { speakText, useVoiceSettings } from '@/lib/speech'
 import { ConversationSidebar } from '@/components/playground/conversation-sidebar'
 import { SettingsRail } from '@/components/playground/settings-rail'
 import { LiquidComposer } from '@/components/playground/liquid-composer'
@@ -356,6 +357,7 @@ export default function PlaygroundPage() {
     queryKey: ['unified-key'],
     queryFn: () => apiFetch('/api/settings/api-key'),
   })
+  const { data: voiceSettings } = useVoiceSettings()
 
   // Ingested docs for @-mentions. Fetched once per page load; ingestion
   // happens in the Assistant tab, and a refetch-on-open keeps the picker
@@ -1207,6 +1209,15 @@ export default function PlaygroundPage() {
       }]
       setMessages(answered)
       await persistConversation(answered)
+      // Auto-speak: read the finished reply aloud when the voice setting is
+      // on. Fire-and-forget — speech must never fail the chat.
+      if (voiceSettings?.autoSpeakChat && keyData?.apiKey) {
+        void speakText(content, {
+          apiKey: keyData.apiKey,
+          model: voiceSettings.ttsModel,
+          voice: voiceSettings.ttsVoice,
+        }).catch(() => {})
+      }
     } catch (err: unknown) {
       // Clearing the chat (or leaving the page) aborts the stream on purpose —
       // that is not a failure to report, and the transcript it belonged to is

@@ -1,15 +1,16 @@
 // @vitest-environment jsdom
-// Speak button: posts text to the TTS endpoint and plays the audio; a second
-// click stops playback. Audio and fetch are stubbed.
+// Speak button: posts cleaned text plus voice prefs to the TTS endpoint and
+// plays the audio; a second click stops playback. Audio and fetch are stubbed.
 import { afterEach, beforeAll, beforeEach, expect, it, vi } from 'vitest'
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import { I18nProvider } from '@/i18n'
 import { SpeakButton } from './speak-button'
 
 let root: Root
 let container: HTMLDivElement
-const flush = async () => { for (let i = 0; i < 6; i++) await act(async () => { await new Promise(r => setTimeout(r, 0)) }) }
+const flush = async () => { for (let i = 0; i < 8; i++) await act(async () => { await new Promise(r => setTimeout(r, 0)) }) }
 
 const realFetch = globalThis.fetch
 let posted: { url: string; body: string } | null = null
@@ -38,6 +39,9 @@ beforeEach(() => {
   FakeAudio.instances = []
   posted = null
   globalThis.fetch = (async (url: string, init?: RequestInit) => {
+    if (String(url).includes('/api/settings/voice')) {
+      return Response.json({ ttsModel: 'auto', ttsVoice: 'nova', sttModel: 'auto', autoSpeakChat: false, autoSpeakRuns: false })
+    }
     posted = { url: String(url), body: String(init?.body) }
     return new Response(new Blob(['audio-bytes']), { status: 200 })
   }) as unknown as typeof fetch
@@ -49,25 +53,37 @@ afterEach(() => {
   globalThis.fetch = realFetch
 })
 
-function render() {
+function render(text = 'Hello there') {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
   root.render(
-    <I18nProvider>
-      <SpeakButton text="Hello there" apiKey="u-key" />
-    </I18nProvider>,
+    <QueryClientProvider client={client}>
+      <I18nProvider>
+        <SpeakButton text={text} apiKey="u-key" />
+      </I18nProvider>
+    </QueryClientProvider>,
   )
 }
 
-it('posts text to TTS and plays the result, toggling on second click', async () => {
+it('posts cleaned text plus voice prefs to TTS and plays the result, toggling on second click', async () => {
   render()
   await flush()
   const button = container.querySelector('button[aria-label="Read aloud"]') as HTMLButtonElement
   await act(async () => { button.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
   await flush()
   expect(posted?.url).toContain('/v1/audio/speech')
-  expect(JSON.parse(posted?.body ?? '{}')).toMatchObject({ input: 'Hello there' })
+  expect(JSON.parse(posted?.body ?? '{}')).toMatchObject({ input: 'Hello there', voice: 'nova' })
   expect(FakeAudio.instances).toHaveLength(1)
   await act(async () => { button.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
   await flush()
   expect(FakeAudio.instances[0].paused).toBe(true)
   expect(FakeAudio.instances).toHaveLength(1)
+})
+
+it('reads markdown as words, not markup', async () => {
+  render('**Bold** move with `code`')
+  await flush()
+  const button = container.querySelector('button[aria-label="Read aloud"]') as HTMLButtonElement
+  await act(async () => { button.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+  await flush()
+  expect(JSON.parse(posted?.body ?? '{}').input).toBe('Bold move with code')
 })

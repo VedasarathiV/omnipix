@@ -6,6 +6,9 @@ import { apiFetch, getToken } from '@/lib/api'
 import { useI18n } from '@/i18n'
 import { Button } from '@/components/ui/button'
 import { SpeakButton } from '@/components/speak-button'
+import { DictationButton } from '@/components/playground/dictation-button'
+import { speakText, useVoiceSettings } from '@/lib/speech'
+import { hasTranscription, resolveDictationModel, type TranscriptionModelRow } from '@/lib/transcription'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -163,6 +166,12 @@ export function AgentRunsPanel() {
     queryKey: ['unified-key'],
     queryFn: () => apiFetch('/api/settings/api-key'),
   })
+  const { data: voiceSettings } = useVoiceSettings()
+  const { data: mediaData } = useQuery<{ models: TranscriptionModelRow[] }>({
+    queryKey: ['media'],
+    queryFn: () => apiFetch('/api/media'),
+  })
+  const mediaModels = mediaData?.models ?? []
   const { data: skillRows = [] } = useQuery<SkillRow[]>({
     queryKey: ['agent-skills'],
     queryFn: () => apiFetch<{ skills: SkillRow[] }>('/api/skills').then(r => r.skills),
@@ -215,6 +224,27 @@ export function AgentRunsPanel() {
     () => searching ? (searchDetail ?? null) : (runs.find(r => r.id === selectedId) ?? null),
     [searching, searchDetail, runs, selectedId],
   )
+
+  // Voice agent announcements: when auto-speak is on, read the selected run's
+  // outcome once as it lands — completion, failure, or approval request.
+  const announcedRef = useRef<Set<number>>(new Set())
+  useEffect(() => {
+    if (!voiceSettings?.autoSpeakRuns || !keyData?.apiKey || !selected) return
+    if (announcedRef.current.has(selected.id)) return
+    const status = selected.status
+    if (status !== 'done' && status !== 'error' && status !== 'stopped' && status !== 'awaiting_approval') return
+    announcedRef.current.add(selected.id)
+    const message = status === 'awaiting_approval'
+      ? t('agents.runs.voiceApproval')
+      : status === 'done'
+        ? `${t('agents.runs.voiceDone')} ${selected.final_answer ?? ''}`
+        : t('agents.runs.voiceFailed', { error: selected.error ?? '' })
+    void speakText(message, {
+      apiKey: keyData.apiKey,
+      model: voiceSettings.ttsModel,
+      voice: voiceSettings.ttsVoice,
+    }).catch(() => {})
+  }, [voiceSettings, keyData?.apiKey, selected, t])
 
   const start = useMutation({
     mutationFn: () =>
@@ -380,7 +410,15 @@ export function AgentRunsPanel() {
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
           <div className="grid gap-1.5">
-            <Label htmlFor="agent-goal">{t('agents.runs.goal')}</Label>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="agent-goal">{t('agents.runs.goal')}</Label>
+              <DictationButton
+                available={hasTranscription(mediaModels)}
+                model={resolveDictationModel(voiceSettings?.sttModel, mediaModels)}
+                apiKey={keyData?.apiKey}
+                onText={text => setGoal(prev => prev ? `${prev} ${text}` : text)}
+              />
+            </div>
             <Textarea
               id="agent-goal"
               value={goal}

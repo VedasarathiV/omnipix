@@ -172,7 +172,18 @@
     "updateNow": "දැන් යාවත්කාලීන කරන්න",
     "updatingContainer": "නව image එක ලබාගෙන නැවත ආරම්භ කරමින්. OmniPix නැවත පැමිණි විට මෙම පිටුව නැවත පූරණය වේ.",
     "updateNowFailed": "යාවත්කාලීනකරු ඉල්ලීම පිළිගත්තේ නැත. watchtower container එක ධාවනය වන්නේදැයි පරීක්ෂා කරන්න.",
-    "updateNowTimeout": "මිනිත්තු 5කට පසුවත් OmniPix නැවත ආරම්භ වී නැත. watchtower container හි ලොග් පරීක්ෂා කරන්න."
+    "updateNowTimeout": "මිනිත්තු 5කට පසුවත් OmniPix නැවත ආරම්භ වී නැත. watchtower container හි ලොග් පරීක්ෂා කරන්න.",
+    "sectionVoice": "Voice",
+    "voiceDescription": "Speech models and hands-free reading for chat and agent runs.",
+    "ttsModel": "Speech voice model",
+    "ttsVoice": "Voice",
+    "ttsVoicePlaceholder": "Provider default",
+    "ttsVoiceHint": "Provider voice id (e.g. nova). Blank uses the default voice.",
+    "sttModel": "Dictation model",
+    "autoSpeakChat": "Read chat replies aloud",
+    "autoSpeakRuns": "Announce agent run results",
+    "testVoice": "Test",
+    "voiceSample": "Hello! This is how I sound."
   },
   "models": {
     "title": "ආකෘති",
@@ -1443,7 +1454,10 @@
       "compactionsHint": "Summarize-and-continue cycles after the step budget exhausts. 0 keeps the hard cap.",
       "searchPlaceholder": "Search past runs…",
       "searchClear": "Clear search",
-      "searchEmpty": "No runs match."
+      "searchEmpty": "No runs match.",
+      "voiceDone": "Run finished.",
+      "voiceFailed": "Run failed: {error}",
+      "voiceApproval": "Approval needed. The run is waiting for your decision."
     },
     "skills": {
       "title": "Skills",

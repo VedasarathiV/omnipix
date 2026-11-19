@@ -172,7 +172,18 @@
     "updateNow": "지금 업데이트",
     "updatingContainer": "새 이미지를 받아 재시작하는 중입니다. OmniPix가 돌아오면 이 페이지가 새로고침됩니다.",
     "updateNowFailed": "업데이터가 요청을 받지 않았습니다. watchtower 컨테이너가 실행 중인지 확인하세요.",
-    "updateNowTimeout": "5분이 지나도 OmniPix가 재시작되지 않았습니다. watchtower 컨테이너 로그를 확인하세요."
+    "updateNowTimeout": "5분이 지나도 OmniPix가 재시작되지 않았습니다. watchtower 컨테이너 로그를 확인하세요.",
+    "sectionVoice": "Voice",
+    "voiceDescription": "Speech models and hands-free reading for chat and agent runs.",
+    "ttsModel": "Speech voice model",
+    "ttsVoice": "Voice",
+    "ttsVoicePlaceholder": "Provider default",
+    "ttsVoiceHint": "Provider voice id (e.g. nova). Blank uses the default voice.",
+    "sttModel": "Dictation model",
+    "autoSpeakChat": "Read chat replies aloud",
+    "autoSpeakRuns": "Announce agent run results",
+    "testVoice": "Test",
+    "voiceSample": "Hello! This is how I sound."
   },
   "models": {
     "title": "모델",
@@ -1443,7 +1454,10 @@
       "compactionsHint": "Summarize-and-continue cycles after the step budget exhausts. 0 keeps the hard cap.",
       "searchPlaceholder": "Search past runs…",
       "searchClear": "Clear search",
-      "searchEmpty": "No runs match."
+      "searchEmpty": "No runs match.",
+      "voiceDone": "Run finished.",
+      "voiceFailed": "Run failed: {error}",
+      "voiceApproval": "Approval needed. The run is waiting for your decision."
     },
     "skills": {
       "title": "Skills",
