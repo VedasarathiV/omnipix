@@ -368,6 +368,18 @@ jobs:
           ELECTRON_RUN_AS_NODE=1 "$app/Contents/MacOS/OmniPix" \
             desktop/scripts/smoke-mac-package.mjs "$app" "$EXPECTED_ARCH"
 
+      # Linux had a packaged backend for releases but no smoke coverage while
+      # macOS and Windows both had it. Same shape as the macOS step, against
+      # the unpacked dir, plus the #1229 chrome-sandbox setuid assertion.
+      - name: Smoke-test packaged Linux backend
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          unpacked=desktop/dist-electron/linux-unpacked
+          ELECTRON_RUN_AS_NODE=1 "$unpacked/omnipix" \
+            desktop/scripts/smoke-linux-package.mjs "$unpacked"
+
       # electron-builder notarizes and staples the .app, then wraps it in a DMG
       # it never submits. The DMG is the file users download, so it is the file
       # macOS quarantines and assesses — until it carries its own stapled
