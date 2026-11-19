@@ -154,6 +154,8 @@ export interface ShellResult {
   exitCode: number | null;
   timedOut: boolean;
   truncated: boolean;
+  /** Where the command ran — the trace shows this so sandbox use is visible. */
+  sandbox: 'process' | 'docker';
 }
 
 export interface ShellOptions {
@@ -168,18 +170,79 @@ export interface ShellOptions {
 export const DEFAULT_SHELL_TIMEOUT_MS = 60_000;
 export const DEFAULT_SHELL_MAX_BYTES = 64 * 1024;
 
+// Container sandbox: with OMNIPIX_SANDBOX=docker, shell commands run inside
+// an ephemeral container (workspace bind-mounted at /work) instead of on the
+// host. Network defaults to none; the image is operator-chosen. Requesting
+// docker without a working daemon fails loudly — never a silent downgrade.
+export const DEFAULT_SANDBOX_IMAGE = 'node:22-slim';
+
+let dockerAvailable: boolean | null = null;
+
+/** Test seam: force docker present/absent regardless of the daemon. */
+export function __setDockerAvailable(value: boolean | null): void {
+  dockerAvailable = value;
+}
+
+export function sandboxBackend(): 'process' | 'docker' {
+  return (process.env.OMNIPIX_SANDBOX ?? '').trim().toLowerCase() === 'docker' ? 'docker' : 'process';
+}
+
+function dockerReady(): boolean {
+  if (dockerAvailable !== null) return dockerAvailable;
+  try {
+    const probed = spawnSync('docker', ['info'], { encoding: 'utf8', timeout: 8000, windowsHide: true });
+    dockerAvailable = probed.status === 0;
+  } catch {
+    dockerAvailable = false;
+  }
+  return dockerAvailable;
+}
+
+function scrubbedExtras(extra?: Record<string, string>): Record<string, string> {
+  const out: Record<string, string> = {};
+  if (extra) {
+    for (const [key, value] of Object.entries(extra)) {
+      if (/KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL|ENCRYPTION/i.test(key)) continue;
+      out[key] = value;
+    }
+  }
+  return out;
+}
+
+let containerSeq = 0;
+
+/** Pure docker argv builder (unit-tested); execShell is the only caller. */
+export function dockerRunArgs(cwd: string, command: string, opts: ShellOptions): { argv: string[]; name: string } {
+  const name = `omnipix-${process.pid}-${++containerSeq}`;
+  const image = (process.env.OMNIPIX_SANDBOX_IMAGE ?? '').trim() || DEFAULT_SANDBOX_IMAGE;
+  const network = (process.env.OMNIPIX_SANDBOX_NETWORK ?? '').trim() || 'none';
+  const argv = ['run', '--rm', '-i', '--name', name, '--network', network, '-v', `${cwd}:/work`, '-w', '/work'];
+  for (const [key, value] of Object.entries(scrubbedExtras(opts.envExtra))) {
+    argv.push('--env', `${key}=${value}`);
+  }
+  argv.push(image, '/bin/sh', '-c', command);
+  return { argv, name };
+}
+
 /** Run one shell command, confined and bounded. Never throws on exit != 0. */
 export function execShell(command: string, opts: ShellOptions): Promise<ShellResult> {
   assertCommandAllowed(command);
   const timeoutMs = opts.timeoutMs ?? DEFAULT_SHELL_TIMEOUT_MS;
   const maxBytes = opts.maxBytes ?? DEFAULT_SHELL_MAX_BYTES;
+  const useDocker = sandboxBackend() === 'docker';
+  if (useDocker && !dockerReady()) {
+    throw new Error('docker sandbox requested (OMNIPIX_SANDBOX=docker) but no docker daemon is available');
+  }
+  const docker = useDocker ? dockerRunArgs(opts.cwd, command, opts) : null;
   return new Promise<ShellResult>(resolve => {
-    const child = spawn(command, {
-      cwd: opts.cwd,
-      env: scrubEnv(opts.envExtra),
-      shell: process.platform === 'win32' ? true : '/bin/sh',
-      windowsHide: true,
-    });
+    const child = docker
+      ? spawn('docker', docker.argv, { env: process.env, windowsHide: true })
+      : spawn(command, {
+        cwd: opts.cwd,
+        env: scrubEnv(opts.envExtra),
+        shell: process.platform === 'win32' ? true : '/bin/sh',
+        windowsHide: true,
+      });
     let stdout = '';
     let stderr = '';
     let stdoutBytes = 0;
@@ -188,6 +251,12 @@ export function execShell(command: string, opts: ShellOptions): Promise<ShellRes
     let timedOut = false;
     const timer = setTimeout(() => {
       timedOut = true;
+      if (docker) {
+        // Killing the client orphans the container; kill by name instead.
+        // Best-effort and synchronous: the close handler resolves right after.
+        try { spawnSync('docker', ['kill', docker.name], { timeout: 5000, windowsHide: true }); } catch { /* gone */ }
+        try { spawnSync('docker', ['rm', '-f', docker.name], { timeout: 5000, windowsHide: true }); } catch { /* gone */ }
+      }
       child.kill('SIGTERM');
       setTimeout(() => {
         try {
@@ -221,11 +290,11 @@ export function execShell(command: string, opts: ShellOptions): Promise<ShellRes
     child.stderr?.on('data', (data: Buffer) => append('stderr', data));
     child.on('error', () => {
       clearTimeout(timer);
-      resolve({ stdout, stderr, exitCode: null, timedOut, truncated });
+      resolve({ stdout, stderr, exitCode: null, timedOut, truncated, sandbox: docker ? 'docker' : 'process' });
     });
     child.on('close', (code: number | null) => {
       clearTimeout(timer);
-      resolve({ stdout, stderr, exitCode: code, timedOut, truncated });
+      resolve({ stdout, stderr, exitCode: code, timedOut, truncated, sandbox: docker ? 'docker' : 'process' });
     });
   });
 }

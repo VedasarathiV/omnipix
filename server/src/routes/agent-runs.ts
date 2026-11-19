@@ -8,12 +8,14 @@ import {
   AGENT_MAX_TOOLS,
   AGENT_TOOL_NAMES,
   appendStep,
+  assertResumable,
   createAgentRun,
   executeAgentRun,
   getAgentRun,
   listAgentRuns,
   listSkills,
   parseSlashSkills,
+  resumeAgentRun,
   stopAgentRun,
   subscribeRun,
 } from '../services/agent-runtime.js';
@@ -323,6 +325,43 @@ agentRunsRouter.post('/runs/:id/stop', (req: Request, res: Response) => {
   }
   stopAgentRun(id);
   res.json(getAgentRun(id));
+});
+
+const resumeSchema = z.object({
+  maxSteps: z.number().int().min(1).max(AGENT_MAX_STEPS).optional(),
+});
+
+// Resume a dead run: the step log replays into context and the loop
+// continues with a fresh turn budget. Only errored/stopped runs qualify;
+// live runs keep their driver and parked runs keep their approval.
+agentRunsRouter.post('/runs/:id/resume', (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) {
+    res.status(400).json({ error: { message: 'Invalid run ID' } });
+    return;
+  }
+  const parsed = resumeSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    res.status(400).json({ error: { message: parsed.error.issues.map(e => e.message).join(', ') } });
+    return;
+  }
+  const run = getAgentRun(id);
+  if (!run) {
+    res.status(404).json({ error: { message: 'Run not found' } });
+    return;
+  }
+  try {
+    assertResumable(id);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const status = message.includes('not found') ? 404 : 400;
+    res.status(status).json({ error: { message } });
+    return;
+  }
+  void resumeAgentRun(id, { maxSteps: parsed.data.maxSteps }).catch(() => {
+    // The loop lands its own terminal state; unhandled rejections crash.
+  });
+  res.status(202).json(getAgentRun(id));
 });
 
 // Live trace: replays persisted steps, then streams new ones until done.

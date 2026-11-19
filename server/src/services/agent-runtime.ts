@@ -60,6 +60,8 @@ export interface AgentRunOptions {
   autoApprove?: boolean;
   /** Summarize-and-continue cycles after the step budget exhausts (0..3, default 1). */
   compactions?: number;
+  /** Internal: rebuild context from the step log instead of starting fresh. Set only by resumeAgentRun. */
+  __resume?: boolean;
 }
 
 export interface AgentStep {
@@ -403,6 +405,135 @@ export function reconcileOrphanedRuns(): number {
   return orphaned;
 }
 
+interface ResumeState {
+  messages: ChatMessage[];
+  seq: number;
+  promptTokens: number;
+  completionTokens: number;
+}
+
+/**
+ * Rebuild model context from the durable step log so a dead run can resume
+ * where it stopped. Tool pairs replay with deterministic call ids (the live
+ * ids aren't stored); check phases replay as summaries; a compaction
+ * restarts the replay from its summary like the live loop did. Tool content
+ * is re-spotlighted — replayed history gets the same injection boundary.
+ */
+function rebuildTranscript(
+  runId: number,
+  goal: string,
+  system: string,
+  storedPrompt: number,
+  storedCompletion: number,
+): ResumeState {
+  const db = getDb();
+  const rows = db.prepare('SELECT seq, kind, name, content_json FROM agent_steps WHERE run_id = ? ORDER BY seq')
+    .all(runId) as { seq: number; kind: string; name: string | null; content_json: string }[];
+  const messages: ChatMessage[] = [
+    { role: 'system', content: system } as ChatMessage,
+    { role: 'user', content: goal } as ChatMessage,
+  ];
+  let startAt = 0;
+  const lastCompact = [...rows].reverse().find(r => r.kind === 'compact');
+  if (lastCompact) {
+    try {
+      const summary = (JSON.parse(lastCompact.content_json) as { summary?: string }).summary ?? '';
+      messages.push(
+        { role: 'assistant', content: `Session summary of previous work:\n${summary}` } as ChatMessage,
+        { role: 'user', content: 'Continue working toward the goal above. Do not repeat completed steps.' } as ChatMessage,
+      );
+      startAt = rows.indexOf(lastCompact) + 1;
+    } catch {
+      // Corrupt summary: replay everything instead of resuming blind.
+    }
+  }
+  const pending: string[] = [];
+  const parse = (json: string): Record<string, unknown> => {
+    try {
+      return JSON.parse(json) as Record<string, unknown>;
+    } catch {
+      return {};
+    }
+  };
+  for (const row of rows.slice(startAt)) {
+    const content = parse(row.content_json);
+    if (row.kind === 'thought' && typeof content.text === 'string' && content.text) {
+      messages.push({ role: 'assistant', content: content.text } as ChatMessage);
+    } else if (row.kind === 'tool_call') {
+      const id = `resumed-${row.seq}`;
+      pending.push(id);
+      messages.push({
+        role: 'assistant',
+        content: '',
+        tool_calls: [{ id, type: 'function', function: { name: row.name ?? '', arguments: JSON.stringify(content.arguments ?? {}) } }],
+      } as unknown as ChatMessage);
+    } else if (row.kind === 'tool_result') {
+      const id = pending.shift() ?? `resumed-${row.seq}`;
+      messages.push({ role: 'tool', tool_call_id: id, content: spotlight(row.name ?? 'tool', String(content.result ?? '')) } as ChatMessage);
+    } else if (row.kind === 'answer' && typeof content.text === 'string' && content.text) {
+      messages.push({ role: 'assistant', content: content.text } as ChatMessage);
+    } else if (row.kind === 'check') {
+      messages.push({ role: 'user', content: `Verification check ${row.name ?? ''}: ${JSON.stringify(content).slice(0, 1000)}` } as ChatMessage);
+    }
+    // error/restore/plan/hook/compact steps are harness metadata, not dialogue.
+  }
+  return {
+    messages,
+    seq: rows.length ? rows[rows.length - 1].seq : 0,
+    promptTokens: storedPrompt,
+    completionTokens: storedCompletion,
+  };
+}
+
+interface ResumeRow {
+  goal: string; model: string; tools_json: string; skills_json: string; status: string;
+  project_key: string; plan_mode: number; auto_approve: number;
+  prompt_tokens: number; completion_tokens: number;
+}
+
+/** Synchronous resume guards, so the route answers 4xx before launching. */
+export function assertResumable(runId: number): ResumeRow {
+  const row = getDb().prepare('SELECT * FROM agent_runs WHERE id = ?').get(runId) as ResumeRow | undefined;
+  if (!row) throw new Error(`Run ${runId} not found`);
+  if (runControllers.has(runId)) throw new Error(`Run ${runId} is already live`);
+  if (row.status === 'running') throw new Error(`Run ${runId} is marked running with no driver; restart the server to reconcile it first`);
+  if (row.status === 'awaiting_approval') throw new Error(`Run ${runId} is parked; decide the pending approval instead of resuming`);
+  if (row.status !== 'error' && row.status !== 'stopped') throw new Error(`Only errored or stopped runs resume (run ${runId} is ${row.status})`);
+  return row;
+}
+
+/**
+ * Resume a dead run (error/stopped) where it stopped: the step log replays
+ * into model context and the loop continues with a fresh turn budget while
+ * token totals carry over for honest cost. Refuses live or parked runs.
+ */
+export async function resumeAgentRun(runId: number, opts?: { maxSteps?: number; signal?: AbortSignal }): Promise<AgentRun> {
+  const db = getDb();
+  const row = assertResumable(runId);
+  db.prepare("UPDATE agent_runs SET status = 'running', error = NULL, finished_at = NULL WHERE id = ?").run(runId);
+  const task = runLoop(runId, {
+    goal: row.goal,
+    model: row.model,
+    tools: JSON.parse(row.tools_json),
+    skills: JSON.parse(row.skills_json),
+    maxSteps: opts?.maxSteps,
+    projectKey: row.project_key,
+    autoApprove: row.auto_approve === 1,
+    signal: opts?.signal,
+    __resume: true,
+  });
+  liveLoops.add(task);
+  try {
+    const run = await task;
+    const learning = learnFromRun(runId).catch(() => undefined);
+    liveLearning.add(learning);
+    void learning.then(() => liveLearning.delete(learning));
+    return run;
+  } finally {
+    liveLoops.delete(task);
+  }
+}
+
 async function runLoop(runId: number, opts: AgentRunOptions): Promise<AgentRun> {
   const db = getDb();
   const maxSteps = Math.min(AGENT_MAX_STEPS, Math.max(1, opts.maxSteps ?? 8));
@@ -431,7 +562,7 @@ async function runLoop(runId: number, opts: AgentRunOptions): Promise<AgentRun> 
     skills.length ? `Active skills:\n${skills.map(s => `## ${s.name}\n${s.instructions}`).join('\n\n')}` : '',
     memoryPromptSection(recalled),
   ].filter(Boolean).join('\n\n');
-  const messages: ChatMessage[] = [
+  let messages: ChatMessage[] = [
     { role: 'system', content: system } as ChatMessage,
     { role: 'user', content: opts.goal } as ChatMessage,
   ];
@@ -439,6 +570,15 @@ async function runLoop(runId: number, opts: AgentRunOptions): Promise<AgentRun> 
   let seq = 0;
   let promptTokens = 0;
   let completionTokens = 0;
+  if (opts.__resume) {
+    const stored = db.prepare('SELECT prompt_tokens, completion_tokens FROM agent_runs WHERE id = ?').get(runId) as { prompt_tokens: number; completion_tokens: number };
+    const rebuilt = rebuildTranscript(runId, opts.goal, system, stored.prompt_tokens, stored.completion_tokens);
+    messages = rebuilt.messages;
+    seq = rebuilt.seq;
+    promptTokens = rebuilt.promptTokens;
+    completionTokens = rebuilt.completionTokens;
+  }
+  const resumed = opts.__resume === true;
   let verifyRounds = 0;
   const dirtyFiles = new Set<string>();
   const step = (kind: AgentStep['kind'], name: string | null, content: Record<string, unknown>): AgentStep => {
@@ -460,6 +600,9 @@ async function runLoop(runId: number, opts: AgentRunOptions): Promise<AgentRun> 
       dirtyFiles.add(args.path);
     }
   };
+  if (resumed) {
+    step('restore', null, { message: 'Run resumed; transcript rebuilt from the step log.' });
+  }
 
   const getRoute = (skipKeys: Set<string>, skipModels: Set<number>): RouteResult | null => {
     try {

@@ -3,12 +3,15 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {
+  __setDockerAvailable,
   __setRipgrepAvailable,
   assertCommandAllowed,
+  dockerRunArgs,
   execShell,
   grepSearch,
   resolveInRoot,
   runWorkspace,
+  sandboxBackend,
 } from '../../lib/workspace.js';
 
 let tmpRoot: string;
@@ -114,5 +117,57 @@ describe('workspace runner', () => {
     expect(matches).toEqual([{ file: 'a.txt', line: 1, text: 'first needle' }]);
     expect(grepSearch(root, 'absent')).toEqual([]);
     expect(() => grepSearch(root, '')).toThrow('non-empty');
+  });
+});
+
+describe('docker sandbox', () => {
+  const OLD = { ...process.env };
+
+  afterEach(() => {
+    process.env.OMNIPIX_SANDBOX = OLD.OMNIPIX_SANDBOX;
+    process.env.OMNIPIX_SANDBOX_IMAGE = OLD.OMNIPIX_SANDBOX_IMAGE;
+    process.env.OMNIPIX_SANDBOX_NETWORK = OLD.OMNIPIX_SANDBOX_NETWORK;
+    for (const k of ['OMNIPIX_SANDBOX', 'OMNIPIX_SANDBOX_IMAGE', 'OMNIPIX_SANDBOX_NETWORK']) {
+      if (OLD[k] === undefined) delete process.env[k];
+    }
+    __setDockerAvailable(null);
+  });
+
+  it('defaults to process mode', () => {
+    delete process.env.OMNIPIX_SANDBOX;
+    expect(sandboxBackend()).toBe('process');
+  });
+
+  it('builds an ephemeral, networkless container with the workspace mounted', () => {
+    process.env.OMNIPIX_SANDBOX = 'docker';
+    const { argv, name } = dockerRunArgs('/tmp/ws', 'npm test', { cwd: '/tmp/ws' });
+    expect(sandboxBackend()).toBe('docker');
+    expect(name).toMatch(/^omnipix-\d+-\d+$/);
+    expect(argv.slice(0, 7)).toEqual(['run', '--rm', '-i', '--name', name, '--network', 'none']);
+    expect(argv).toContain('/tmp/ws:/work');
+    expect(argv.slice(-4)).toEqual(['node:22-slim', '/bin/sh', '-c', 'npm test']);
+  });
+
+  it('honors image/network overrides and scrubs secret extras', () => {
+    process.env.OMNIPIX_SANDBOX_IMAGE = 'python:3.12-slim';
+    process.env.OMNIPIX_SANDBOX_NETWORK = 'bridge';
+    const { argv } = dockerRunArgs('/tmp/ws', 'true', { cwd: '/tmp/ws', envExtra: { BUILD_ID: '7', API_TOKEN: 's3cret' } });
+    expect(argv).toContain('python:3.12-slim');
+    expect(argv).toContain('bridge');
+    expect(argv.join(' ')).toContain('BUILD_ID=7');
+    expect(argv.join(' ')).not.toContain('s3cret');
+  });
+
+  it('fails loudly when docker is requested but unavailable', () => {
+    process.env.OMNIPIX_SANDBOX = 'docker';
+    __setDockerAvailable(false);
+    expect(() => execShell('echo hi', { cwd: tmpRoot })).toThrow('no docker daemon');
+  });
+
+  it('reports the process backend in results', async () => {
+    delete process.env.OMNIPIX_SANDBOX;
+    const result = await execShell('echo hi', { cwd: tmpRoot });
+    expect(result).toMatchObject({ exitCode: 0, sandbox: 'process' });
+    expect(result.stdout).toContain('hi');
   });
 });

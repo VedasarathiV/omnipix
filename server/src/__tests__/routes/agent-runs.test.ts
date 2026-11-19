@@ -145,6 +145,50 @@ describe('agent runs', () => {
     expect((await call('POST', '/api/agents/runs', { ...base, maxTokens: 20_000_000 })).status).toBe(400);
   });
 
+  it('resumes a dead run from its step log with history intact', async () => {
+    const { getDb } = await import('../../db/index.js');
+    const row = getDb().prepare(
+      `INSERT INTO agent_runs (goal, model, tools_json, skills_json, status, error, steps_used, prompt_tokens, completion_tokens)
+       VALUES ('What is 2 + 2?', 'llama-3.1-8b-instant', '["calculator"]', '[]', 'error', 'token budget exhausted', 2, 26, 6) RETURNING id`,
+    ).get() as { id: number };
+    const insert = getDb().prepare('INSERT INTO agent_steps (run_id, seq, kind, name, content_json) VALUES (?, ?, ?, ?, ?)');
+    insert.run(row.id, 1, 'tool_call', 'calculator', JSON.stringify({ arguments: { expression: '2 + 2' } }));
+    insert.run(row.id, 2, 'tool_result', 'calculator', JSON.stringify({ result: '4' }));
+
+    const bodies: string[] = [];
+    globalThis.fetch = vi.fn(async (url: string, init?: RequestInit) => {
+      if (init?.body) bodies.push(String(init.body));
+      return completion('llama-3.1-8b-instant', { role: 'assistant', content: 'The answer is 4.' });
+    }) as unknown as typeof fetch;
+
+    const resumed = await call('POST', `/api/agents/runs/${row.id}/resume`, {});
+    expect(resumed.status).toBe(202);
+    const run = await waitForTerminal(row.id);
+    expect(run.status).toBe('done');
+    expect(run.final_answer).toBe('The answer is 4.');
+    // History replayed: the resumed turn saw the earlier tool pair.
+    const firstTurn = bodies[0];
+    expect(firstTurn).toContain('resumed-1');
+    expect(firstTurn).toContain('untrusted-data');
+    // Token totals carry over instead of restarting.
+    expect(run.prompt_tokens).toBeGreaterThan(26);
+    // Trace keeps old steps plus the restore marker and the new answer.
+    const kinds = run.steps.map((s: any) => s.kind);
+    expect(kinds).toEqual(expect.arrayContaining(['tool_call', 'tool_result', 'restore', 'answer']));
+  });
+
+  it('refuses to resume live, parked, finished, or missing runs', async () => {
+    const { getDb } = await import('../../db/index.js');
+    const mk = (status: string) => getDb().prepare(
+      `INSERT INTO agent_runs (goal, model, tools_json, skills_json, status) VALUES ('g', 'auto', '[]', '[]', ?) RETURNING id`,
+    ).get(status) as { id: number };
+    expect((await call('POST', '/api/agents/runs/99999/resume', {})).status).toBe(404);
+    expect((await call('POST', `/api/agents/runs/${mk('running').id}/resume`, {})).status).toBe(400);
+    expect((await call('POST', `/api/agents/runs/${mk('awaiting_approval').id}/resume`, {})).status).toBe(400);
+    expect((await call('POST', `/api/agents/runs/${mk('done').id}/resume`, {})).status).toBe(400);
+    expect((await call('POST', '/api/agents/runs/x/resume', {})).status).toBe(400);
+  });
+
   it('validates review requests and lands clone failures loudly', async () => {
     expect((await call('POST', '/api/agents/review', { repo: 'git@x:y.git', base: 'main' })).status).toBe(400);
     expect((await call('POST', '/api/agents/review', { repo: 'https://x.test/y.git' })).status).toBe(400);
