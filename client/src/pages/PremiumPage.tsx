@@ -146,7 +146,7 @@ export default function PremiumPage() {
               <div className="flex flex-wrap items-center gap-3">
                 <span className="font-mono text-sm">{maskedKey}</span>
                 {licensed ? (
-                  <Badge className="bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-transparent">
+                  <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 border-transparent">
                     {license?.plan === 'annual'
                       ? t('premium.planAnnual')
                       : license?.plan === 'lifetime'

@@ -2,12 +2,12 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Link, useParams } from 'react-router-dom'
 import { ChevronLeft } from 'lucide-react'
 import { useI18n } from '@/i18n'
-import { apiFetch } from '@/lib/api'
+import { apiBaseUrl, apiFetch } from '@/lib/api'
 import { CopyButton } from '@/components/copy-button'
 import { PageHeader } from '@/components/page-header'
 import { ModelsTabs } from '@/components/models-tabs'
 import { Switch } from '@/components/ui/switch'
-import { apiBaseUrl, ApiUsageBlock } from '@/components/api-usage'
+import { ApiUsageBlock } from '@/components/api-usage'
 import type { MediaModel } from '@/components/media-models'
 
 // One generative-media model's page: every provider that serves this logical
@@ -21,7 +21,7 @@ export default function MediaDetailPage({ modality }: { modality: 'image' | 'vid
   const label = id ? decodeURIComponent(id) : ''
   const queryClient = useQueryClient()
 
-  const { data, isLoading } = useQuery<{ models: MediaModel[] }>({
+  const { data, isLoading, isError, error } = useQuery<{ models: MediaModel[] }>({
     queryKey: ['media'],
     queryFn: () => apiFetch('/api/media'),
   })
@@ -82,7 +82,12 @@ export default function MediaDetailPage({ modality }: { modality: 'image' | 'vid
           <ChevronLeft className="size-4" />{t('models.backToModels')}
         </Link>
 
-        {isLoading ? (
+        {isError ? (
+          <p role="alert" className="rounded-3xl border border-destructive/40 bg-destructive/10 px-5 py-4 text-sm text-destructive">
+            {t('models.loadFailed')}{' '}
+            {error instanceof Error ? error.message : ''}
+          </p>
+        ) : isLoading ? (
           <p className="text-sm text-muted-foreground">{t('common.loading')}</p>
         ) : members.length === 0 ? (
           <div className="rounded-3xl border border-dashed p-8 text-center">
@@ -108,7 +113,7 @@ export default function MediaDetailPage({ modality }: { modality: 'image' | 'vid
                       <span className="text-[10px] rounded-full px-1.5 py-0.5 bg-amber-600/15 text-amber-700 dark:bg-amber-400/15 dark:text-amber-400">{t('models.noKey')}</span>
                     )}
                     <CopyButton text={m.modelId} label={t('models.copyModelName')} />
-                    <Switch checked={m.enabled} onCheckedChange={(c) => toggle.mutate({ mediaId: m.id, enabled: c })} />
+                    <Switch checked={m.enabled} onCheckedChange={(c) => toggle.mutate({ mediaId: m.id, enabled: c })} aria-label={t('models.toggleMemberEnabled', { name: `${m.platform} ${m.modelId}` })} />
                   </div>
                 ))}
               </div>

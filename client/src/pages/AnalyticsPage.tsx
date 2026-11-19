@@ -171,6 +171,7 @@ interface CacheStatsResponse {
   lookupHits: number
   lookupMisses: number
   hitRate: number
+  semanticHits: number
 }
 
 interface ByPlatformRow {
@@ -372,12 +373,12 @@ function Panel({ icon: Icon, title, actions, children }: { icon: LucideIcon; tit
 }
 
 // Platform swatch shared by the ladder and the per-provider table; same color
-// source as the token-usage legend (lib/routing.ts), same gray fallback.
+// source as the token-usage legend (lib/routing.ts), same neutral fallback.
 function PlatformDot({ platform }: { platform: string }) {
   return (
     <span
       className="size-2 rounded-full flex-shrink-0"
-      style={{ backgroundColor: platformColors[platform] ?? '#94a3b8' }}
+      style={{ backgroundColor: platformColors[platform] ?? 'var(--muted-foreground)' }}
     />
   )
 }
@@ -407,7 +408,7 @@ function DetailField({ label, value, mono }: { label: string; value: React.React
 function RequestDetailDialog({ requestId, onClose }: { requestId: number | null; onClose: () => void }) {
   const { t } = useI18n()
 
-  const { data: detail, isLoading } = useQuery({
+  const { data: detail, isLoading, isError, error } = useQuery({
     queryKey: ['analytics', 'request-detail', requestId],
     queryFn: () => apiFetch<RequestDetail>(`/api/analytics/requests/${requestId}`),
     enabled: requestId != null,
@@ -429,7 +430,12 @@ function RequestDetailDialog({ requestId, onClose }: { requestId: number | null;
           </DialogClose>
         </div>
 
-        {isLoading || !detail ? (
+        {isError ? (
+          <p role="alert" className="rounded-2xl border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+            {t('analytics.detailLoadFailed')}{' '}
+            {error instanceof Error ? error.message : ''}
+          </p>
+        ) : isLoading || !detail ? (
           <div className="space-y-3">
             <Skeleton className="h-24 rounded-xl" />
             <Skeleton className="h-32 rounded-xl" />
@@ -546,17 +552,14 @@ function formatTimelineTick(value: string): string {
   })
 }
 
-// Two categorical series hues, validated against the app's actual chart
-// surfaces (light card #ffffff, dark card #101010) with the dataviz palette
-// checker. Slot A (blue) = the "average / input" series; slot B (aqua) = the
-// "p95 / output" series. The app's own --chart-* tokens are all grayscale
-// (zero chroma), which fails the CVD separation check for a two-series chart,
-// so we take the nearest passing categorical hues and theme them here.
+// Two categorical series hues. Slot A = the "average / input" series, slot B
+// = the "p95 / output" series. They ride the accent blue and the vision
+// teal, so both modes stay consistent, and the pair keeps its blue/teal
+// separation for color-vision deficiency.
 const seriesA = 'var(--series-a)'
 const seriesB = 'var(--series-b)'
 const chartVars = `
-.analytics-viz { --series-a: #2a78d6; --series-b: #1baf7a; }
-.dark .analytics-viz { --series-a: #3987e5; --series-b: #199e70; }
+.analytics-viz { --series-a: var(--primary); --series-b: var(--vision); }
 `
 
 export default function AnalyticsPage() {
@@ -570,10 +573,23 @@ export default function AnalyticsPage() {
   // render (calling Date.now() during render is impure and non-deterministic).
   const [now] = useState(() => Date.now())
 
-  const { data: summary, isLoading: summaryLoading } = useQuery({
+  const { data: summary, isLoading: summaryLoading, isError: summaryError, error: summaryFailure } = useQuery({
     queryKey: ['analytics', 'summary', range],
     queryFn: () => apiFetch<SummaryResponse>(`/api/analytics/summary?range=${range}`),
   })
+
+  // First-run routing for the empty banner: with no keyed models the
+  // Playground is a dead end, so the CTA points at Keys instead. Shared
+  // ['models'] cache with the rest of the app. undefined while loading —
+  // the banner keeps the Playground link until we know better.
+  const { data: modelRows } = useQuery<Array<{ enabled: boolean; keyCount?: number }>>({
+    queryKey: ['models'],
+    queryFn: () => apiFetch('/api/models'),
+    staleTime: 30_000,
+  })
+  const hasKeyedModels = modelRows === undefined
+    ? undefined
+    : modelRows.some(m => m.enabled && (m.keyCount ?? 0) > 0)
 
   // Response-cache health: how often identical requests were served from memory
   // (zero quota cost) vs. spending a free-tier slot. The cache is process-local,
@@ -583,7 +599,7 @@ export default function AnalyticsPage() {
     queryFn: () => apiFetch<CacheStatsResponse>('/api/cache/stats'),
   })
 
-  const { data: byPlatform = [] } = useQuery({
+  const { data: byPlatform = [], error: byPlatformFailure } = useQuery({
     queryKey: ['analytics', 'by-platform', range],
     queryFn: () => apiFetch<ByPlatformRow[]>(`/api/analytics/by-platform?range=${range}`),
   })
@@ -593,7 +609,7 @@ export default function AnalyticsPage() {
   // shows 'relay.example.com', not 'custom:https://relay.example.com' (#889).
   const providerDisplay = new Map(byPlatform.map((p) => [p.providerId, p.endpoint ?? p.platform]))
 
-  const { data: byClient = [] } = useQuery({
+  const { data: byClient = [], error: byClientFailure } = useQuery({
     queryKey: ['analytics', 'by-client', range],
     queryFn: () => apiFetch<ByClientRow[]>(`/api/analytics/by-client?range=${range}`),
   })
@@ -602,22 +618,22 @@ export default function AnalyticsPage() {
   // timeline hours/days on the viewer's wall clock instead of UTC.
   const tzOffset = -new Date().getTimezoneOffset()
 
-  const { data: timeline = [] } = useQuery({
+  const { data: timeline = [], error: timelineFailure } = useQuery({
     queryKey: ['analytics', 'timeline', range, tzOffset],
     queryFn: () => apiFetch<TimelineBucket[]>(`/api/analytics/timeline?range=${range}&tzOffset=${tzOffset}`),
   })
 
-  const { data: byModel = [] } = useQuery({
+  const { data: byModel = [], error: byModelFailure } = useQuery({
     queryKey: ['analytics', 'by-model', range],
     queryFn: () => apiFetch<ByModelRow[]>(`/api/analytics/by-model?range=${range}`),
   })
 
-  const { data: byKey = [] } = useQuery({
+  const { data: byKey = [], error: byKeyFailure } = useQuery({
     queryKey: ['analytics', 'by-key', range],
     queryFn: () => apiFetch<ByKeyRow[]>(`/api/analytics/by-key?range=${range}`),
   })
 
-  const { data: errors = [] } = useQuery({
+  const { data: errors = [], error: errorsFailure } = useQuery({
     queryKey: ['analytics', 'errors', range],
     queryFn: () => apiFetch<RecentErrorRow[]>(`/api/analytics/errors?range=${range}`),
   })
@@ -631,7 +647,7 @@ export default function AnalyticsPage() {
     retry: false,
   })
 
-  const { data: errorDist } = useQuery({
+  const { data: errorDist, error: errorDistFailure } = useQuery({
     queryKey: ['analytics', 'error-distribution', range],
     queryFn: () => apiFetch<ErrorDistribution>(`/api/analytics/error-distribution?range=${range}`),
   })
@@ -643,7 +659,7 @@ export default function AnalyticsPage() {
   const [platformFilter, setPlatformFilter] = useState<string>('all')
   const [detailId, setDetailId] = useState<number | null>(null)
 
-  const { data: recentCalls } = useQuery({
+  const { data: recentCalls, error: recentCallsFailure } = useQuery({
     queryKey: ['analytics', 'requests', range, statusFilter, platformFilter],
     queryFn: () => {
       const params = new URLSearchParams({ range, limit: '100' })
@@ -654,6 +670,14 @@ export default function AnalyticsPage() {
       return apiFetch<RecentCallsResponse>(`/api/analytics/requests?${params}`)
     },
   })
+
+  // Any failed core panel must say so: without this a dead endpoint renders
+  // as 0s and 'No data', indistinguishable from a quiet install. The cache
+  // and search panels stay out: both treat absence as off/none by design
+  // (an older server without the endpoint simply has none).
+  const loadFailure = summaryFailure ?? byPlatformFailure ?? byClientFailure
+    ?? timelineFailure ?? byModelFailure ?? byKeyFailure ?? errorsFailure
+    ?? errorDistFailure ?? recentCallsFailure ?? null
 
   // Per-table column sort (client-side, remembered per table). `null` keeps
   // the API order, so the memoised arrays are the query data itself then.
@@ -755,16 +779,30 @@ export default function AnalyticsPage() {
         }
       />
 
+      {loadFailure && (
+        <div role="alert" className="ox-enter mb-6 rounded-3xl border border-destructive/40 bg-destructive/10 px-5 py-4 text-sm text-destructive">
+          {t('analytics.loadFailed')}{' '}
+          {loadFailure instanceof Error ? loadFailure.message : String(loadFailure ?? '')}
+        </div>
+      )}
+
       {/* First-run guidance: bare "No data yet" charts teach nothing. Once a
-          single request lands this whole banner disappears. */}
-      {!summaryLoading && (summary?.totalRequests ?? 0) === 0 && (
+          single request lands this whole banner disappears. Never shown when
+          the summary failed to load — an outage is not a first run. */}
+      {!summaryLoading && !summaryError && (summary?.totalRequests ?? 0) === 0 && (
         <div className="ox-enter mb-6 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-3xl border border-primary/25 bg-primary/5 px-5 py-4">
           <Zap className="size-4 shrink-0 text-primary" aria-hidden="true" />
           <p className="min-w-0 flex-1 text-sm text-muted-foreground">
             {t('analytics.emptyHint')}{' '}
-            <Link to="/playground" className="font-medium text-primary underline-offset-4 hover:underline">
-              {t('analytics.emptyHintAction')}
-            </Link>
+            {hasKeyedModels === false ? (
+              <Link to="/keys" className="font-medium text-primary underline-offset-4 hover:underline">
+                {t('analytics.emptyHintKeysAction')}
+              </Link>
+            ) : (
+              <Link to="/playground" className="font-medium text-primary underline-offset-4 hover:underline">
+                {t('analytics.emptyHintAction')}
+              </Link>
+            )}
           </p>
         </div>
       )}
@@ -800,7 +838,7 @@ export default function AnalyticsPage() {
                   label={t('analytics.cacheHitRate')}
                   value={`${Math.round(cacheStats.hitRate * 100)}%`}
                   sub={t('analytics.cacheSavedTokens', { tokens: formatTokens(cacheStats.savedTokens) })}
-                  hint={t('analytics.cacheHitRateHint', { hits: cacheStats.lookupHits, misses: cacheStats.lookupMisses, requests: cacheStats.estimatedRequestsSaved })}
+                  hint={t('analytics.cacheHitRateHint', { hits: cacheStats.lookupHits, misses: cacheStats.lookupMisses, requests: cacheStats.estimatedRequestsSaved, semantic: cacheStats.semanticHits ?? 0 })}
                 />
               )}
             </>

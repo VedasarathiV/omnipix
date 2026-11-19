@@ -1,23 +1,4 @@
 import type { ApiKeyModel, Platform, ProviderQuotaState } from '../../../../shared/types'
-import { ExternalLink } from 'lucide-react'
-import { useI18n } from '@/i18n'
-
-// Small "Get API key" external link shown next to a provider (#137).
-export function GetKeyLink({ url }: { url: string }) {
-  const { t } = useI18n()
-  if (!url) return null
-  return (
-    <a
-      href={url}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-    >
-      {t('keys.getApiKey')}
-      <ExternalLink className="size-3" />
-    </a>
-  )
-}
 
 // `url` points to each provider's key-management / signup page so the Keys page
 // can show a "Get API key" shortcut (#137). OpenCode Zen's key is free from
@@ -162,8 +143,8 @@ export function customModelDeletePath(model: ApiKeyModel): string {
 export const statusDot: Record<string, string> = {
   healthy: 'bg-emerald-500',
   rate_limited: 'bg-amber-500',
-  invalid: 'bg-rose-500',
-  error: 'bg-rose-500',
+  invalid: 'bg-destructive',
+  error: 'bg-destructive',
   unknown: 'bg-muted-foreground/40',
 }
 

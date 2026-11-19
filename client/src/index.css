@@ -27,6 +27,10 @@
     --color-input: var(--input);
     --color-border: var(--border);
     --color-destructive: var(--destructive);
+    --color-vision: var(--vision);
+    --color-score-reliability: var(--score-reliability);
+    --color-score-speed: var(--score-speed);
+    --color-score-intelligence: var(--score-intelligence);
     --color-accent-foreground: var(--accent-foreground);
     --color-accent: var(--accent);
     --color-muted-foreground: var(--muted-foreground);
@@ -52,76 +56,89 @@
     --radius-4xl: calc(var(--radius) * 4);
 }
 
-/* OmniPix "terminal forest" theme: emerald is the single brand accent
-   (primary actions, focus, key metrics, charts), neutrals carry a whisper of
-   green so surfaces feel alive without tinting text. No purple anywhere. */
+/* OmniPix professional theme: neutral graphite surfaces with one restrained
+   signal-blue accent (primary actions, focus, key metrics, charts). Green
+   means exactly one thing now — success/healthy/live — never decoration.
+   vision/score-* are the only sanctioned off-accent UI hues: vision-capability
+   markers and the three scoring axes. Categorical DATA colors are exempt by
+   necessity: the ~40-provider legend, severity ramps, and chart series must
+   stay mutually distinct, so they carry their own hues (lib/routing.ts,
+   penaltyClass, series-a/b). */
 :root {
-    --background: oklch(0.99 0.004 170);
-    --foreground: oklch(0.2 0.01 170);
+    --background: oklch(0.985 0.002 250);
+    --foreground: oklch(0.2 0.005 250);
     --card: oklch(1 0 0);
-    --card-foreground: oklch(0.2 0.01 170);
+    --card-foreground: oklch(0.2 0.005 250);
     --popover: oklch(1 0 0);
-    --popover-foreground: oklch(0.2 0.01 170);
-    --primary: oklch(0.55 0.15 165);
+    --popover-foreground: oklch(0.2 0.005 250);
+    --primary: oklch(0.52 0.17 262);
     --primary-foreground: oklch(0.99 0 0);
-    --secondary: oklch(0.955 0.01 170);
-    --secondary-foreground: oklch(0.3 0.03 170);
-    --muted: oklch(0.955 0.01 170);
-    --muted-foreground: oklch(0.5 0.02 170);
-    --accent: oklch(0.93 0.035 170);
-    --accent-foreground: oklch(0.28 0.05 170);
+    --secondary: oklch(0.95 0.005 250);
+    --secondary-foreground: oklch(0.28 0.008 250);
+    --muted: oklch(0.95 0.005 250);
+    --muted-foreground: oklch(0.5 0.01 250);
+    --accent: oklch(0.93 0.01 250);
+    --accent-foreground: oklch(0.25 0.008 250);
     --destructive: oklch(0.577 0.245 27.325);
-    --border: oklch(0.9 0.012 170);
-    --input: oklch(0.9 0.012 170);
-    --ring: oklch(0.6 0.15 165);
-    --chart-1: oklch(0.508 0.118 165.612);
-    --chart-2: oklch(0.596 0.145 163.225);
-    --chart-3: oklch(0.696 0.17 162.48);
-    --chart-4: oklch(0.765 0.177 163.225);
-    --chart-5: oklch(0.845 0.143 164.978);
+    --border: oklch(0.9 0.005 250);
+    --input: oklch(0.9 0.005 250);
+    --ring: oklch(0.52 0.17 262);
+    --vision: oklch(0.48 0.12 195);
+    --score-reliability: oklch(0.65 0.18 150);
+    --score-speed: oklch(0.6 0.16 255);
+    --score-intelligence: oklch(0.72 0.16 80);
+    --chart-1: oklch(0.5 0.16 260);
+    --chart-2: oklch(0.6 0.14 260);
+    --chart-3: oklch(0.7 0.11 260);
+    --chart-4: oklch(0.8 0.07 260);
+    --chart-5: oklch(0.88 0.04 260);
     --radius: 0.5rem;
-    --sidebar: oklch(0.975 0.008 170);
-    --sidebar-foreground: oklch(0.2 0.01 170);
-    --sidebar-primary: oklch(0.55 0.15 165);
+    --sidebar: oklch(0.985 0.002 250);
+    --sidebar-foreground: oklch(0.2 0.005 250);
+    --sidebar-primary: oklch(0.52 0.17 262);
     --sidebar-primary-foreground: oklch(0.99 0 0);
-    --sidebar-accent: oklch(0.93 0.035 170);
-    --sidebar-accent-foreground: oklch(0.28 0.05 170);
-    --sidebar-border: oklch(0.9 0.012 170);
-    --sidebar-ring: oklch(0.6 0.15 165);
+    --sidebar-accent: oklch(0.93 0.01 250);
+    --sidebar-accent-foreground: oklch(0.25 0.008 250);
+    --sidebar-border: oklch(0.9 0.005 250);
+    --sidebar-ring: oklch(0.52 0.17 262);
 }
 
 .dark {
-    --background: oklch(0.16 0.02 170);
-    --foreground: oklch(0.96 0.005 170);
-    --card: oklch(0.205 0.025 172);
-    --card-foreground: oklch(0.96 0.005 170);
-    --popover: oklch(0.205 0.025 172);
-    --popover-foreground: oklch(0.96 0.005 170);
-    --primary: oklch(0.72 0.17 162.5);
-    --primary-foreground: oklch(0.16 0.02 170);
-    --secondary: oklch(0.26 0.03 172);
-    --secondary-foreground: oklch(0.96 0.005 170);
-    --muted: oklch(0.24 0.025 172);
-    --muted-foreground: oklch(0.68 0.02 170);
-    --accent: oklch(0.29 0.055 170);
-    --accent-foreground: oklch(0.96 0.005 170);
+    --background: oklch(0.17 0.005 250);
+    --foreground: oklch(0.96 0.005 250);
+    --card: oklch(0.21 0.008 250);
+    --card-foreground: oklch(0.96 0.005 250);
+    --popover: oklch(0.21 0.008 250);
+    --popover-foreground: oklch(0.96 0.005 250);
+    --primary: oklch(0.72 0.14 260);
+    --primary-foreground: oklch(0.16 0.005 250);
+    --secondary: oklch(0.26 0.01 250);
+    --secondary-foreground: oklch(0.96 0.005 250);
+    --muted: oklch(0.24 0.01 250);
+    --muted-foreground: oklch(0.68 0.01 250);
+    --accent: oklch(0.29 0.015 250);
+    --accent-foreground: oklch(0.96 0.005 250);
     --destructive: oklch(0.704 0.191 22.216);
     --border: oklch(1 0 0 / 10%);
     --input: oklch(1 0 0 / 14%);
-    --ring: oklch(0.72 0.17 162.5);
-    --chart-1: oklch(0.845 0.143 164.978);
-    --chart-2: oklch(0.765 0.177 163.225);
-    --chart-3: oklch(0.696 0.17 162.48);
-    --chart-4: oklch(0.596 0.145 163.225);
-    --chart-5: oklch(0.508 0.118 165.612);
-    --sidebar: oklch(0.19 0.022 172);
-    --sidebar-foreground: oklch(0.96 0.005 170);
-    --sidebar-primary: oklch(0.72 0.17 162.5);
-    --sidebar-primary-foreground: oklch(0.16 0.02 170);
-    --sidebar-accent: oklch(0.29 0.055 170);
-    --sidebar-accent-foreground: oklch(0.96 0.005 170);
+    --ring: oklch(0.72 0.14 260);
+    --vision: oklch(0.78 0.12 195);
+    --score-reliability: oklch(0.72 0.19 150);
+    --score-speed: oklch(0.7 0.15 255);
+    --score-intelligence: oklch(0.78 0.15 80);
+    --chart-1: oklch(0.78 0.1 260);
+    --chart-2: oklch(0.7 0.13 260);
+    --chart-3: oklch(0.6 0.15 260);
+    --chart-4: oklch(0.52 0.15 260);
+    --chart-5: oklch(0.45 0.13 260);
+    --sidebar: oklch(0.17 0.005 250);
+    --sidebar-foreground: oklch(0.96 0.005 250);
+    --sidebar-primary: oklch(0.72 0.14 260);
+    --sidebar-primary-foreground: oklch(0.16 0.005 250);
+    --sidebar-accent: oklch(0.29 0.015 250);
+    --sidebar-accent-foreground: oklch(0.96 0.005 250);
     --sidebar-border: oklch(1 0 0 / 10%);
-    --sidebar-ring: oklch(0.72 0.17 162.5);
+    --sidebar-ring: oklch(0.72 0.14 260);
 }
 
 @layer base {
@@ -165,34 +182,35 @@
 }
 
 /* ── Syntax highlighting (highlight.js spans, see lib/highlight.ts) ─────────
-   One restrained palette per theme: keywords and tags carry the accent,
-   strings warm, comments recede, everything else stays the text colour. */
+   One restrained professional palette per theme, in the VSCode family:
+   keywords carry the signal blue, tags teal, strings green, numbers/attrs
+   warm, comments recede, everything else stays the text colour. */
 .code-highlight { color: var(--foreground); }
 .code-highlight .hljs-comment, .code-highlight .hljs-quote { color: oklch(0.55 0 0); font-style: italic; }
 .code-highlight .hljs-keyword, .code-highlight .hljs-selector-tag, .code-highlight .hljs-built_in,
 .code-highlight .hljs-type, .code-highlight .hljs-literal, .code-highlight .hljs-doctag,
-.code-highlight .hljs-meta { color: oklch(0.45 0.18 290); }
+.code-highlight .hljs-meta { color: oklch(0.5 0.15 260); }
 .code-highlight .hljs-tag, .code-highlight .hljs-name, .code-highlight .hljs-selector-class,
-.code-highlight .hljs-selector-id, .code-highlight .hljs-section, .code-highlight .hljs-title { color: oklch(0.48 0.16 250); }
+.code-highlight .hljs-selector-id, .code-highlight .hljs-section, .code-highlight .hljs-title { color: oklch(0.48 0.11 200); }
 .code-highlight .hljs-attr, .code-highlight .hljs-attribute, .code-highlight .hljs-variable,
 .code-highlight .hljs-template-variable, .code-highlight .hljs-property, .code-highlight .hljs-params { color: oklch(0.5 0.12 45); }
 .code-highlight .hljs-string, .code-highlight .hljs-regexp, .code-highlight .hljs-addition,
-.code-highlight .hljs-template-tag, .code-highlight .hljs-symbol, .code-highlight .hljs-bullet { color: oklch(0.5 0.14 150); }
+.code-highlight .hljs-template-tag, .code-highlight .hljs-symbol, .code-highlight .hljs-bullet { color: oklch(0.5 0.13 160); }
 .code-highlight .hljs-number, .code-highlight .hljs-link { color: oklch(0.5 0.15 25); }
 .code-highlight .hljs-deletion { color: oklch(0.5 0.18 25); }
 .code-highlight .hljs-emphasis { font-style: italic; }
 .code-highlight .hljs-strong { font-weight: 600; }
-.dark .code-highlight .hljs-comment, .dark .code-highlight .hljs-quote { color: oklch(0.6 0 0); }
+.dark .code-highlight .hljs-comment, .dark .code-highlight .hljs-quote { color: oklch(0.65 0.08 145); }
 .dark .code-highlight .hljs-keyword, .dark .code-highlight .hljs-selector-tag, .dark .code-highlight .hljs-built_in,
 .dark .code-highlight .hljs-type, .dark .code-highlight .hljs-literal, .dark .code-highlight .hljs-doctag,
-.dark .code-highlight .hljs-meta { color: oklch(0.78 0.12 290); }
+.dark .code-highlight .hljs-meta { color: oklch(0.72 0.12 255); }
 .dark .code-highlight .hljs-tag, .dark .code-highlight .hljs-name, .dark .code-highlight .hljs-selector-class,
-.dark .code-highlight .hljs-selector-id, .dark .code-highlight .hljs-section, .dark .code-highlight .hljs-title { color: oklch(0.78 0.11 240); }
+.dark .code-highlight .hljs-selector-id, .dark .code-highlight .hljs-section, .dark .code-highlight .hljs-title { color: oklch(0.72 0.1 200); }
 .dark .code-highlight .hljs-attr, .dark .code-highlight .hljs-attribute, .dark .code-highlight .hljs-variable,
 .dark .code-highlight .hljs-template-variable, .dark .code-highlight .hljs-property, .dark .code-highlight .hljs-params { color: oklch(0.8 0.1 60); }
 .dark .code-highlight .hljs-string, .dark .code-highlight .hljs-regexp, .dark .code-highlight .hljs-addition,
-.dark .code-highlight .hljs-template-tag, .dark .code-highlight .hljs-symbol, .dark .code-highlight .hljs-bullet { color: oklch(0.78 0.12 150); }
-.dark .code-highlight .hljs-number, .dark .code-highlight .hljs-link { color: oklch(0.78 0.12 30); }
+.dark .code-highlight .hljs-template-tag, .dark .code-highlight .hljs-symbol, .dark .code-highlight .hljs-bullet { color: oklch(0.74 0.09 70); }
+.dark .code-highlight .hljs-number, .dark .code-highlight .hljs-link { color: oklch(0.78 0.08 130); }
 .dark .code-highlight .hljs-deletion { color: oklch(0.7 0.16 25); }
 
 /* ── OmniPix motion system ────────────────────────────────────────────────

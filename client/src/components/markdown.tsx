@@ -1,12 +1,13 @@
 import { memo, isValidElement, useContext, type ReactNode } from 'react'
 import ReactMarkdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { AppWindow, Image as ImageIcon } from 'lucide-react'
+import { AppWindow, Image as ImageIcon, PanelRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { CopyButton } from './copy-button'
 import { CodeBlock } from './code-block'
 import { artifactKindOf, type ArtifactKind } from '@/lib/artifacts'
 import { ArtifactHostContext } from '@/lib/artifact-host'
+import { CodeHostContext } from '@/lib/code-host'
 import { useI18n } from '@/i18n'
 
 
@@ -58,18 +59,37 @@ function nodeText(node: ReactNode): string {
 }
 
 function Pre({ children }: { children?: ReactNode }) {
-  const host = useContext(ArtifactHostContext)
-  if (host) {
-    const language = fenceLanguage(children)
-    const code = nodeText(children).replace(/\n$/, '')
+  const { t } = useI18n()
+  const artifactHost = useContext(ArtifactHostContext)
+  const codeHost = useContext(CodeHostContext)
+  // Pull the source out only when a host can use it; everywhere else the
+  // block renders untouched.
+  const language = artifactHost || codeHost ? fenceLanguage(children) : ''
+  const code = artifactHost || codeHost ? nodeText(children).replace(/\n$/, '') : ''
+  if (artifactHost) {
     const kind = artifactKindOf(language, code)
     if (kind) return <ArtifactCard kind={kind} language={language} code={code} />
   }
+  // With no artifact host, a runnable fence has nowhere to open: the pane
+  // only carries non-runnable code files, so hide the button instead of
+  // offering a dead one.
+  const openable = codeHost && (artifactHost || !artifactKindOf(language, code))
   return (
     <pre className="group relative my-2 overflow-x-auto rounded-lg border bg-background/60 p-3 first:mt-0 last:mb-0">
+      {openable && (
+        <button
+          type="button"
+          onClick={() => codeHost!.open(language, code)}
+          aria-label={t('playground.codeOpen')}
+          title={t('playground.codeOpen')}
+          className="absolute right-10 top-2 flex size-7 items-center justify-center rounded-md text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground focus-visible:opacity-100 group-hover:opacity-100"
+        >
+          <PanelRight className="size-3.5" />
+        </button>
+      )}
       <CopyButton
         text={nodeText(children).replace(/\n$/, '')}
-        label="Copy code"
+        label={t('common.copy')}
         className="absolute right-2 top-2 size-7 opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-100"
       />
       {children}

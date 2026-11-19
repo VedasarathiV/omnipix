@@ -2,10 +2,9 @@ import { useState, type ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { ArrowRight, Check, Copy, X } from 'lucide-react'
-import { apiFetch } from '@/lib/api'
+import { apiBaseUrl, apiFetch } from '@/lib/api'
 import { copyText } from '@/lib/clipboard'
 import { toast } from '@/lib/toast'
-import { apiBaseUrl } from '@/components/api-usage'
 import { Button } from '@/components/ui/button'
 import { useI18n } from '@/i18n'
 
@@ -42,6 +41,11 @@ export function GettingStarted() {
     queryKey: ['unified-key'],
     queryFn: () => apiFetch('/api/settings/api-key'),
   })
+  const { data: agentRuns } = useQuery<{ runs: unknown[] }>({
+    queryKey: ['agent-runs', 'setup-probe'],
+    queryFn: () => apiFetch('/api/agents/runs?limit=1'),
+    staleTime: 30_000,
+  })
 
   // Wait for real data before deciding: rendering on undefined would flash the
   // checklist at every established install for a moment on each visit.
@@ -49,9 +53,14 @@ export function GettingStarted() {
 
   const hasKeys = keys.length > 0
   const hasRequest = (summary.totalRequests ?? 0) > 0
-  if (hasKeys && hasRequest) return null
+  const hasAgentRun = (agentRuns?.runs.length ?? 0) > 0
+  if (hasKeys && hasRequest && hasAgentRun) return null
 
   const doneCount = [hasKeys, hasRequest, connected].filter(Boolean).length
+  // The agent nudge is deliberately OUTSIDE the counted three: it appears
+  // once routing works and the user still hasn't tried an agent run — the
+  // headline feature hiding behind the Agents nav entry.
+  const showAgentNudge = hasKeys && hasRequest && !hasAgentRun
 
   function copyValue(value: string, message: string) {
     void copyText(value).then(ok => {
@@ -142,6 +151,20 @@ export function GettingStarted() {
           }
         />
       </ol>
+      {showAgentNudge && (
+        <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-primary/25 bg-primary/5 px-3 py-2.5">
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium">{t('setup.nextAgentTitle')}</p>
+            <p className="text-xs text-muted-foreground">{t('setup.nextAgentDesc')}</p>
+          </div>
+          <Link to="/agents?tab=runs">
+            <Button variant="outline" size="sm">
+              {t('setup.nextAgentCta')}
+              <ArrowRight data-icon="inline-end" className="size-3.5" />
+            </Button>
+          </Link>
+        </div>
+      )}
     </section>
   )
 }

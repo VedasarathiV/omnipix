@@ -25,7 +25,7 @@ const ICONS = {
 } as const
 
 const ICON_CLASS = {
-  success: 'text-emerald-600 dark:text-emerald-400',
+  success: 'text-emerald-700 dark:text-emerald-400',
   error: 'text-destructive',
   info: 'text-muted-foreground',
 } as const

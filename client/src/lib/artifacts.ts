@@ -78,3 +78,59 @@ export const ARTIFACT_SANDBOX = 'allow-scripts allow-forms allow-modals allow-po
 export function artifactMimeType(kind: ArtifactKind): string {
   return kind === 'svg' ? 'image/svg+xml' : 'text/html'
 }
+
+// ── Code files ─────────────────────────────────────────────────────────────
+// Every OTHER fenced block (not runnable in a browser) feeds the Playground's
+// code pane: the Claude-style second column beside the chat. Same fence
+// grammar as artifacts, so a reply's blocks split deterministically between
+// the preview panel (html/svg) and the code pane (everything else).
+
+export interface CodeFile {
+  /** Stable within a message: `code:${messageIndex}:${n}`. */
+  id: string
+  /** Fence language as written, lowercased ('' when the fence had none). */
+  language: string
+  code: string
+  filename: string
+}
+
+const EXT_BY_LANGUAGE: Record<string, string> = {
+  js: 'js', javascript: 'js', jsx: 'jsx', mjs: 'js', cjs: 'js',
+  ts: 'ts', typescript: 'ts', tsx: 'tsx', mts: 'ts', cts: 'ts',
+  py: 'py', python: 'py', rb: 'rb', ruby: 'rb', go: 'go',
+  rs: 'rs', rust: 'rs', java: 'java', kt: 'kt', kotlin: 'kt', kts: 'kt',
+  scala: 'scala', c: 'c', h: 'h', hpp: 'hpp', cpp: 'cpp', 'c++': 'cpp', cc: 'cpp',
+  cs: 'cs', csharp: 'cs', php: 'php', swift: 'swift', lua: 'lua',
+  pl: 'pl', pm: 'pm', r: 'r', jl: 'jl', ex: 'ex', exs: 'exs', erl: 'erl',
+  hs: 'hs', ml: 'ml', dart: 'dart', vue: 'vue', svelte: 'svelte', astro: 'astro',
+  html: 'html', htm: 'html', xhtml: 'html', xml: 'xml', svg: 'svg',
+  css: 'css', scss: 'scss', less: 'less', json: 'json', jsonc: 'jsonc',
+  yaml: 'yml', yml: 'yml', toml: 'toml', ini: 'ini', cfg: 'cfg', conf: 'conf',
+  env: 'env', sh: 'sh', bash: 'sh', zsh: 'zsh', fish: 'fish', ps1: 'ps1',
+  bat: 'bat', cmd: 'cmd', sql: 'sql', graphql: 'gql', gql: 'gql', proto: 'proto',
+  dockerfile: 'Dockerfile', makefile: 'Makefile', cmake: 'cmake',
+  md: 'md', markdown: 'md', rst: 'rst', txt: 'txt', text: 'txt',
+  diff: 'diff', patch: 'patch', log: 'log', csv: 'csv', tsv: 'tsv',
+}
+
+export function codeFilename(language: string, n: number): string {
+  const ext = EXT_BY_LANGUAGE[language.toLowerCase()] ?? 'txt'
+  return ext === 'Dockerfile' || ext === 'Makefile' ? ext : `snippet-${n}.${ext}`
+}
+
+/** Every non-runnable fenced block in a Markdown reply, in document order.
+ *  Empty fences carry nothing to show, so they are skipped. Like artifacts,
+ *  a still-streaming (unclosed) fence is not matched. */
+export function extractCodeFiles(markdown: string, messageIndex = 0): CodeFile[] {
+  const out: CodeFile[] = []
+  let n = 0
+  for (const m of markdown.matchAll(FENCE)) {
+    const language = (m[3] ?? '').toLowerCase()
+    const code = m[4] ?? ''
+    if (!code.trim()) continue
+    if (artifactKindOf(language, code)) continue
+    n += 1
+    out.push({ id: `code:${messageIndex}:${n}`, language, code, filename: codeFilename(language, n) })
+  }
+  return out
+}

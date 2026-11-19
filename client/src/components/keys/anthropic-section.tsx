@@ -40,6 +40,8 @@ export function AnthropicSection() {
   })
 
   const [draft, setDraft] = useState<AnthropicMap | null>(null)
+  // Sync server state into the editable draft.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { if (mapData?.map) setDraft(mapData.map) }, [mapData])
 
   const save = useMutation({

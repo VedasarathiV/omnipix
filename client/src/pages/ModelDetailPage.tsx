@@ -63,7 +63,7 @@ export default function ModelDetailPage() {
   const canonicalId = id ? decodeURIComponent(id) : ''
   const queryClient = useQueryClient()
 
-  const { data: entries = [], isLoading } = useQuery<FallbackEntry[]>({
+  const { data: entries = [], isLoading, isError, error } = useQuery<FallbackEntry[]>({
     queryKey: ['fallback'],
     queryFn: () => apiFetch('/api/fallback'),
   })
@@ -211,7 +211,9 @@ export default function ModelDetailPage() {
   // the full overrides list (see lib/alias-merge) — the visible rows are only
   // this group's slice, so editing by row position would hit other groups.
   const merges = useMemo(() => unify?.overrides.merges ?? [], [unify])
-  const groupAliases = useMemo(() => aliasesFor(merges, label), [merges, label])
+  // Unmemoized on purpose: a filter over a handful of merge entries is
+  // cheaper than the memo bookkeeping, and never goes stale.
+  const groupAliases = aliasesFor(merges, label)
   const submitAlias = () => {
     if (!aliasInput.trim()) return
     mergeMutation.mutate(addAlias(merges, label, aliasInput))
@@ -241,7 +243,12 @@ export default function ModelDetailPage() {
           <ChevronLeft className="size-4" />{t('models.backToModels')}
         </Link>
 
-        {isLoading ? (
+        {isError ? (
+          <p role="alert" className="rounded-3xl border border-destructive/40 bg-destructive/10 px-5 py-4 text-sm text-destructive">
+            {t('models.loadFailed')}{' '}
+            {error instanceof Error ? error.message : ''}
+          </p>
+        ) : isLoading ? (
           <TableSkeleton rows={3} />
         ) : members.length === 0 ? (
           <div className="rounded-3xl border border-dashed p-8 text-center">
@@ -261,8 +268,8 @@ export default function ModelDetailPage() {
               <span className="text-[11px] rounded-full px-2 py-0.5 bg-muted text-muted-foreground">{t('models.providerCount', { count: members.length })}</span>
               {quota && <span title={quota.title} className="text-[11px] rounded-full px-2 py-0.5 bg-muted text-muted-foreground tabular-nums">{quota.text}</span>}
               <RateLimitBadge size="md" rows={members.flatMap(m => rateUsageByModel.get(m.modelDbId) ?? [])} />
-              {vision && <span title={t('models.visionTitle')} className="text-[11px] rounded-full px-2 py-0.5 bg-cyan-600/15 text-cyan-700 dark:bg-cyan-400/15 dark:text-cyan-400">{t('models.vision')}</span>}
-              {tools && <span title={t('models.toolsTitle')} className="text-[11px] rounded-full px-2 py-0.5 bg-emerald-600/15 text-emerald-700 dark:bg-emerald-400/15 dark:text-emerald-400">{t('models.tools')}</span>}
+              {vision && <span title={t('models.visionTitle')} className="text-[11px] rounded-full px-2 py-0.5 bg-vision/15 text-vision">{t('models.vision')}</span>}
+              {tools && <span title={t('models.toolsTitle')} className="text-[11px] rounded-full px-2 py-0.5 bg-primary/15 text-primary">{t('models.tools')}</span>}
             </div>
 
             {/* Per-provider stats (same columns as the Models table) */}
@@ -411,6 +418,8 @@ function ProviderSettingsRow({
     tpmLimit, tpdLimit, supportsVision, supportsTools, enabled])
 
   const [form, setForm] = useState(() => modelSettingsForm(source))
+  // Resync the editable form when navigating to another model.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => setForm(modelSettingsForm(source)), [modelDbId, source])
   const setField = <K extends keyof typeof form>(key: K, value: typeof form[K]) =>
     setForm(current => ({ ...current, [key]: value }))
@@ -438,7 +447,7 @@ function ProviderSettingsRow({
         <CopyButton text={model.modelId} label={t('models.copyModelId')} className="size-6 shrink-0" />
         <span className="rounded-full bg-muted px-1.5 py-0.5 text-[10px] text-muted-foreground">{sourceLabel}</span>
         {model.hasOverrides && (
-          <span className="rounded-full bg-emerald-600/15 px-1.5 py-0.5 text-[10px] text-emerald-700 dark:text-emerald-400">
+          <span className="rounded-full bg-primary/15 px-1.5 py-0.5 text-[10px] text-primary">
             {t('models.localOverride')}
           </span>
         )}
@@ -494,7 +503,7 @@ function ProviderSettingsRow({
         </label>
         <div className="flex items-center justify-end gap-1">
           <Tooltip text={t('models.saveModelSettings')}>
-            <Button type="button" size="icon-sm" variant="ghost" disabled={!canSave} onClick={save}>
+            <Button type="button" size="icon-sm" variant="ghost" disabled={!canSave} onClick={save} aria-label={t('models.saveModelSettings')}>
               <Save className="size-3.5" />
             </Button>
           </Tooltip>
@@ -603,7 +612,7 @@ function FieldLabel({ text, overridden }: { text: string; overridden: boolean })
         <span
           title={t('models.localOverride')}
           aria-label={t('models.localOverride')}
-          className="size-1.5 shrink-0 rounded-full bg-emerald-600 dark:bg-emerald-400"
+          className="size-1.5 shrink-0 rounded-full bg-primary"
         />
       )}
     </span>

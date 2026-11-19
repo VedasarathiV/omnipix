@@ -10,6 +10,7 @@ import type { ApiKey, Platform } from '../../../shared/types'
 import { Plus, Download } from 'lucide-react'
 import { useI18n } from '@/i18n'
 import { LISTED_PLATFORMS, type HealthData } from '@/components/keys/shared'
+import { KEYS_TABS, type KeysTab } from '@/lib/keys-tabs'
 import { QuotaSignalsSection } from '@/components/keys/quota-signals-section'
 import { UnifiedKeySection } from '@/components/keys/unified-key-section'
 import { ClientProfilesSection } from '@/components/keys/client-profiles-section'
@@ -22,23 +23,34 @@ import { AddKeyDialog } from '@/components/keys/add-key-dialog'
 import { ExportKeysDialog } from '@/components/keys/export-keys-dialog'
 import { AgentCompatibilitySection } from '@/components/keys/agent-compatibility-section'
 
-type KeysTab = 'providers' | 'quotaSignals' | 'apiKey' | 'anthropic' | 'agents'
-const KEYS_TABS: { id: KeysTab; labelKey: string }[] = [
-  { id: 'providers', labelKey: 'keys.tabProviders' },
-  { id: 'quotaSignals', labelKey: 'keys.tabQuotaSignals' },
-  { id: 'apiKey', labelKey: 'keys.tabApiKey' },
-  { id: 'anthropic', labelKey: 'keys.tabAnthropic' },
-  { id: 'agents', labelKey: 'keys.tabAgents' },
-]
-
 export default function KeysPage() {
   const { t } = useI18n()
   const queryClient = useQueryClient()
-  const [tab, setTab] = useState<KeysTab>('providers')
+  const [searchParams, setSearchParams] = useSearchParams()
+  // `/keys?tab=<id>` deep-links a tab (the workbench sidebar); the tab is
+  // derived from the URL, never mirrored state, so sidebar and page agree.
+  // Unknown values fall back to providers, and the bogus param is replaced
+  // so the URL never names a tab that does not exist.
+  const rawTab = searchParams.get('tab')
+  const tab: KeysTab = KEYS_TABS.some(tb => tb.id === rawTab)
+    ? (rawTab as KeysTab)
+    : 'providers'
+  useEffect(() => {
+    if (rawTab !== null && !KEYS_TABS.some(tb => tb.id === rawTab)) {
+      setSearchParams(prev => { prev.delete('tab'); return prev }, { replace: true })
+    }
+  }, [rawTab, setSearchParams])
+  const setTab = (next: KeysTab) => {
+    // Bare /keys is the canonical providers URL (matches the sidebar link).
+    setSearchParams(prev => {
+      if (next === 'providers') prev.delete('tab')
+      else prev.set('tab', next)
+      return prev
+    }, { replace: true })
+  }
   // `/keys?add=<platform>` opens Add key preselected to that provider, so other
   // pages can send the user straight to the one key they need (e.g. the
   // Decision routing setup guide, #1354). Unknown values are ignored.
-  const [searchParams, setSearchParams] = useSearchParams()
   const linkedPlatform = LISTED_PLATFORMS.find(p => p.value === searchParams.get('add'))?.value
   const [addOpen, setAddOpen] = useState(linkedPlatform !== undefined)
   // Provider the Add key dialog opens preselected to, when the add flow was
@@ -57,16 +69,19 @@ export default function KeysPage() {
 
   // Kept at page level for the header's "Check all" gate; ProviderList runs the
   // same query (deduped by react-query) for the list itself.
-  const { data: keys = [] } = useQuery<ApiKey[]>({
+  const { data: keys = [], error: keysFailure } = useQuery<ApiKey[]>({
     queryKey: ['keys'],
     queryFn: () => apiFetch('/api/keys'),
   })
 
-  const { data: healthData } = useQuery<HealthData>({
+  const { data: healthData, error: healthFailure } = useQuery<HealthData>({
     queryKey: ['health'],
     queryFn: () => apiFetch('/api/health'),
     refetchInterval: 30000,
   })
+
+  // A failed load must not masquerade as "no keys yet".
+  const loadFailure = keysFailure ?? healthFailure ?? null
 
   const checkAll = useMutation({
     mutationFn: () => apiFetch('/api/health/check-all', { method: 'POST' }),
@@ -111,6 +126,13 @@ export default function KeysPage() {
           </>
         }
       />
+
+      {loadFailure && (
+        <div role="alert" className="ox-enter mb-6 rounded-3xl border border-destructive/40 bg-destructive/10 px-5 py-4 text-sm text-destructive">
+          {t('keys.loadFailed')}{' '}
+          {loadFailure instanceof Error ? loadFailure.message : String(loadFailure ?? '')}
+        </div>
+      )}
 
       <div className="space-y-8">
         {tab === 'apiKey' && (

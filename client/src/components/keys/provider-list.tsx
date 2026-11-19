@@ -503,6 +503,7 @@ export function ProviderList({ onAddKey }: { onAddKey: () => void }) {
                       togglePlatform.mutate({ platform: group.platform, enabled: checked, group: group.customGroup })
                     }
                     disabled={togglePlatform.isPending}
+                    aria-label={t('keys.togglePlatformEnabled', { name: group.label })}
                   />
                   <button
                     type="button"
@@ -512,7 +513,7 @@ export function ProviderList({ onAddKey }: { onAddKey: () => void }) {
                   >
                     <h3 className="text-sm font-medium">{group.label}</h3>
                     {group.search && (
-                      <Badge variant="outline" className="border-sky-600/30 text-[10px] text-sky-700 dark:text-sky-300">
+                      <Badge variant="outline" className="border-primary/30 text-[10px] text-primary">
                         {t('search.badge')}
                       </Badge>
                     )}
@@ -533,7 +534,7 @@ export function ProviderList({ onAddKey }: { onAddKey: () => void }) {
                       )}
                       {issueCount > 0 && (
                         <span className="inline-flex items-center gap-1">
-                          <span className="size-1.5 rounded-full bg-rose-500" />
+                          <span className="size-1.5 rounded-full bg-destructive" />
                           {t(issueCount === 1 ? 'keys.summaryIssueOne' : 'keys.summaryIssueOther', { count: issueCount })}
                         </span>
                       )}
@@ -748,7 +749,7 @@ export function ProviderList({ onAddKey }: { onAddKey: () => void }) {
                                   variant="outline"
                                   aria-label={t('keys.quotaBalanceLeft', { remaining: new Intl.NumberFormat(locale).format(balance.remaining) })}
                                   className={`text-[10px] tabular-nums ${balance.fraction != null && balance.fraction <= 0.2
-                                    ? 'border-amber-600/30 text-amber-700 dark:text-amber-300'
+                                    ? 'border-amber-600/30 text-amber-800 dark:text-amber-400'
                                     : 'text-muted-foreground'} ${k.enabled ? '' : 'opacity-50'}`}
                                 >
                                   {balance.limit != null && balance.fraction != null

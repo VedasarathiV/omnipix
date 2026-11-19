@@ -1,7 +1,7 @@
-import { useEffect, useState, type ReactNode } from 'react'
-import { BrowserRouter, Routes, Route, Navigate, NavLink, Link, useLocation, useNavigate } from 'react-router-dom'
+import { Suspense, lazy, useEffect, useState, type ReactNode } from 'react'
+import { BrowserRouter, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { MutationCache, QueryClient, QueryClientProvider } from '@tanstack/react-query'
-import { ChevronDown, KeyRound, LogOut, Menu, MoreHorizontal, RefreshCw, Search, Settings, Sparkles } from 'lucide-react'
+import { Loader2, Menu } from 'lucide-react'
 import { buttonVariants } from '@/components/ui/button'
 import {
   DropdownMenu,
@@ -16,38 +16,47 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { AuthGate, ChangeCredentialsModal } from '@/components/auth-gate'
 import { CommandPalette } from '@/components/command-palette'
-import { openCommandPalette } from '@/components/command-palette-state'
 import { ErrorBoundary } from '@/components/error-boundary'
 import { SettingsDialog } from '@/components/settings-dialog'
 import { UpdatesDialog } from '@/components/updates-dialog'
 import { OPEN_UPDATES_EVENT } from '@/lib/updates'
 import { Toaster } from '@/components/toaster'
+import { GlobalDictation } from '@/components/global-dictation'
 import { UpdateReminder } from '@/components/update-reminder'
 import { NewBuildPrompt } from '@/components/new-build-prompt'
 import { usePremium } from '@/hooks/use-premium'
 import { I18nProvider, useI18n } from '@/i18n'
-import { logout } from '@/lib/api'
 import { toast } from '@/lib/toast'
+import { navItems, navMenus } from '@/lib/workbench'
+import { isDesktopApp, isMacDesktop } from '@/lib/desktop-env'
+import { AccountMenuItems } from '@/components/account-menu-items'
+import { Brand } from '@/components/brand'
+import { NoKeysBanner } from '@/components/no-keys-banner'
+import { NotificationBell } from '@/components/notification-bell'
+import { Workbench } from '@/components/workbench/workbench'
 import { ThemeProvider } from '@/theme'
-import KeysPage from '@/pages/KeysPage'
-import PlaygroundPage from '@/pages/PlaygroundPage'
-import FallbackPage from '@/pages/FallbackPage'
-import ModelDetailPage from '@/pages/ModelDetailPage'
-import FusionPage from '@/pages/FusionPage'
-import ArenaPage from '@/pages/ArenaPage'
-import EmbeddingsPage from '@/pages/EmbeddingsPage'
-import ImagePage from '@/pages/ImagePage'
-import VideoPage from '@/pages/VideoPage'
-import AudioPage from '@/pages/AudioPage'
-import SearchPage from '@/pages/SearchPage'
-import DecisionPage from '@/pages/DecisionPage'
-import MediaDetailPage from '@/pages/MediaDetailPage'
-import EmbeddingDetailPage from '@/pages/EmbeddingDetailPage'
-import AnalyticsPage from '@/pages/AnalyticsPage'
-import LogsPage from '@/pages/LogsPage'
-import PremiumPage from '@/pages/PremiumPage'
-import NotFoundPage from '@/pages/NotFoundPage'
-import AgentsPage from '@/pages/AgentsPage'
+// Route-level code splitting: each page is its own chunk, loaded on first
+// navigation instead of in the initial bundle. The shell (auth gate, nav,
+// palette, toaster) stays eager so first paint is never a blank page.
+const KeysPage = lazy(() => import('@/pages/KeysPage'))
+const PlaygroundPage = lazy(() => import('@/pages/PlaygroundPage'))
+const FallbackPage = lazy(() => import('@/pages/FallbackPage'))
+const ModelDetailPage = lazy(() => import('@/pages/ModelDetailPage'))
+const FusionPage = lazy(() => import('@/pages/FusionPage'))
+const ArenaPage = lazy(() => import('@/pages/ArenaPage'))
+const EmbeddingsPage = lazy(() => import('@/pages/EmbeddingsPage'))
+const ImagePage = lazy(() => import('@/pages/ImagePage'))
+const VideoPage = lazy(() => import('@/pages/VideoPage'))
+const AudioPage = lazy(() => import('@/pages/AudioPage'))
+const SearchPage = lazy(() => import('@/pages/SearchPage'))
+const DecisionPage = lazy(() => import('@/pages/DecisionPage'))
+const MediaDetailPage = lazy(() => import('@/pages/MediaDetailPage'))
+const EmbeddingDetailPage = lazy(() => import('@/pages/EmbeddingDetailPage'))
+const AnalyticsPage = lazy(() => import('@/pages/AnalyticsPage'))
+const LogsPage = lazy(() => import('@/pages/LogsPage'))
+const PremiumPage = lazy(() => import('@/pages/PremiumPage'))
+const NotFoundPage = lazy(() => import('@/pages/NotFoundPage'))
+const AgentsPage = lazy(() => import('@/pages/AgentsPage'))
 
 // Every failed mutation surfaces as an error toast, so no action fails
 // silently. A page that already shows the failure inline can opt out with
@@ -70,105 +79,8 @@ const queryClient = new QueryClient({
   }),
 })
 
-const navItems = [
-  { to: '/models', labelKey: 'nav.models' },
-  { to: '/playground', labelKey: 'nav.playground' },
-  { to: '/keys', labelKey: 'nav.keys' },
-  { to: '/agents', labelKey: 'nav.agents' },
-  { to: '/analytics', labelKey: 'nav.analytics' },
-  { to: '/premium', labelKey: 'nav.premium' },
-]
-
-// The modality pages behind "Models"; surfaced in the nav dropdown and
-// the mobile submenu so Fusion/Embeddings/Image/Audio are discoverable without
-// first landing on the chat table.
-const modelItems = [
-  { to: '/models/chat', labelKey: 'models.chatModelsTab' },
-  { to: '/models/image', labelKey: 'models.imageTab' },
-  { to: '/models/video', labelKey: 'models.videoTab' },
-  { to: '/models/audio', labelKey: 'models.audioTab' },
-  { to: '/models/embeddings', labelKey: 'models.embeddingsTab' },
-  { to: '/models/decision', labelKey: 'decision.tab' },
-  { to: '/models/search', labelKey: 'search.tab' },
-  { to: '/models/fusion', labelKey: 'models.fusionTab' },
-  { to: '/models/arena', labelKey: 'models.arenaTab' },
-]
-
-// The pages that hang off "Analytics". Logs is reachable only from here — it is
-// deliberately kept out of navItems so the top bar does not grow a seventh entry.
-const analyticsItems = [
-  { to: '/analytics', labelKey: 'nav.analytics' },
-  { to: '/logs', labelKey: 'nav.logs' },
-]
-
-// Nav entries rendered as a split control: the label still navigates, and a
-// chevron (desktop) / submenu (mobile) reveals the pages behind it. Keyed by the
-// nav entry's `to` so both branches below stay one lookup, not two hardcoded
-// special cases.
-const navMenus: Record<
-  string,
-  { ariaKey: string; items: { to: string; labelKey: string }[]; isActive: (pathname: string) => boolean }
-> = {
-  '/models': {
-    ariaKey: 'nav.modelsMenu',
-    items: modelItems,
-    isActive: (pathname) => pathname.startsWith('/models'),
-  },
-  '/analytics': {
-    ariaKey: 'nav.analyticsMenu',
-    items: analyticsItems,
-    isActive: (pathname) => pathname.startsWith('/analytics') || pathname.startsWith('/logs'),
-  },
-}
-
-const isMac = typeof navigator !== 'undefined' && /mac/i.test(navigator.platform)
-
-function NavItem({ to, children }: { to: string; children: React.ReactNode }) {
-  return (
-    <NavLink
-      to={to}
-      className={({ isActive }) =>
-        `relative text-sm px-1 py-4 transition-colors ${
-          isActive
-            ? 'text-primary after:absolute after:inset-x-0 after:-bottom-px after:h-0.5 after:rounded-full after:bg-primary'
-            : 'text-muted-foreground hover:text-foreground'
-        }`
-      }
-    >
-      {children}
-    </NavLink>
-  )
-}
-
-function Brand() {
-  return (
-    <Link to="/" className="flex items-center gap-2 transition-opacity hover:opacity-70" aria-label="OmniPix home">
-      <svg width="18" height="18" viewBox="0 0 64 64" aria-hidden="true" className="shrink-0">
-        <rect width="64" height="64" rx="14" fill="var(--primary)" />
-        <circle cx="32" cy="32" r="9.5" fill="var(--primary-foreground)" />
-        <circle cx="32" cy="32" r="18" fill="none" stroke="var(--primary-foreground)" strokeOpacity=".55"
-          strokeWidth="4.5" strokeLinecap="round" strokeDasharray="86 27"
-          transform="rotate(-60 32 32)" />
-      </svg>
-      <span className="font-semibold tracking-tight text-sm">OmniPix</span>
-    </Link>
-  )
-}
-
-// True when the dashboard runs inside the desktop shell (Electron preload
-// sets this). The navbar then doubles as the window title bar: draggable,
-// padded for the macOS traffic lights, and without the web-only Sign out.
-const isDesktopApp = typeof window !== 'undefined'
-  && (window as Window & { __OMNIPIX_DESKTOP__?: boolean }).__OMNIPIX_DESKTOP__ === true
-
-const desktopPlatform = typeof window !== 'undefined'
-  ? (window as Window & { __OMNIPIX_PLATFORM__?: string }).__OMNIPIX_PLATFORM__
-  : undefined
-
-const isMacDesktop = isDesktopApp && (
-  desktopPlatform ? desktopPlatform === 'darwin' : (typeof navigator !== 'undefined' && /Macintosh|Mac OS X/.test(navigator.userAgent))
-)
-
+// Nav data lives in lib/workbench.ts (shared with the workbench shell);
+// the brand, account menu, and desktop detection live in their own modules.
 // The preload's own early classList.add can be lost (it may run before this
 // document exists), so the client claims the class itself at module load —
 // before the first React paint — keeping html.desktop CSS (transparent body,
@@ -180,79 +92,115 @@ if (isDesktopApp) {
   }
 }
 
-function AccountMenuItems({
+// Compact top bar for narrow screens (the workbench takes over at md+).
+// Dialog state lives in ShellChrome so the two shells share one instance.
+function Navbar({
+  visibleNavItems,
   showUpgrade,
-  upgradeLabel,
-  settingsLabel,
-  updatesLabel,
-  signOutLabel,
-  changeEmailLabel,
-  changePasswordLabel,
-  onUpgrade,
   onOpenSettings,
   onOpenUpdates,
   onChangeEmail,
   onChangePassword,
 }: {
+  visibleNavItems: { to: string; labelKey: string }[]
   showUpgrade: boolean
-  upgradeLabel: string
-  settingsLabel: string
-  updatesLabel: string
-  signOutLabel: string
-  changeEmailLabel: string
-  changePasswordLabel: string
-  onUpgrade: () => void
   onOpenSettings: () => void
   onOpenUpdates: () => void
   onChangeEmail: () => void
   onChangePassword: () => void
 }) {
-  return (
-    <>
-      {showUpgrade && (
-        <DropdownMenuItem onClick={onUpgrade}>
-          <Sparkles />
-          {upgradeLabel}
-        </DropdownMenuItem>
-      )}
-      <DropdownMenuItem onClick={onOpenSettings}>
-        <Settings />
-        {settingsLabel}
-      </DropdownMenuItem>
-      <DropdownMenuItem onClick={onOpenUpdates}>
-        <RefreshCw />
-        {updatesLabel}
-      </DropdownMenuItem>
-      {/* Desktop signs in with a hidden local account, so it has no credentials
-          to change and no session to end. */}
-      {!isDesktopApp && (
-        <>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem onClick={onChangeEmail}>
-            <span className="flex size-4 items-center justify-center font-serif text-xs font-bold">@</span>
-            {changeEmailLabel}
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={onChangePassword}>
-            <KeyRound />
-            {changePasswordLabel}
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={() => logout()}>
-            <LogOut />
-            {signOutLabel}
-          </DropdownMenuItem>
-        </>
-      )}
-    </>
-  )
-}
-
-function Navbar() {
   const { t } = useI18n()
   const location = useLocation()
   const navigate = useNavigate()
+
+  return (
+    <header
+      // In macOS desktop shell the window carries vibrancy blur, so a lighter wash (45%)
+      // lets it read as glass. Everywhere else (Windows/Linux/browser), use solid wash (80%)
+      // so text and contrast stay sharp and readable.
+      className={`sticky top-0 z-40 border-b backdrop-blur ${isMacDesktop ? 'bg-background/45' : 'bg-background/80'}`}
+      style={isDesktopApp ? ({ WebkitAppRegion: 'drag' } as React.CSSProperties) : undefined}
+    >
+      <div
+        // Physical pl: reserves macOS traffic lights only on macOS. On Windows and Linux,
+        // standard window controls sit on the top-right, so no left padding is needed.
+        className={`mx-auto flex max-w-6xl items-center px-4 sm:px-6 ${isMacDesktop ? 'pl-20 sm:pl-20' : ''}`}
+        style={isMacDesktop ? { minHeight: 52 } : undefined}
+      >
+        <Brand />
+        <div
+          className="ms-auto flex items-center"
+          style={isDesktopApp ? ({ WebkitAppRegion: 'no-drag' } as React.CSSProperties) : undefined}
+        >
+          <NotificationBell className="size-10" />
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              className={buttonVariants({ variant: 'ghost', size: 'icon' })}
+              aria-label={t('nav.openMenu')}
+            >
+              <Menu />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-52">
+              <DropdownMenuGroup>
+                {visibleNavItems.map((item) => {
+                  const menu = navMenus[item.to]
+                  return menu ? (
+                    <DropdownMenuSub key={item.to}>
+                      <DropdownMenuSubTrigger
+                        className={menu.isActive(location.pathname) ? 'bg-accent text-accent-foreground font-medium' : undefined}
+                      >
+                        {t(item.labelKey)}
+                      </DropdownMenuSubTrigger>
+                      <DropdownMenuSubContent>
+                        {menu.items.map((entry) => (
+                          <DropdownMenuItem key={entry.to} onClick={() => navigate(entry.to)}>
+                            {t(entry.labelKey)}
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuSubContent>
+                    </DropdownMenuSub>
+                  ) : (
+                    <DropdownMenuItem
+                      key={item.to}
+                      onClick={() => navigate(item.to)}
+                      className={location.pathname === item.to ? 'bg-accent text-accent-foreground font-medium' : undefined}
+                    >
+                      {t(item.labelKey)}
+                    </DropdownMenuItem>
+                  )
+                })}
+              </DropdownMenuGroup>
+              <DropdownMenuSeparator />
+              <AccountMenuItems
+                showUpgrade={showUpgrade}
+                upgradeLabel={t('nav.upgrade')}
+                settingsLabel={t('nav.settings')}
+                updatesLabel={t('settings.checkForUpdates')}
+                signOutLabel={t('nav.signOut')}
+                changeEmailLabel={t('auth.changeEmail')}
+                changePasswordLabel={t('auth.changePassword')}
+                onUpgrade={() => navigate('/premium')}
+                onOpenSettings={onOpenSettings}
+                onOpenUpdates={onOpenUpdates}
+                onChangeEmail={onChangeEmail}
+                onChangePassword={onChangePassword}
+                isDesktopApp={isDesktopApp}
+              />
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </div>
+    </header>
+  )
+}
+
+// Owns the chrome both shells share (dialogs, premium gating): the narrow
+// navbar below md, the workbench at md and up. One instance of each dialog,
+// whichever shell is showing.
+function ShellChrome({ children }: { children: ReactNode }) {
   const [settingsOpen, setSettingsOpen] = useState(false)
   const [updatesOpen, setUpdatesOpen] = useState(false)
-  // The update pill lives outside the navbar; it asks for this dialog by event.
+  // The update pill lives outside the chrome; it asks for this dialog by event.
   useEffect(() => {
     const open = () => setUpdatesOpen(true)
     window.addEventListener(OPEN_UPDATES_EVENT, open)
@@ -268,150 +216,26 @@ function Navbar() {
 
   return (
     <>
-      <header
-        // In macOS desktop shell the window carries vibrancy blur, so a lighter wash (45%)
-        // lets it read as glass. Everywhere else (Windows/Linux/browser), use solid wash (80%)
-        // so text and contrast stay sharp and readable.
-        className={`sticky top-0 z-40 border-b backdrop-blur ${isMacDesktop ? 'bg-background/45' : 'bg-background/80'}`}
-        style={isDesktopApp ? ({ WebkitAppRegion: 'drag' } as React.CSSProperties) : undefined}
+      <div className="md:hidden">
+        <Navbar
+          visibleNavItems={visibleNavItems}
+          showUpgrade={showUpgrade}
+          onOpenSettings={() => setSettingsOpen(true)}
+          onOpenUpdates={() => setUpdatesOpen(true)}
+          onChangeEmail={() => setCredentialsMode('email')}
+          onChangePassword={() => setCredentialsMode('password')}
+        />
+      </div>
+      <Workbench
+        premiumEnabled={premiumEnabled}
+        showUpgrade={showUpgrade}
+        onOpenSettings={() => setSettingsOpen(true)}
+        onOpenUpdates={() => setUpdatesOpen(true)}
+        onChangeEmail={() => setCredentialsMode('email')}
+        onChangePassword={() => setCredentialsMode('password')}
       >
-        <div
-          // Physical pl: reserves macOS traffic lights only on macOS. On Windows and Linux,
-          // standard window controls sit on the top-right, so no left padding is needed.
-          className={`mx-auto flex max-w-6xl items-center px-4 sm:px-6 ${isMacDesktop ? 'pl-20 sm:pl-20' : ''}`}
-          style={isMacDesktop ? { minHeight: 52 } : undefined}
-        >
-          <Brand />
-          <nav
-            className="ms-10 hidden items-center gap-6 md:flex"
-            style={isDesktopApp ? ({ WebkitAppRegion: 'no-drag' } as React.CSSProperties) : undefined}
-          >
-            {visibleNavItems.map((item) => {
-              const menu = navMenus[item.to]
-              return menu ? (
-                // Split control: the label navigates, the chevron reveals the
-                // pages hiding behind it.
-                <div key={item.to} className="flex items-center gap-0.5">
-                  <NavItem to={item.to}>{t(item.labelKey)}</NavItem>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger
-                      aria-label={t(menu.ariaKey)}
-                      className="rounded-md p-1 text-muted-foreground transition-colors hover:text-foreground"
-                    >
-                      <ChevronDown className="size-3.5" />
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="start" className="w-44">
-                      {menu.items.map((entry) => (
-                        <DropdownMenuItem key={entry.to} onClick={() => navigate(entry.to)}>
-                          {t(entry.labelKey)}
-                        </DropdownMenuItem>
-                      ))}
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
-              ) : (
-                <NavItem key={item.to} to={item.to}>
-                  {t(item.labelKey)}
-                </NavItem>
-              )
-            })}
-          </nav>
-          <div
-            className="ms-auto hidden items-center gap-1 md:flex"
-            style={isDesktopApp ? ({ WebkitAppRegion: 'no-drag' } as React.CSSProperties) : undefined}
-          >
-            <button
-              type="button"
-              onClick={openCommandPalette}
-              aria-label={t('palette.title')}
-              className={buttonVariants({ variant: 'ghost', size: 'sm' })}
-            >
-              <Search className="size-3.5" />
-              <kbd className="text-[10px] text-muted-foreground">{isMac ? '⌘K' : 'Ctrl K'}</kbd>
-            </button>
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                className={buttonVariants({ variant: 'ghost', size: 'icon' })}
-                aria-label={t('nav.openMenu')}
-              >
-                <MoreHorizontal />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48">
-                <AccountMenuItems
-                  showUpgrade={showUpgrade}
-                  upgradeLabel={t('nav.upgrade')}
-                  settingsLabel={t('nav.settings')}
-                  updatesLabel={t('settings.checkForUpdates')}
-                  signOutLabel={t('nav.signOut')}
-                  changeEmailLabel={t('auth.changeEmail')}
-                  changePasswordLabel={t('auth.changePassword')}
-                  onUpgrade={() => navigate('/premium')}
-                  onOpenSettings={() => setSettingsOpen(true)}
-                  onOpenUpdates={() => setUpdatesOpen(true)}
-                  onChangeEmail={() => setCredentialsMode('email')}
-                  onChangePassword={() => setCredentialsMode('password')}
-                />
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-          <div className="ms-auto md:hidden">
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                className={buttonVariants({ variant: 'ghost', size: 'icon' })}
-                aria-label={t('nav.openMenu')}
-              >
-                <Menu />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-52">
-                <DropdownMenuGroup>
-                  {visibleNavItems.map((item) => {
-                    const menu = navMenus[item.to]
-                    return menu ? (
-                      <DropdownMenuSub key={item.to}>
-                        <DropdownMenuSubTrigger
-                          className={menu.isActive(location.pathname) ? 'bg-accent text-accent-foreground font-medium' : undefined}
-                        >
-                          {t(item.labelKey)}
-                        </DropdownMenuSubTrigger>
-                        <DropdownMenuSubContent>
-                          {menu.items.map((entry) => (
-                            <DropdownMenuItem key={entry.to} onClick={() => navigate(entry.to)}>
-                              {t(entry.labelKey)}
-                            </DropdownMenuItem>
-                          ))}
-                        </DropdownMenuSubContent>
-                      </DropdownMenuSub>
-                    ) : (
-                      <DropdownMenuItem
-                        key={item.to}
-                        onClick={() => navigate(item.to)}
-                        className={location.pathname === item.to ? 'bg-accent text-accent-foreground font-medium' : undefined}
-                      >
-                        {t(item.labelKey)}
-                      </DropdownMenuItem>
-                    )
-                  })}
-                </DropdownMenuGroup>
-                <DropdownMenuSeparator />
-                <AccountMenuItems
-                  showUpgrade={showUpgrade}
-                  upgradeLabel={t('nav.upgrade')}
-                  settingsLabel={t('nav.settings')}
-                  updatesLabel={t('settings.checkForUpdates')}
-                  signOutLabel={t('nav.signOut')}
-                  changeEmailLabel={t('auth.changeEmail')}
-                  changePasswordLabel={t('auth.changePassword')}
-                  onUpgrade={() => navigate('/premium')}
-                  onOpenSettings={() => setSettingsOpen(true)}
-                  onOpenUpdates={() => setUpdatesOpen(true)}
-                  onChangeEmail={() => setCredentialsMode('email')}
-                  onChangePassword={() => setCredentialsMode('password')}
-                />
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </div>
-      </header>
+        {children}
+      </Workbench>
       <SettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} />
       <UpdatesDialog open={updatesOpen} onOpenChange={setUpdatesOpen} />
       {credentialsMode && (
@@ -425,6 +249,16 @@ function Navbar() {
 function PageBoundary({ children }: { children: ReactNode }) {
   const location = useLocation()
   return <ErrorBoundary key={location.pathname}>{children}</ErrorBoundary>
+}
+
+// Shown while a lazily-loaded page chunk downloads. Inside the error
+// boundary, so a failed chunk load renders the page error card, not white.
+function RouteFallback() {
+  return (
+    <div className="flex min-h-[40vh] items-center justify-center" role="status" aria-label="Loading page">
+      <Loader2 className="size-6 animate-spin text-muted-foreground" />
+    </div>
+  )
 }
 
 // Routes that own the whole viewport instead of sitting in the shell's centred,
@@ -453,7 +287,8 @@ function PageContainer({ children }: { children: ReactNode }) {
   const fullBleed = FULL_BLEED_ROUTES.has(location.pathname)
   // Keyed by route so the enter animation replays on every navigation.
   return (
-    <main key={location.pathname} className={(fullBleed ? 'flex min-h-0 flex-1 flex-col' : 'mx-auto w-full max-w-6xl px-6 py-8') + ' ox-enter'}>
+    <main key={location.pathname} className={(fullBleed ? 'flex min-h-0 flex-1 flex-col' : 'mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 sm:py-8') + ' ox-enter'}>
+      <NoKeysBanner />
       {children}
     </main>
   )
@@ -486,9 +321,10 @@ function App() {
                   Fixed-position children (toaster, palette, reminder) are out of
                   flow, and a padded route stretches to nothing it can show. */}
               <AppShell>
-                <Navbar />
+                <ShellChrome>
                 <PageContainer>
                   <PageBoundary>
+                    <Suspense fallback={<RouteFallback />}>
                     <Routes>
                       <Route path="/" element={<Navigate to="/models/chat" replace />} />
                       <Route path="/models" element={<Navigate to="/models/chat" replace />} />
@@ -518,9 +354,12 @@ function App() {
                       <Route path="/health" element={<Navigate to="/keys" replace />} />
                       <Route path="*" element={<NotFoundPage />} />
                     </Routes>
+                    </Suspense>
                   </PageBoundary>
                 </PageContainer>
+                </ShellChrome>
                 <Toaster />
+                <GlobalDictation />
                 <CommandPalette />
                 <UpdateReminder />
                 <NewBuildPrompt />

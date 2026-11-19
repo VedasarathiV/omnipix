@@ -51,8 +51,8 @@ const SCROLL_FOLLOW_SLACK = 40
 // muted for debug — which is noise you opted into.
 const LEVEL_CLASS: Record<LogLevel, string> = {
   debug: 'bg-muted text-muted-foreground',
-  info: 'bg-sky-600/15 text-sky-700 dark:text-sky-400',
-  warn: 'bg-amber-600/15 text-amber-700 dark:text-amber-400',
+  info: 'bg-primary/15 text-primary',
+  warn: 'bg-amber-600/15 text-amber-800 dark:text-amber-400',
   error: 'bg-destructive/10 text-destructive',
 }
 
@@ -382,7 +382,7 @@ export default function LogsPage() {
       <p className="mb-2 text-xs text-muted-foreground">{t('logs.countsHint')}</p>
 
       {query.isError && (
-        <div className="mb-3 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2.5 text-xs text-destructive">
+        <div role="alert" className="mb-3 rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2.5 text-xs text-destructive">
           {t('logs.loadFailed')}{' '}
           {query.error instanceof Error ? query.error.message : String(query.error ?? '')}
         </div>

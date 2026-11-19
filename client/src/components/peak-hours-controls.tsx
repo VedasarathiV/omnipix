@@ -45,6 +45,7 @@ export function PeakHoursControls({ routing, strategy, saving, onSave }: {
   const [tzError, setTzError] = useState(false)
 
   // Re-sync when the server's value changes under us (poll, or another tab).
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { setTz(routing.peakTimezone); setTzError(false) }, [routing.peakTimezone])
 
   const enabled = routing.peakHoursAdjust

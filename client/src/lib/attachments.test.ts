@@ -5,7 +5,10 @@ import {
   classifyFile,
   composeText,
   dataUrlBytes,
+  detectMention,
+  docsContextMessage,
   fenceLanguage,
+  filterMentionDocs,
   fitWithin,
   inlineTextAttachment,
   toMessageContent,
@@ -119,5 +122,59 @@ describe('dataUrlBytes', () => {
   it('measures the decoded payload, not the URI', () => {
     // 4 base64 chars per 3 bytes; the "data:...;base64," prefix is excluded.
     expect(dataUrlBytes(`data:image/png;base64,${'A'.repeat(400)}`)).toBe(300)
+  })
+})
+
+describe('doc attachments', () => {
+  const doc: Attachment = { id: 'd', kind: 'doc', name: 'Guide', project: 'acme', url: 'https://x.test/g' }
+
+  it('leaves the user text and image parts untouched (docs resolve to system context)', () => {
+    expect(composeText('hello', [doc])).toBe('hello')
+    expect(attachmentImages([doc])).toEqual([])
+  })
+})
+
+describe('detectMention', () => {
+  it('finds an open token before the caret', () => {
+    expect(detectMention('hello @wid')).toEqual({ anchor: 6, query: 'wid' })
+    expect(detectMention('@')).toEqual({ anchor: 0, query: '' })
+    expect(detectMention('(@api/v2')).toEqual({ anchor: 1, query: 'api/v2' })
+  })
+
+  it('rejects closed tokens and emails', () => {
+    expect(detectMention('hello @wid ')).toBeNull()
+    expect(detectMention('mail me@example.com')).toBeNull()
+    expect(detectMention('no token here')).toBeNull()
+    expect(detectMention('')).toBeNull()
+  })
+})
+
+describe('filterMentionDocs', () => {
+  const docs = [
+    { project_key: 'acme', source_url: 'https://x.test/guide', title: 'Widget Guide', chunks: 12, updated_at: '' },
+    { project_key: 'acme', source_url: 'https://x.test/api', title: 'API Reference', chunks: 40, updated_at: '' },
+    { project_key: 'other', source_url: 'https://y.test/notes', title: 'Notes', chunks: 3, updated_at: '' },
+  ]
+
+  it('matches title, url, and project, biggest first', () => {
+    expect(filterMentionDocs(docs, '')).toHaveLength(3)
+    expect(filterMentionDocs(docs, '')[0].title).toBe('API Reference')
+    expect(filterMentionDocs(docs, 'widget')).toEqual([docs[0]])
+    expect(filterMentionDocs(docs, 'y.test')).toEqual([docs[2]])
+    expect(filterMentionDocs(docs, 'other')).toEqual([docs[2]])
+    expect(filterMentionDocs(docs, 'missing')).toEqual([])
+  })
+})
+
+describe('docsContextMessage', () => {
+  it('renders chunks with section heads', () => {
+    const out = docsContextMessage([
+      { id: 1, project_key: 'a', source_url: 'u', title: 'Guide', chunk_index: 0, section: 'Auth', content: 'Use tokens.' },
+      { id: 2, project_key: 'a', source_url: 'u', title: '', chunk_index: 1, section: '', content: 'More.' },
+    ])
+    expect(out).toContain('Relevant docs')
+    expect(out).toContain('### Guide — Auth')
+    expect(out).toContain('Use tokens.')
+    expect(out).toContain('### u')
   })
 })

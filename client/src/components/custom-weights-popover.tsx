@@ -8,9 +8,9 @@ import type { RoutingWeights } from '@/lib/routing'
 // Slider axes share the colors used by the score table columns.
 // `tKey` is the i18n suffix under `strategies.weight*`.
 const WEIGHT_AXES: { key: keyof RoutingWeights; tKey: string; color: string }[] = [
-  { key: 'reliability', tKey: 'weightReliability', color: '#22c55e' },
-  { key: 'speed', tKey: 'weightSpeed', color: '#3b82f6' },
-  { key: 'intelligence', tKey: 'weightIntelligence', color: '#f59e0b' },
+  { key: 'reliability', tKey: 'weightReliability', color: 'var(--score-reliability)' },
+  { key: 'speed', tKey: 'weightSpeed', color: 'var(--score-speed)' },
+  { key: 'intelligence', tKey: 'weightIntelligence', color: 'var(--score-intelligence)' },
 ]
 
 // Slider popover for the 'custom' strategy. Sliders are independent (0-100)

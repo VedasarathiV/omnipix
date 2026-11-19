@@ -1,3 +1,6 @@
+/* eslint-disable react-refresh/only-export-components -- badgeVariants is the
+   component's own style map; every consumer composes it with Badge, so
+   splitting the file would only scatter one unit. Dev-only HMR note. */
 import { mergeProps } from "@base-ui/react/merge-props"
 import { useRender } from "@base-ui/react/use-render"
 import { cva, type VariantProps } from "class-variance-authority"

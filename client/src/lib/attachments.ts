@@ -31,7 +31,7 @@ export const TEXT_EXTENSIONS = ['txt', 'md', 'markdown', 'csv', 'tsv', 'json', '
 /** `accept` for the file input — mirrors what classifyFile() lets through. */
 export const ACCEPT_ATTRIBUTE = [...IMAGE_MIME_TYPES, ...TEXT_EXTENSIONS.map(e => `.${e}`)].join(',')
 
-export type AttachmentKind = 'image' | 'text'
+export type AttachmentKind = 'image' | 'text' | 'doc'
 
 export interface Attachment {
   id: string
@@ -41,6 +41,28 @@ export interface Attachment {
   dataUrl?: string
   /** Decoded UTF-8 contents — text-like files only. */
   text?: string
+  /** Ingested-doc locator — doc attachments only. */
+  project?: string
+  url?: string
+}
+
+/** An ingested doc row, as GET /api/memories/docs returns it. */
+export interface IngestedDoc {
+  project_key: string
+  source_url: string
+  title: string
+  chunks: number
+  updated_at: string
+}
+
+export interface DocChunk {
+  id: number
+  project_key: string
+  source_url: string
+  title: string
+  chunk_index: number
+  section: string
+  content: string
 }
 
 /** OpenAI multimodal content parts, exactly as the proxy expects them. */
@@ -85,6 +107,47 @@ const FENCE_LANGUAGE: Record<string, string> = {
 
 export function fenceLanguage(name: string): string {
   return FENCE_LANGUAGE[fileExtension(name)] ?? 'text'
+}
+
+// ── @-mentions ───────────────────────────────────────────────────────────────
+// Typing @ in the composer opens a picker over ingested docs (+ attach-file).
+// The token is the @ plus the word being typed; selecting a doc pins a doc
+// attachment and deletes the token, so the sent text stays clean.
+
+export interface MentionToken {
+  /** Caret-relative start index of the @. */
+  anchor: number
+  /** Text after the @ (the filter query). */
+  query: string
+}
+
+/** Find an open @-token immediately before the caret. Null when none. */
+export function detectMention(textBeforeCaret: string): MentionToken | null {
+  const match = /(?:^|[\s(])@([\w./-]*)$/.exec(textBeforeCaret)
+  if (!match) return null
+  const at = textBeforeCaret.lastIndexOf('@')
+  return { anchor: at, query: match[1] }
+}
+
+/** Docs matching the mention query (title, URL, or project), most-chunked first. */
+export function filterMentionDocs(docs: IngestedDoc[], query: string, limit = 6): IngestedDoc[] {
+  const q = query.trim().toLowerCase()
+  const hits = q
+    ? docs.filter(d =>
+      d.title.toLowerCase().includes(q) ||
+      d.source_url.toLowerCase().includes(q) ||
+      d.project_key.toLowerCase().includes(q))
+    : [...docs]
+  return hits.sort((a, b) => b.chunks - a.chunks).slice(0, limit)
+}
+
+/** Render recalled doc chunks as the system context pinned mentions inject. */
+export function docsContextMessage(chunks: DocChunk[]): string {
+  const blocks = chunks.map(c => {
+    const head = c.section ? `${c.title || c.source_url} — ${c.section}` : (c.title || c.source_url)
+    return `### ${head}\n${c.content}`
+  })
+  return `Relevant docs for the @-mentioned sources (quote rather than paraphrase when precision matters):\n${blocks.join('\n\n')}`
 }
 
 // Inlined as a fenced block so the model sees the filename AND a boundary; the

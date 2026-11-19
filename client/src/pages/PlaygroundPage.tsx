@@ -1,15 +1,20 @@
 import { useState, useRef, useEffect, useMemo, useCallback, type ReactNode } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { ChevronRight, CircleAlert, FileText, Globe, X } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { BookOpenText, Bot, ChevronRight, CircleAlert, FileText, Globe, PanelRight, X } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 import { apiFetch } from '@/lib/api'
 import { buildModelOptions } from '@/lib/model-groups'
 import type { Chain } from '@/components/chain-manager'
 import { Markdown } from '@/components/markdown'
 import { ArtifactHostContext } from '@/lib/artifact-host'
+import { CodeHostContext } from '@/lib/code-host'
 import { ArtifactPanel, ARTIFACT_PANEL_TRANSITION_MS } from '@/components/playground/artifact-panel'
-import { ARTIFACT_WIDTH_STORAGE_KEY, clampArtifactWidth, readArtifactWidth } from '@/lib/artifact-panel-size'
-import { extractArtifacts, type Artifact, type ArtifactKind } from '@/lib/artifacts'
+import { CodePane, CODE_PANE_TRANSITION_MS } from '@/components/playground/code-pane'
+import { ARTIFACT_WIDTH_STORAGE_KEY, CONVERSATION_RAIL_COLLAPSED_WIDTH, CONVERSATION_RAIL_OPEN_WIDTH, WORKBENCH_CHROME_WIDTH, clampArtifactWidth, readArtifactWidth } from '@/lib/artifact-panel-size'
+import { extractArtifacts, extractCodeFiles, type Artifact, type ArtifactKind, type CodeFile } from '@/lib/artifacts'
 import { CopyButton } from '@/components/copy-button'
+import { SpeakButton } from '@/components/speak-button'
 import { toast } from '@/lib/toast'
 import {
   ACCEPT_ATTRIBUTE,
@@ -22,16 +27,23 @@ import {
   classifyFile,
   composeText,
   dataUrlBytes,
+  detectMention,
+  docsContextMessage,
+  filterMentionDocs,
   formatBytes,
   readImageAttachment,
   readTextAttachment,
   toMessageContent,
   type Attachment,
+  type DocChunk,
+  type IngestedDoc,
 } from '@/lib/attachments'
 import { readChatStream } from '@/lib/playground-stream'
 import { ConversationSidebar } from '@/components/playground/conversation-sidebar'
 import { SettingsRail } from '@/components/playground/settings-rail'
 import { LiquidComposer } from '@/components/playground/liquid-composer'
+import { MentionPicker } from '@/components/playground/mention-picker'
+import { parseSlashCommand, slashSkillsMessage, type SlashSkill } from '@/lib/slash-skills'
 import { SearchSources } from '@/components/playground/search-sources'
 import { searchContextMessage, searchProviderName, searchReadinessHint, type SearchResult } from '@/lib/search'
 import { useSearchReadiness } from '@/hooks/use-search-readiness'
@@ -50,6 +62,7 @@ import {
   readSampling,
   samplingRequestParams,
   writeSampling,
+  type SamplingRequestParams,
   type SamplingSettings,
 } from '@/lib/playground-sampling'
 import {
@@ -69,6 +82,22 @@ import {
   type FusionPanelEntry,
 } from '@/lib/playground-conversations'
 import { useI18n } from '@/i18n'
+import { CONVERSATIONS_CHANGED_EVENT, NEW_CONVERSATION_EVENT, OPEN_CONVERSATION_EVENT } from '@/lib/workbench'
+
+// One Server-Sent-Event frame from a chat/fusion stream: fusion control frames,
+// OpenAI error envelopes, or choice deltas.
+interface SseFrame {
+  _fusion?: {
+    event?: string
+    platform?: string
+    model?: string
+    status?: string
+    content?: string
+    error?: string
+  }
+  error?: { message?: string }
+  choices?: Array<{ delta?: { content?: string } }>
+}
 
 interface FallbackEntry {
   modelDbId: number
@@ -223,6 +252,9 @@ const SCROLL_FOLLOW_SLACK = 40
 
 /** localStorage key holding whether the right-hand settings rail is expanded. */
 const SETTINGS_OPEN_KEY = 'playground.settingsOpen'
+/** localStorage keys for the code pane: split on/off and the settled width. */
+const CODE_SPLIT_STORAGE_KEY = 'playground.codeSplit'
+const CODE_WIDTH_STORAGE_KEY = 'playground.codeWidth'
 
 // Both rails plus the chat need room the small breakpoints do not have: three
 // columns on a phone leave the transcript a sliver. So below lg a visit starts
@@ -276,6 +308,11 @@ export default function PlaygroundPage() {
   // Files staged for the NEXT message: images already downscaled to a data URI,
   // text-like files already decoded. Cleared on send. (#325)
   const [attachments, setAttachments] = useState<Attachment[]>([])
+  // Open @-mention token (anchor index + filter query) and the picker's
+  // keyboard cursor. The picker lives outside the goo composer on purpose:
+  // the Liquid tree owns its own layout and must not gain siblings.
+  const [mention, setMention] = useState<{ anchor: number; query: string } | null>(null)
+  const [mentionIndex, setMentionIndex] = useState(0)
   const [dragging, setDragging] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const transcriptRef = useRef<HTMLDivElement>(null)
@@ -295,6 +332,7 @@ export default function PlaygroundPage() {
   // page is writing to; null means "nothing sent yet", and no row exists until
   // the first message — a fresh visit still opens on an empty transcript.
   const queryClient = useQueryClient()
+  const navigate = useNavigate()
   const [conversationId, setConversationId] = useState<number | null>(null)
   const [sidebarOpen, setSidebarOpen] = useState<boolean>(() => initialRailOpen(SIDEBAR_OPEN_KEY))
   const [settingsOpen, setSettingsOpen] = useState<boolean>(() => initialRailOpen(SETTINGS_OPEN_KEY))
@@ -317,6 +355,22 @@ export default function PlaygroundPage() {
   const { data: keyData } = useQuery<{ apiKey: string }>({
     queryKey: ['unified-key'],
     queryFn: () => apiFetch('/api/settings/api-key'),
+  })
+
+  // Ingested docs for @-mentions. Fetched once per page load; ingestion
+  // happens in the Assistant tab, and a refetch-on-open keeps the picker
+  // honest without polling.
+  const { data: ingestedDocs = [], refetch: refetchDocs } = useQuery<IngestedDoc[]>({
+    queryKey: ['ingested-docs'],
+    queryFn: () => apiFetch<{ docs: IngestedDoc[] }>('/api/memories/docs').then(r => r.docs),
+    staleTime: 60_000,
+  })
+
+  // Skills for /slash invocation. Shared cache key with the runs panel.
+  const { data: skills = [] } = useQuery<SlashSkill[]>({
+    queryKey: ['agent-skills'],
+    queryFn: () => apiFetch<{ skills: SlashSkill[] }>('/api/skills').then(r => r.skills),
+    staleTime: 60_000,
   })
 
   // Speech-to-text for the composer's mic: which transcription models can
@@ -344,6 +398,29 @@ export default function PlaygroundPage() {
   const dictationOptions = transcriptionOptions(mediaModels, t('playground.autoModel'))
   const dictationModel = resolveDictationModel(dictationChoice, mediaModels)
 
+  // Rails sharing the row with the panes: workbench chrome at md+, plus the
+  // conversation rail in its current state. The pane max subtracts it so the
+  // chat keeps its minimum instead of overflowing at md widths.
+  const paneChromeWidth =
+    (window.innerWidth >= 768 ? WORKBENCH_CHROME_WIDTH : 0) +
+    (sidebarOpen ? CONVERSATION_RAIL_OPEN_WIDTH : CONVERSATION_RAIL_COLLAPSED_WIDTH)
+
+  // Code-pane mount states live up here (before the artifact block) because
+  // the artifact openers below settle the pane synchronously on slot
+  // handoff. Everything else code-related stays in the code block further
+  // down, where it can read the artifact state it depends on.
+  const [codeOpen, setCodeOpen] = useState(false)
+  const [codeMounted, setCodeMounted] = useState(false)
+  const codeCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  // Synchronous unmount for slot handoff: when an artifact takes the column,
+  // the code pane leaves at once instead of stranding its exit timer behind
+  // an instantly-unmounted tree.
+  const settleCodePane = useCallback(() => {
+    if (codeCloseTimer.current) { clearTimeout(codeCloseTimer.current); codeCloseTimer.current = null }
+    setCodeOpen(false)
+    setCodeMounted(false)
+  }, [])
+
   // Artifacts (#playground): runnable code in a reply (HTML, SVG) opens in a
   // side panel with a sandboxed preview next to the source. A card in the
   // reply opens it by hand; a reply that finishes with an artifact opens its
@@ -354,18 +431,19 @@ export default function PlaygroundPage() {
   const [artifactOpen, setArtifactOpen] = useState(false)
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const [artifactWidth, setArtifactWidth] = useState<number>(
-    () => readArtifactWidth(localStorage.getItem(ARTIFACT_WIDTH_STORAGE_KEY), window.innerWidth),
+    () => readArtifactWidth(localStorage.getItem(ARTIFACT_WIDTH_STORAGE_KEY), window.innerWidth, paneChromeWidth),
   )
   const commitArtifactWidth = (w: number) => {
-    const next = clampArtifactWidth(w, window.innerWidth)
+    const next = clampArtifactWidth(w, window.innerWidth, paneChromeWidth)
     setArtifactWidth(next)
     localStorage.setItem(ARTIFACT_WIDTH_STORAGE_KEY, String(next))
   }
-  const showArtifact = (a: Artifact) => {
+  const showArtifact = useCallback((a: Artifact) => {
     if (closeTimer.current) { clearTimeout(closeTimer.current); closeTimer.current = null }
+    settleCodePane()
     setArtifact(a)
     setArtifactOpen(true)
-  }
+  }, [settleCodePane])
   const closeArtifact = () => {
     setArtifactOpen(false)
     if (closeTimer.current) clearTimeout(closeTimer.current)
@@ -374,6 +452,7 @@ export default function PlaygroundPage() {
   useEffect(() => () => { if (closeTimer.current) clearTimeout(closeTimer.current) }, [])
   const openArtifact = useCallback((kind: ArtifactKind, language: string, code: string) => {
     if (closeTimer.current) { clearTimeout(closeTimer.current); closeTimer.current = null }
+    settleCodePane()
     setArtifact({
       id: `manual:${code.length}:${code.slice(0, 40)}`,
       kind,
@@ -383,7 +462,7 @@ export default function PlaygroundPage() {
       filename: kind === 'svg' ? 'artifact.svg' : 'artifact.html',
     })
     setArtifactOpen(true)
-  }, [])
+  }, [settleCodePane])
   const artifactHost = useMemo(() => ({ open: openArtifact, activeCode: artifact?.code ?? null }), [openArtifact, artifact?.code])
   // Auto-open only for a reply that just finished HERE — not for every old
   // conversation that happens to contain one, which would pop the panel on
@@ -402,7 +481,75 @@ export default function PlaygroundPage() {
     // part of rendering it, and it must not cascade into this commit.
     const timer = setTimeout(() => showArtifact(found[0]), 0)
     return () => clearTimeout(timer)
-  }, [loading, messages])
+  }, [loading, messages, showArtifact])
+
+  // Code pane: the chat's second column, Claude-style. Every fenced block in
+  // the thread's assistant replies (minus html/svg, which keep going to the
+  // artifact panel) lands here as a file. Split defaults on, so the pane
+  // appears with the first code block; the header toggle (or the pane's own
+  // close button) dismisses it, and an open artifact takes the slot instead.
+  const codeFiles: CodeFile[] = useMemo(
+    () => messages.flatMap((m, i) => (m.role === 'assistant' && !m.isError ? extractCodeFiles(m.content, i) : [])),
+    [messages],
+  )
+  const [split, setSplit] = useState<boolean>(() => {
+    try { return localStorage.getItem(CODE_SPLIT_STORAGE_KEY) !== '0' } catch { return true }
+  })
+  const [codeActiveId, setCodeActiveId] = useState<string | null>(null)
+  // `codeOpen` drives the slide; `codeMounted` keeps the pane up through the
+  // exit animation (same two-state dance as the artifact panel). Both live
+  // above the artifact block (see settleCodePane there).
+  const [codeWidth, setCodeWidth] = useState<number>(
+    () => readArtifactWidth(localStorage.getItem(CODE_WIDTH_STORAGE_KEY), window.innerWidth, paneChromeWidth),
+  )
+  const codeVisible = split && codeFiles.length > 0 && !artifact
+  // The mount/unmount + slide states track the derived visibility, and the
+  // exit timer needs effect cleanup on unmount — setState here is the same
+  // justified pattern as the session-restore effect above.
+  /* eslint-disable react-hooks/set-state-in-effect */
+  useEffect(() => {
+    if (codeVisible) {
+      if (codeCloseTimer.current) { clearTimeout(codeCloseTimer.current); codeCloseTimer.current = null }
+      setCodeMounted(true)
+      setCodeOpen(true)
+      return
+    }
+    if (!codeMounted) return
+    setCodeOpen(false)
+    if (codeCloseTimer.current) clearTimeout(codeCloseTimer.current)
+    codeCloseTimer.current = setTimeout(() => { setCodeMounted(false); codeCloseTimer.current = null }, CODE_PANE_TRANSITION_MS)
+  }, [codeVisible, codeMounted])
+  /* eslint-enable react-hooks/set-state-in-effect */
+  useEffect(() => () => { if (codeCloseTimer.current) clearTimeout(codeCloseTimer.current) }, [])
+  const commitCodeWidth = (w: number) => {
+    const next = clampArtifactWidth(w, window.innerWidth, paneChromeWidth)
+    setCodeWidth(next)
+    localStorage.setItem(CODE_WIDTH_STORAGE_KEY, String(next))
+  }
+  const toggleSplit = useCallback(() => {
+    setSplit(prev => {
+      const next = !prev
+      try { localStorage.setItem(CODE_SPLIT_STORAGE_KEY, next ? '1' : '0') } catch { /* ignore */ }
+      return next
+    })
+  }, [])
+  const openCodeFile = useCallback((language: string, code: string) => {
+    const file = codeFiles.find(f => f.code === code && f.language === language)
+      ?? codeFiles.find(f => f.code === code)
+    if (!file) return
+    setCodeActiveId(file.id)
+    // An open artifact owns the slot: dismiss it first so this is never a
+    // silent no-op; the code pane mounts as the artifact exits.
+    if (artifact) closeArtifact()
+    setSplit(prev => {
+      if (!prev) { try { localStorage.setItem(CODE_SPLIT_STORAGE_KEY, '1') } catch { /* ignore */ } }
+      return true
+    })
+  }, [codeFiles, artifact])
+  const codeHost = useMemo(() => {
+    const active = codeFiles.find(f => f.id === codeActiveId) ?? codeFiles[codeFiles.length - 1] ?? null
+    return { open: openCodeFile, activeCode: active?.code ?? null }
+  }, [openCodeFile, codeFiles, codeActiveId])
 
   const { data: fallbackEntries = [] } = useQuery<FallbackEntry[]>({
     queryKey: ['fallback'],
@@ -581,11 +728,14 @@ export default function PlaygroundPage() {
   const handleSelectConversation = (id: number) => {
     if (id === conversationIdRef.current) return
     flushCurrentConversation()
-    openConversation(id).catch(err => {
-      console.error('[playground] could not open the conversation', err)
-      toast.error(t('playgroundSessions.loadFailed'))
-      refreshConversations()
-    })
+    openConversation(id).then(
+      () => window.dispatchEvent(new Event(CONVERSATIONS_CHANGED_EVENT)),
+      err => {
+        console.error('[playground] could not open the conversation', err)
+        toast.error(t('playgroundSessions.loadFailed'))
+        refreshConversations()
+      },
+    )
   }
 
   // "New conversation" and "Clear" are the same move now: bank the current
@@ -594,6 +744,24 @@ export default function PlaygroundPage() {
     flushCurrentConversation()
     resetConversationState()
     inputRef.current?.focus()
+    window.dispatchEvent(new Event(CONVERSATIONS_CHANGED_EVENT))
+  }
+
+  // Chat → agent continuity: bank the transcript, open a session linked to
+  // this conversation, and continue there. The agent UI reads ?session=.
+  const handoffToAgent = async () => {
+    const id = conversationIdRef.current
+    if (id == null) return
+    flushCurrentConversation()
+    try {
+      const session = await apiFetch<{ id: number }>('/api/agents/sessions', {
+        method: 'POST',
+        body: JSON.stringify({ title: titleRef.current || t('playground.agentHandoffTitle'), conversationId: id }),
+      })
+      navigate(`/agents?tab=runs&session=${session.id}`)
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : String(err))
+    }
   }
 
   const handleRenameConversation = (id: number, title: string) => {
@@ -603,6 +771,7 @@ export default function PlaygroundPage() {
       .then(saved => {
         if (conversationIdRef.current === id) titleRef.current = saved.title
         refreshConversations()
+        window.dispatchEvent(new Event(CONVERSATIONS_CHANGED_EVENT))
       })
       .catch(err => {
         console.error('[playground] could not rename the conversation', err)
@@ -617,6 +786,7 @@ export default function PlaygroundPage() {
         // same state a first-ever visit gets.
         if (conversationIdRef.current === id) resetConversationState()
         refreshConversations()
+        window.dispatchEvent(new Event(CONVERSATIONS_CHANGED_EVENT))
       })
       .catch(err => {
         console.error('[playground] could not delete the conversation', err)
@@ -649,6 +819,26 @@ export default function PlaygroundPage() {
     openConversation(stored).catch(() => writeActiveConversationId(null))
     // Mount only: this restores the session, it does not track later changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // The workbench sidebar drives the Playground from any page: open a recent
+  // conversation, or start fresh. The handlers close over the live transcript
+  // (switching banks it first), so the listener reads them through a ref —
+  // subscribing once, never to a stale render.
+  const externalHandlers = useRef({ select: handleSelectConversation, fresh: handleNewConversation })
+  externalHandlers.current = { select: handleSelectConversation, fresh: handleNewConversation }
+  useEffect(() => {
+    const open = (e: Event) => {
+      const id = (e as CustomEvent<{ id: number }>).detail?.id
+      if (typeof id === 'number') externalHandlers.current.select(id)
+    }
+    const fresh = () => externalHandlers.current.fresh()
+    window.addEventListener(OPEN_CONVERSATION_EVENT, open)
+    window.addEventListener(NEW_CONVERSATION_EVENT, fresh)
+    return () => {
+      window.removeEventListener(OPEN_CONVERSATION_EVENT, open)
+      window.removeEventListener(NEW_CONVERSATION_EVENT, fresh)
+    }
   }, [])
 
   // Read a fusion SSE stream, updating the assistant message in place as panel
@@ -686,17 +876,24 @@ export default function PlaygroundPage() {
         if (!tl.startsWith('data:')) continue
         const d = tl.slice(5).trim()
         if (d === '[DONE]') continue
-        let obj: any
-        try { obj = JSON.parse(d) } catch { continue }
+        let obj: SseFrame
+        try { obj = JSON.parse(d) as SseFrame } catch { continue }
         if (obj._fusion) {
           if (obj._fusion.event === 'panel') {
-            panel.push({ platform: obj._fusion.platform, model: obj._fusion.model, status: obj._fusion.status, content: obj._fusion.content, error: obj._fusion.error })
+            const fusion = obj._fusion
+            panel.push({
+              platform: fusion.platform ?? '',
+              model: fusion.model ?? '',
+              status: fusion.status === 'ok' || fusion.status === 'failed' ? fusion.status : undefined,
+              content: fusion.content,
+              error: fusion.error,
+            })
           } else if (obj._fusion.event === 'judge') {
-            judge = { platform: obj._fusion.platform, model: obj._fusion.model }
+            judge = { platform: obj._fusion.platform ?? '', model: obj._fusion.model ?? '' }
           }
           flush(true)
         } else if (obj.error) {
-          finalContent = `${t('playground.errorPrefix')} ${obj.error.message}`
+          finalContent = `${t('playground.errorPrefix')} ${obj.error.message ?? ''}`
           flush(true)
         } else if (obj.choices) {
           const delta = obj.choices[0]?.delta?.content
@@ -813,11 +1010,35 @@ export default function PlaygroundPage() {
     const text = input.trim()
     if ((!text && attachments.length === 0) || loading) return
 
+    // Slash invocation: /name attaches that skill's instructions for this
+    // message. Unknown or bare slashes stop the send with guidance instead
+    // of confusing the model.
+    let sendText = text
+    let skillContext: string | null = null
+    const slash = parseSlashCommand(text)
+    if (slash) {
+      const byName = new Map(skills.map(s => [s.name, s]))
+      const missing = slash.names.filter(n => {
+        const s = byName.get(n)
+        return !s || !s.enabled
+      })
+      if (!slash.rest) {
+        toast.error(t('playground.slashEmpty'))
+        return
+      }
+      if (missing.length > 0) {
+        toast.error(t('playground.slashUnknown', { names: missing.join(', ') }))
+        return
+      }
+      skillContext = slashSkillsMessage(slash.names.map(n => byName.get(n)!))
+      sendText = slash.rest
+    }
+
     // Text-like files are inlined into the prompt; images ride along as data
     // URIs and become `image_url` parts in the request envelope below.
     const userMsg: ChatMessage = {
       role: 'user',
-      content: composeText(text, attachments),
+      content: composeText(sendText, attachments),
       ...(pendingImages.length > 0 ? { images: pendingImages } : {}),
     }
     const newMessages = [...messages, userMsg]
@@ -827,6 +1048,8 @@ export default function PlaygroundPage() {
     setMessages(newMessages)
     setInput('')
     setAttachments([])
+    setMention(null)
+    setMentionIndex(0)
     setLoading(true)
     inputRef.current?.focus()
 
@@ -845,13 +1068,13 @@ export default function PlaygroundPage() {
       // failed search is reported and the question is answered without it.
       let searchContext: string | null = null
       let webSearchMeta: WebSearchMeta | undefined
-      if (webSearchOn && text) {
+      if (webSearchOn && sendText) {
         const searchStart = Date.now()
         try {
           const res = await fetch(`${base}/v1/search`, {
             method: 'POST',
             headers,
-            body: JSON.stringify({ query: text, max_results: 5 }),
+            body: JSON.stringify({ query: sendText, max_results: 5 }),
           })
           if (!res.ok) {
             const err = await res.json().catch(() => ({ error: { message: `HTTP ${res.status}` } }))
@@ -871,12 +1094,33 @@ export default function PlaygroundPage() {
         }
       }
 
+      // @-mentioned docs resolve to the chunks most relevant to THIS
+      // question. A failed lookup toasts and the message still sends.
+      let docsContext: string | null = null
+      const docAttachments = attachments.filter(a => a.kind === 'doc' && a.project && a.url)
+      if (docAttachments.length > 0) {
+        try {
+          const all: DocChunk[] = []
+          for (const doc of docAttachments) {
+            const found = await apiFetch<{ chunks: DocChunk[] }>(
+              `/api/memories/docs/search?project=${encodeURIComponent(doc.project!)}&url=${encodeURIComponent(doc.url!)}&q=${encodeURIComponent(sendText || doc.name)}&limit=3`,
+            )
+            all.push(...found.chunks)
+          }
+          if (all.length > 0) docsContext = docsContextMessage(all.slice(0, 8))
+        } catch (err) {
+          toast.error(t('playground.mentionResolveFailed', { reason: err instanceof Error ? err.message : String(err) }))
+        }
+      }
+
       const isFusion = selectedModel === 'fusion'
       const sysPrompt = systemPrompt.trim()
-      const body: any = {
+      const body: { messages: Array<{ role: string; content: unknown }>; model?: string; stream?: boolean } & SamplingRequestParams = {
         messages: [
           ...(sysPrompt ? [{ role: 'system', content: sysPrompt }] : []),
           ...(searchContext ? [{ role: 'system', content: searchContext }] : []),
+          ...(docsContext ? [{ role: 'system', content: docsContext }] : []),
+          ...(skillContext ? [{ role: 'system', content: skillContext }] : []),
           ...newMessages.map(m => ({ role: m.role, content: toMessageContent(m.content, m.images) })),
         ],
         // Only the knobs switched on in the settings rail: temperature, top_p
@@ -963,15 +1207,15 @@ export default function PlaygroundPage() {
       }]
       setMessages(answered)
       await persistConversation(answered)
-    } catch (err: any) {
+    } catch (err: unknown) {
       // Clearing the chat (or leaving the page) aborts the stream on purpose —
       // that is not a failure to report, and the transcript it belonged to is
       // already gone.
-      if (err?.name === 'AbortError') return
+      if (err instanceof Error && err.name === 'AbortError') return
       const failed: ChatMessage[] = [...newMessages, {
         role: 'assistant',
         isError: true,
-        content: err.message,
+        content: err instanceof Error ? err.message : String(err),
       }]
       setMessages(failed)
       await persistConversation(failed)
@@ -981,7 +1225,84 @@ export default function PlaygroundPage() {
     }
   }
 
+  const mentionDocs = useMemo(
+    () => (mention ? filterMentionDocs(ingestedDocs, mention.query) : []),
+    [mention, ingestedDocs],
+  )
+
+  const closeMention = () => {
+    setMention(null)
+    setMentionIndex(0)
+  }
+
+  const clearMentionToken = () => {
+    if (!mention) return
+    const caret = inputRef.current?.selectionStart ?? input.length
+    setInput(input.slice(0, mention.anchor) + input.slice(caret))
+  }
+
+  const handleComposerChange = (value: string) => {
+    setInput(value)
+    const caret = inputRef.current?.selectionStart ?? value.length
+    const token = loading ? null : detectMention(value.slice(0, caret))
+    if (token) {
+      if (!mention) void refetchDocs()
+      setMention(token)
+      setMentionIndex(0)
+    } else if (mention) {
+      closeMention()
+    }
+  }
+
+  const selectMentionDoc = (doc: IngestedDoc) => {
+    if (!mention) return
+    if (attachments.length >= MAX_ATTACHMENTS) {
+      toast.error(t('playground.attachTooMany', { count: MAX_ATTACHMENTS }))
+      return
+    }
+    setAttachments(prev => [...prev, {
+      id: `doc-${Date.now()}-${doc.source_url}`,
+      kind: 'doc',
+      name: doc.title || doc.source_url,
+      project: doc.project_key,
+      url: doc.source_url,
+    }])
+    clearMentionToken()
+    closeMention()
+    inputRef.current?.focus()
+  }
+
+  const attachFileFromMention = () => {
+    clearMentionToken()
+    closeMention()
+    fileInputRef.current?.click()
+  }
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (mention) {
+      const rows = mentionDocs.length + 1 // docs + the attach-file row
+      if (e.key === 'ArrowDown') {
+        e.preventDefault()
+        setMentionIndex(i => (i + 1) % rows)
+        return
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault()
+        setMentionIndex(i => (i - 1 + rows) % rows)
+        return
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault()
+        if (mentionIndex < mentionDocs.length) selectMentionDoc(mentionDocs[mentionIndex])
+        else attachFileFromMention()
+        return
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault()
+        closeMention()
+        return
+      }
+    }
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
       handleSend()
@@ -1058,6 +1379,40 @@ export default function PlaygroundPage() {
       />
 
       <div className="flex min-w-0 flex-1 flex-col">
+        {/* Chat header: what answers, and the code-pane split toggle (only
+            once there is code to show — a toggle to nowhere teaches nothing). */}
+        <div className="flex shrink-0 items-center gap-2 border-b px-4 py-1.5">
+          <span className="min-w-0 truncate text-xs text-muted-foreground">
+            {t('playground.answeringAs', { model: activeModelLabel })}
+          </span>
+          {conversationId != null && (
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              id="playground-agent-handoff"
+              className={codeFiles.length > 0 ? '' : 'ml-auto'}
+              aria-label={t('playground.agentHandoff')}
+              title={t('playground.agentHandoff')}
+              onClick={() => void handoffToAgent()}
+            >
+              <Bot className="size-4" />
+            </Button>
+          )}
+          {codeFiles.length > 0 && (
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              id="playground-split-toggle"
+              className="ml-auto"
+              aria-pressed={split}
+              onClick={toggleSplit}
+              aria-label={t('playground.codeToggle')}
+              title={t('playground.codeToggle')}
+            >
+              <PanelRight className="size-4" />
+            </Button>
+          )}
+        </div>
         <div ref={transcriptRef} className="min-h-0 flex-1 overflow-y-auto p-6">
           {/* The chat sits in a centred column; the composer below shares its width. */}
           <div className="mx-auto h-full w-full max-w-3xl space-y-4">
@@ -1121,7 +1476,9 @@ export default function PlaygroundPage() {
                                 />
                               )}
                               <ArtifactHostContext.Provider value={artifactHost}>
-                                <Markdown>{msg.content}</Markdown>
+                                <CodeHostContext.Provider value={codeHost}>
+                                  <Markdown>{msg.content}</Markdown>
+                                </CodeHostContext.Provider>
                               </ArtifactHostContext.Provider>
                             </>
                           ) : (
@@ -1170,14 +1527,28 @@ export default function PlaygroundPage() {
                                   className="size-5 border-0 bg-transparent opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-60 hover:!opacity-100"
                                 />
                               )}
+                              {msg.role === 'assistant' && !msg.isError && msg.content && (
+                                <SpeakButton
+                                  text={msg.content}
+                                  apiKey={keyData?.apiKey}
+                                  className="size-5 opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-60 hover:!opacity-100"
+                                />
+                              )}
                             </div>
                           )}
                           {!msg.meta && msg.role === 'assistant' && !msg.isError && msg.content && (
-                            <CopyButton
-                              text={msg.content}
-                              label={t('playground.copyReply')}
-                              className="mt-1 size-5 border-0 bg-transparent opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-60 hover:!opacity-100"
-                            />
+                            <span className="mt-1 inline-flex items-center gap-1">
+                              <CopyButton
+                                text={msg.content}
+                                label={t('playground.copyReply')}
+                                className="size-5 border-0 bg-transparent opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-60 hover:!opacity-100"
+                              />
+                              <SpeakButton
+                                text={msg.content}
+                                apiKey={keyData?.apiKey}
+                                className="size-5 opacity-0 transition-opacity focus-visible:opacity-100 group-hover:opacity-60 hover:!opacity-100"
+                              />
+                            </span>
                           )}
                         </div>
                       )}
@@ -1223,13 +1594,24 @@ export default function PlaygroundPage() {
             addFiles([...e.dataTransfer.files])
           }}
         >
+          {mention && !loading && (
+            <MentionPicker
+              docs={mentionDocs}
+              activeIndex={Math.min(mentionIndex, mentionDocs.length)}
+              onSelectDoc={selectMentionDoc}
+              onAttachFile={attachFileFromMention}
+              onHover={setMentionIndex}
+            />
+          )}
           {attachments.length > 0 && (
             <div className="mb-2 flex flex-wrap gap-2">
               {attachments.map(a => (
                 <div key={a.id} className="relative flex items-center gap-1.5 rounded-lg border bg-background py-1 pl-1.5 pr-6 text-xs">
                   {a.kind === 'image' && a.dataUrl
                     ? <img src={a.dataUrl} alt="" className="size-8 rounded object-cover" />
-                    : <FileText className="size-4 shrink-0 text-muted-foreground" />}
+                    : a.kind === 'doc'
+                      ? <BookOpenText className="size-4 shrink-0 text-muted-foreground" />
+                      : <FileText className="size-4 shrink-0 text-muted-foreground" />}
                   <span className="max-w-[140px] truncate">{a.name}</span>
                   <button
                     type="button"
@@ -1264,7 +1646,7 @@ export default function PlaygroundPage() {
           <LiquidComposer
             inputRef={inputRef}
             value={input}
-            onChange={setInput}
+            onChange={handleComposerChange}
             onKeyDown={handleKeyDown}
             onPaste={e => {
               // Screenshot straight from the clipboard; a normal text paste
@@ -1304,7 +1686,8 @@ export default function PlaygroundPage() {
           it carries must never come before the composer's, which is what a
           plain `textarea` selector reaches for. */}
       {/* The artifact panel takes the rail's column while something is open;
-          closing it brings the settings rail back as it was. */}
+          else the code pane when split is on and the thread has code;
+          otherwise the settings rail as it was. */}
       {artifact ? (
         <ArtifactPanel
           artifact={artifact}
@@ -1312,7 +1695,30 @@ export default function PlaygroundPage() {
           width={artifactWidth}
           onWidthChange={setArtifactWidth}
           onWidthCommit={commitArtifactWidth}
-          onClose={closeArtifact}
+          chromeWidth={paneChromeWidth}
+          onClose={() => {
+            closeArtifact()
+            // The close button unmounts with the panel — land focus on the
+            // composer, the page's primary control, instead of the body.
+            inputRef.current?.focus()
+          }}
+        />
+      ) : codeMounted ? (
+        <CodePane
+          files={codeFiles}
+          activeId={codeActiveId}
+          onSelect={setCodeActiveId}
+          open={codeOpen}
+          width={codeWidth}
+          onWidthChange={setCodeWidth}
+          onWidthCommit={commitCodeWidth}
+          chromeWidth={paneChromeWidth}
+          onClose={() => {
+            toggleSplit()
+            // The close button unmounts with the pane — land focus on the
+            // split toggle instead of dropping it to the body.
+            document.getElementById('playground-split-toggle')?.focus()
+          }}
         />
       ) : (
       <SettingsRail

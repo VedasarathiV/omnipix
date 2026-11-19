@@ -47,6 +47,24 @@ export function CustomProviderSection({ onAdded }: { onAdded?: () => void } = {}
   // "Fetch models" asks the endpoint itself what it serves instead of making the
   // user paste ids from a curl (#488).
   const [discoverOpen, setDiscoverOpen] = useState(false)
+  // Local speech-engine shortcut: one click fills whisper.cpp-style defaults,
+  // and Test pings the engine without saving anything.
+  const [probeResult, setProbeResult] = useState<{ reachable: boolean; endpoint?: string; error?: string } | null>(null)
+  const probe = useMutation({
+    meta: { silenceToast: true },
+    mutationFn: () =>
+      apiFetch<{ reachable: boolean; status?: number; endpoint?: string; error?: string }>('/api/media/probe', {
+        method: 'POST',
+        body: JSON.stringify({ baseUrl }),
+      }),
+    onSuccess: (r) => setProbeResult(r),
+    onError: (e) => setProbeResult({ reachable: false, error: e instanceof Error ? e.message : String(e) }),
+  })
+  const useLocalPreset = () => {
+    setBaseUrl('http://127.0.0.1:8080/v1')
+    setModel('local-stt')
+    setProbeResult(null)
+  }
 
   const models = customType === 'chat' ? parseModelList(model) : [model.trim()].filter(Boolean)
   const multiple = customType === 'chat' && models.length > 1
@@ -289,6 +307,33 @@ export function CustomProviderSection({ onAdded }: { onAdded?: () => void } = {}
       <p className="text-xs text-muted-foreground mb-3">{t('keys.addCustomDescription')}</p>
       {form}
       {contractHint && <p className="text-xs text-muted-foreground mt-2" data-testid="custom-contract-hint">{contractHint}</p>}
+      {customType === 'transcription' && (
+        <div className="mt-2 space-y-2">
+          <p className="text-xs text-muted-foreground">{t('keys.localSttHint')}</p>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button type="button" variant="outline" size="xs" onClick={useLocalPreset}>
+              {t('keys.localSttPreset')}
+            </Button>
+            <Button
+              type="button" variant="outline" size="xs"
+              onClick={() => probe.mutate()}
+              disabled={probe.isPending || !!baseUrlError || !baseUrl}
+            >
+              {probe.isPending ? t('common.loading') : t('keys.testConnection')}
+            </Button>
+            {probeResult && (
+              <span
+                role="status"
+                className={`text-xs ${probeResult.reachable ? 'text-emerald-700 dark:text-emerald-400' : 'text-destructive'}`}
+              >
+                {probeResult.reachable
+                  ? t('keys.probeOk', { endpoint: probeResult.endpoint ?? '' })
+                  : t('keys.probeFail', { reason: probeResult.error ?? '' })}
+              </span>
+            )}
+          </div>
+        </div>
+      )}
       {errorLine}
       {discoverOpen && (
         <DiscoverModelsDialog

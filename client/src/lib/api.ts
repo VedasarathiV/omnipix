@@ -86,3 +86,11 @@ export async function logout(): Promise<void> {
   clearToken();
   window.dispatchEvent(new CustomEvent(UNAUTHORIZED_EVENT));
 }
+
+// The /v1 base URL for ready-to-run snippets: the dev server port in DEV,
+// the page origin in a packaged/hosted build.
+export function apiBaseUrl(): string {
+  return import.meta.env.DEV
+    ? `http://${window.location.hostname}:${__SERVER_PORT__}/v1`
+    : `${window.location.origin}/v1`
+}

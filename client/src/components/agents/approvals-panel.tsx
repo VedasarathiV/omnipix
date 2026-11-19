@@ -1,0 +1,147 @@
+import { useState } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Check, X } from 'lucide-react'
+import { apiFetch } from '@/lib/api'
+import { useI18n } from '@/i18n'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { DiffViewer } from './diff-viewer'
+
+export interface Approval {
+  id: number
+  run_id: number
+  seq: number
+  tool: string
+  args_json: string
+  risk: string
+  summary: string
+  diff_text: string | null
+  status: 'pending' | 'approved' | 'denied' | 'expired'
+  created_at: string
+  decided_at: string | null
+}
+
+const STATUS_VARIANT: Record<Approval['status'], 'default' | 'secondary' | 'destructive' | 'outline'> = {
+  pending: 'default',
+  approved: 'secondary',
+  denied: 'destructive',
+  expired: 'outline',
+}
+
+export function ApprovalsPanel() {
+  const { t } = useI18n()
+  const queryClient = useQueryClient()
+  const [showDecided, setShowDecided] = useState(false)
+  const [expanded, setExpanded] = useState<number | null>(null)
+
+  const { data: rows = [] } = useQuery<Approval[]>({
+    queryKey: ['approvals'],
+    queryFn: () => apiFetch<{ approvals: Approval[] }>('/api/agents/approvals?limit=50').then(r => r.approvals),
+    // Pending requests resolve outside this tab (CLI, another browser), and
+    // new ones park while the inbox sits open — poll while any are pending.
+    refetchInterval: query =>
+      query.state.data?.some(a => a.status === 'pending') ? 2000 : false,
+  })
+
+  const decide = useMutation({
+    mutationFn: ({ id, approved }: { id: number; approved: boolean }) =>
+      apiFetch(`/api/agents/approvals/${id}/decide`, {
+        method: 'POST',
+        body: JSON.stringify({ approved }),
+      }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['approvals'] })
+      void queryClient.invalidateQueries({ queryKey: ['agent-runs'] })
+    },
+  })
+
+  const visible = showDecided ? rows : rows.filter(r => r.status === 'pending')
+
+  return (
+    <Card size="sm">
+      <CardHeader>
+        <CardTitle>{t('agents.approvals.title')}</CardTitle>
+        <CardDescription>{t('agents.approvals.description')}</CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-2">
+        <div>
+          <Button
+            variant="outline"
+            size="sm"
+            aria-pressed={showDecided}
+            onClick={() => setShowDecided(v => !v)}
+          >
+            {t('agents.approvals.showDecided')}
+          </Button>
+        </div>
+        {visible.length === 0 && (
+          <p className="text-xs text-muted-foreground">{t('agents.approvals.empty')}</p>
+        )}
+        {visible.map(row => {
+          const open = expanded === row.id
+          let args = row.args_json
+          try {
+            args = JSON.stringify(JSON.parse(row.args_json), null, 2)
+          } catch { /* show raw */ }
+          return (
+            <div key={row.id} className="rounded-xl border">
+              <button
+                type="button"
+                onClick={() => setExpanded(open ? null : row.id)}
+                aria-expanded={open}
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs"
+              >
+                <span className="font-mono text-muted-foreground">#{row.id}</span>
+                <span className="min-w-0 flex-1 truncate font-medium">{row.summary}</span>
+                <Badge variant="outline" className="shrink-0 font-mono text-[10px]">{row.tool}</Badge>
+                <Badge variant={STATUS_VARIANT[row.status]} className="shrink-0">
+                  {t(`agents.approvals.${row.status}`)}
+                </Badge>
+              </button>
+              {open && (
+                <div className="flex flex-col gap-2 border-t px-3 py-2">
+                  <p className="text-[11px] text-muted-foreground">
+                    {t('agents.approvals.run')} #{row.run_id} · {t('agents.approvals.step')} {row.seq} · {row.risk}
+                  </p>
+                  <div>
+                    <p className="mb-1 text-[11px] font-medium">{t('agents.approvals.args')}</p>
+                    <pre className="overflow-x-auto rounded-xl bg-muted/50 px-3 py-2 font-mono text-[11px]">
+                      {args}
+                    </pre>
+                  </div>
+                  <div>
+                    <p className="mb-1 text-[11px] font-medium">{t('agents.approvals.diff')}</p>
+                    <DiffViewer diffText={row.diff_text ?? ''} />
+                  </div>
+                  {row.status === 'pending' && (
+                    <div className="flex gap-2">
+                      <Button
+                        size="sm"
+                        disabled={decide.isPending}
+                        onClick={() => decide.mutate({ id: row.id, approved: true })}
+                      >
+                        <Check /> {t('agents.approvals.approve')}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={decide.isPending}
+                        onClick={() => decide.mutate({ id: row.id, approved: false })}
+                      >
+                        <X /> {t('agents.approvals.deny')}
+                      </Button>
+                    </div>
+                  )}
+                  {decide.isError && (
+                    <p role="alert" className="text-xs text-destructive">{(decide.error as Error).message}</p>
+                  )}
+                </div>
+              )}
+            </div>
+          )
+        })}
+      </CardContent>
+    </Card>
+  )
+}

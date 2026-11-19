@@ -1,3 +1,6 @@
+/* eslint-disable react-refresh/only-export-components -- buttonVariants is the
+   component's own style map; every consumer composes it with Button, so
+   splitting the file would only scatter one unit. Dev-only HMR note. */
 import { Button as ButtonPrimitive } from "@base-ui/react/button"
 import { cva, type VariantProps } from "class-variance-authority"
 

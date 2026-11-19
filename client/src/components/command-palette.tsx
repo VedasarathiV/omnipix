@@ -6,25 +6,28 @@ import {
   Bot,
   Boxes,
   ChartColumn,
+  CheckCheck,
   Clapperboard,
   Copy,
+  FlaskConical,
   Globe,
   Scale,
+  Trophy,
   Image as ImageIcon,
   KeyRound,
   Layers,
   MessageSquare,
   Moon,
+  ScrollText,
   Search,
   Sparkles,
   SquareTerminal,
   Swords,
   Zap,
 } from 'lucide-react'
-import { apiFetch } from '@/lib/api'
+import { apiBaseUrl, apiFetch } from '@/lib/api'
 import { copyText } from '@/lib/clipboard'
 import { toast } from '@/lib/toast'
-import { apiBaseUrl } from '@/components/api-usage'
 import { COMMAND_PALETTE_EVENT } from '@/components/command-palette-state'
 import { useI18n } from '@/i18n'
 import type { FallbackEntry } from '@/lib/routing'
@@ -125,6 +128,7 @@ export function CommandPalette() {
       { id: 'p-keys', group: 'pages', label: t('nav.keys'), keywords: 'keys providers api tokens', icon: KeyRound, run: go('/keys') },
       { id: 'p-agents', group: 'pages', label: t('nav.agents'), keywords: 'agents claude codex cline ollama gemini', icon: Bot, run: go('/agents') },
       { id: 'p-analytics', group: 'pages', label: t('nav.analytics'), keywords: 'analytics usage stats savings latency', icon: ChartColumn, run: go('/analytics') },
+      { id: 'p-logs', group: 'pages', label: t('nav.logs'), keywords: 'logs server log tail errors debugging', icon: ScrollText, run: go('/logs') },
       ...(premiumEnabled
         ? [{ id: 'p-premium', group: 'pages', label: t('nav.premium'), keywords: 'premium catalog license subscription', icon: Sparkles, run: go('/premium') } as Command]
         : []),
@@ -160,6 +164,39 @@ export function CommandPalette() {
         run: () => {
           void copyAndToast(apiBaseUrl(), t('setup.copiedUrl'), t('common.copyFailed'))
         },
+      },
+      // Agent surfaces, deep-linked by tab: the target pages read ?tab=.
+      {
+        id: 'a-agent-run',
+        group: 'actions',
+        label: t('palette.newAgentRun'),
+        keywords: 'agent run new start goal tools',
+        icon: Bot,
+        run: go('/agents?tab=runs'),
+      },
+      {
+        id: 'a-approvals',
+        group: 'actions',
+        label: t('palette.openApprovals'),
+        keywords: 'approvals inbox approve deny pending policy',
+        icon: CheckCheck,
+        run: go('/agents?tab=approvals'),
+      },
+      {
+        id: 'a-evals',
+        group: 'actions',
+        label: t('palette.openEvals'),
+        keywords: 'eval evaluation arena suite test harness',
+        icon: FlaskConical,
+        run: go('/models/arena?tab=evals'),
+      },
+      {
+        id: 'a-scorecards',
+        group: 'actions',
+        label: t('palette.openScorecards'),
+        keywords: 'scorecard safety pass rate ranking model quality',
+        icon: Trophy,
+        run: go('/models/arena?tab=scorecards'),
       },
     ]
     // One entry per logical model (configured providers only).

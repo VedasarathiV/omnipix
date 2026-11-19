@@ -6,6 +6,7 @@ import { useI18n } from '@/i18n'
 import { CopyButton } from '@/components/copy-button'
 import { Switch } from '@/components/ui/switch'
 import { Tooltip } from '@/components/tooltip'
+import { dragDots } from './drag-dots'
 import {
   cleanQuotaLabel,
   formatContext,
@@ -108,13 +109,13 @@ export function ModelTableHead() {
         <th className="py-2 pr-2 w-6 text-center font-medium">#</th>
         <th className="py-2 pr-3 font-medium">{t('models.columnModel')}</th>
         <th className="py-2 pr-3 font-medium">
-          <span className="inline-flex items-center gap-1"><span className="size-2 rounded-sm" style={{ background: '#22c55e' }} />{t('strategies.weightReliability')}</span>
+          <span className="inline-flex items-center gap-1"><span className="size-2 rounded-sm" style={{ background: 'var(--score-reliability)' }} />{t('strategies.weightReliability')}</span>
         </th>
         <th className="py-2 pr-3 font-medium">
-          <span className="inline-flex items-center gap-1"><span className="size-2 rounded-sm" style={{ background: '#3b82f6' }} />{t('strategies.weightSpeed')}</span>
+          <span className="inline-flex items-center gap-1"><span className="size-2 rounded-sm" style={{ background: 'var(--score-speed)' }} />{t('strategies.weightSpeed')}</span>
         </th>
         <th className="py-2 pr-3 font-medium">
-          <span className="inline-flex items-center gap-1"><span className="size-2 rounded-sm" style={{ background: '#f59e0b' }} />{t('strategies.weightIntelligence')}</span>
+          <span className="inline-flex items-center gap-1"><span className="size-2 rounded-sm" style={{ background: 'var(--score-intelligence)' }} />{t('strategies.weightIntelligence')}</span>
         </th>
         <th className="py-2 pr-3 font-medium">
           <Tooltip text={t('strategies.guardrailsTooltip')}>
@@ -143,9 +144,9 @@ export function RateLimitBadge({ rows, size = 'sm' }: { rows: RateLimitUsageRow[
   if (!tightest) return null
   const ratio = tightest.limit > 0 ? tightest.used / tightest.limit : 0
   const tone = tightest.used >= tightest.limit
-    ? 'bg-red-600/15 text-red-700 dark:text-red-400'
+    ? 'bg-destructive/10 text-destructive'
     : ratio >= 0.7
-      ? 'bg-amber-600/15 text-amber-700 dark:text-amber-400'
+      ? 'bg-amber-600/15 text-amber-800 dark:text-amber-400'
       : 'bg-muted text-muted-foreground'
   const scale = size === 'md' ? 'text-[11px] px-2 py-0.5' : 'text-[10px] px-1.5 py-0.5'
   return (
@@ -198,7 +199,7 @@ export function RowContent({
           {row.supportsVision && (
             <span
               title={t('models.visionTitle')}
-              className="text-[10px] rounded-full px-1.5 py-0.5 bg-cyan-600/15 text-cyan-700 dark:bg-cyan-400/15 dark:text-cyan-400"
+              className="text-[10px] rounded-full px-1.5 py-0.5 bg-vision/15 text-vision"
             >
               {t('models.vision')}
             </span>
@@ -206,7 +207,7 @@ export function RowContent({
           {row.supportsTools && (
             <span
               title={t('models.toolsTitle')}
-              className="text-[10px] rounded-full px-1.5 py-0.5 bg-emerald-600/15 text-emerald-700 dark:bg-emerald-400/15 dark:text-emerald-400"
+              className="text-[10px] rounded-full px-1.5 py-0.5 bg-primary/15 text-primary"
             >
               {t('models.tools')}
             </span>
@@ -214,13 +215,13 @@ export function RowContent({
           {row.retiredUpstream && (
             <span
               title={row.retiredReason ?? undefined}
-              className="text-[10px] rounded-full px-1.5 py-0.5 bg-rose-600/15 text-rose-700 dark:bg-rose-400/15 dark:text-rose-400"
+              className="text-[10px] rounded-full px-1.5 py-0.5 bg-destructive/10 text-destructive"
             >
               {t('models.retired')}
             </span>
           )}
           {(row.penalty ?? 0) > 0 && (
-            <span className="text-[10px] text-amber-600 dark:text-amber-400">{t('models.penalty', { value: row.penalty })}</span>
+            <span className="text-[10px] text-amber-700 dark:text-amber-400">{t('models.penalty', { value: row.penalty })}</span>
           )}
           {row.totalRequests !== undefined && row.totalRequests > 0 && (
             <span className="text-[10px] text-muted-foreground/60 tabular-nums">{t('models.obs', { count: row.totalRequests })}</span>
@@ -251,9 +252,9 @@ export function RowContent({
           scorer only has its exploration priors, so show an explicit "no data"
           state instead of prior-valued bars (#580). Intelligence is catalog
           metadata and stays. */}
-      <td className="py-2 pr-3 align-middle">{row.totalRequests === 0 ? <AxisNoData /> : <AxisBar value={row.reliability} color="#22c55e" />}</td>
-      <td className="py-2 pr-3 align-middle">{row.totalRequests === 0 ? <AxisNoData /> : <AxisBar value={row.speed} color="#3b82f6" />}</td>
-      <td className="py-2 pr-3 align-middle"><AxisBar value={row.intelligence} color="#f59e0b" /></td>
+      <td className="py-2 pr-3 align-middle">{row.totalRequests === 0 ? <AxisNoData /> : <AxisBar value={row.reliability} color="var(--score-reliability)" />}</td>
+      <td className="py-2 pr-3 align-middle">{row.totalRequests === 0 ? <AxisNoData /> : <AxisBar value={row.speed} color="var(--score-speed)" />}</td>
+      <td className="py-2 pr-3 align-middle"><AxisBar value={row.intelligence} color="var(--score-intelligence)" /></td>
       <td className="py-2 pr-3 align-middle font-mono text-[11px] text-muted-foreground tabular-nums">
         {guard < 0.999 ? `×${guard.toFixed(2)}` : '—'}
       </td>
@@ -261,21 +262,11 @@ export function RowContent({
         {row.score !== undefined ? row.score.toFixed(3) : '–'}
       </td>
       <td className="py-2 pr-3 align-middle text-right">
-        <Switch checked={row.enabled} onCheckedChange={(c) => onToggle(row.modelDbId, c)} />
+        <Switch checked={row.enabled} onCheckedChange={(c) => onToggle(row.modelDbId, c)} aria-label={t('models.toggleMemberEnabled', { name: row.displayName })} />
       </td>
     </>
   )
 }
-
-// Shared drag-handle glyph (also used by the Embeddings provider list, so the
-// two reorder surfaces look identical).
-export const dragDots = (
-  <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
-    <circle cx="9" cy="6" r="1.5" /><circle cx="15" cy="6" r="1.5" />
-    <circle cx="9" cy="12" r="1.5" /><circle cx="15" cy="12" r="1.5" />
-    <circle cx="9" cy="18" r="1.5" /><circle cx="15" cy="18" r="1.5" />
-  </svg>
-)
 
 // The rank cell, editable in manual mode (#1317). Dragging a model from rank
 // 140 to rank 3 across a long chain is dozens of rows of pointer travel; an
@@ -419,10 +410,10 @@ export function GroupHeaderCells({ group, rank, dragHandle, editableRank, onMove
               </span>
             )}
             {vision && (
-              <span title={t('models.visionTitle')} className="text-[10px] rounded-full px-1.5 py-0.5 bg-cyan-600/15 text-cyan-700 dark:bg-cyan-400/15 dark:text-cyan-400">{t('models.vision')}</span>
+              <span title={t('models.visionTitle')} className="text-[10px] rounded-full px-1.5 py-0.5 bg-vision/15 text-vision">{t('models.vision')}</span>
             )}
             {tools && (
-              <span title={t('models.toolsTitle')} className="text-[10px] rounded-full px-1.5 py-0.5 bg-emerald-600/15 text-emerald-700 dark:bg-emerald-400/15 dark:text-emerald-400">{t('models.tools')}</span>
+              <span title={t('models.toolsTitle')} className="text-[10px] rounded-full px-1.5 py-0.5 bg-primary/15 text-primary">{t('models.tools')}</span>
             )}
           </Link>
           {/* Quick-copy the unified model id (#343). Stop propagation so it neither
@@ -436,9 +427,9 @@ export function GroupHeaderCells({ group, rank, dragHandle, editableRank, onMove
           </span>
         </div>
       </td>
-      <td className="py-2 pr-3 align-middle">{measured.length === 0 ? <AxisNoData /> : <AxisRangeBar values={measured.map(m => m.reliability)} color="#22c55e" />}</td>
-      <td className="py-2 pr-3 align-middle">{measured.length === 0 ? <AxisNoData /> : <AxisRangeBar values={measured.map(m => m.speed)} color="#3b82f6" />}</td>
-      <td className="py-2 pr-3 align-middle"><AxisRangeBar values={group.members.map(m => m.intelligence)} color="#f59e0b" /></td>
+      <td className="py-2 pr-3 align-middle">{measured.length === 0 ? <AxisNoData /> : <AxisRangeBar values={measured.map(m => m.reliability)} color="var(--score-reliability)" />}</td>
+      <td className="py-2 pr-3 align-middle">{measured.length === 0 ? <AxisNoData /> : <AxisRangeBar values={measured.map(m => m.speed)} color="var(--score-speed)" />}</td>
+      <td className="py-2 pr-3 align-middle"><AxisRangeBar values={group.members.map(m => m.intelligence)} color="var(--score-intelligence)" /></td>
       <td className="py-2 pr-3 align-middle font-mono text-[11px] text-muted-foreground tabular-nums">{guard < 0.999 ? `×${guard.toFixed(2)}` : '—'}</td>
       <td className="py-2 pr-3 align-middle text-right font-mono text-xs font-medium tabular-nums">
         {solo ? (
@@ -453,7 +444,7 @@ export function GroupHeaderCells({ group, rank, dragHandle, editableRank, onMove
         )}
       </td>
       <td className="py-2 pr-3 align-middle text-right" onClick={e => e.stopPropagation()}>
-        <Switch checked={anyEnabled} onCheckedChange={(c) => onToggleGroup(group.members.map(m => m.modelDbId), c)} />
+        <Switch checked={anyEnabled} onCheckedChange={(c) => onToggleGroup(group.members.map(m => m.modelDbId), c)} aria-label={t('models.toggleMemberEnabled', { name: group.label })} />
       </td>
     </>
   )

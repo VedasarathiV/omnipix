@@ -5,7 +5,7 @@ import { CopyButton } from '@/components/copy-button'
 import { CodeBlock } from '@/components/code-block'
 import { useI18n } from '@/i18n'
 import { ARTIFACT_SANDBOX, artifactMimeType, artifactSrcDoc, type Artifact } from '@/lib/artifacts'
-import { ARTIFACT_KEY_STEP, clampArtifactWidth, draggedArtifactWidth } from '@/lib/artifact-panel-size'
+import { ARTIFACT_KEY_STEP, ARTIFACT_MIN_WIDTH, clampArtifactWidth, draggedArtifactWidth, maxArtifactWidth } from '@/lib/artifact-panel-size'
 
 // The artifact side panel: what a reply built, running. Preview is a
 // sandboxed iframe fed by srcdoc — scripts run, but the frame is an opaque
@@ -30,11 +30,13 @@ export interface ArtifactPanelProps {
   /** Called once the user lets go of the handle — the moment to persist. */
   onWidthCommit?: (width: number) => void
   onClose: () => void
+  /** Pixels of rails sharing the row; the max width accounts for them. */
+  chromeWidth?: number
 }
 
 export const ARTIFACT_PANEL_TRANSITION_MS = 280
 
-export function ArtifactPanel({ artifact, open, width, onWidthChange, onWidthCommit, onClose }: ArtifactPanelProps) {
+export function ArtifactPanel({ artifact, open, width, onWidthChange, onWidthCommit, onClose, chromeWidth = 0 }: ArtifactPanelProps) {
   const { t } = useI18n()
   const [tab, setTab] = useState<ArtifactTab>('preview')
   // Bumping the key remounts the iframe, which re-runs the document.
@@ -69,27 +71,32 @@ export function ArtifactPanel({ artifact, open, width, onWidthChange, onWidthCom
 
   function onHandleDown(e: PointerEvent<HTMLDivElement>) {
     e.preventDefault()
-    e.currentTarget.setPointerCapture(e.pointerId)
+    try { e.currentTarget.setPointerCapture(e.pointerId) } catch { /* already captured */ }
     drag.current = { startX: e.clientX, startWidth: width }
     setDragging(true)
   }
   function onHandleMove(e: PointerEvent<HTMLDivElement>) {
     if (!drag.current) return
-    onWidthChange(draggedArtifactWidth(drag.current.startWidth, drag.current.startX, e.clientX, window.innerWidth))
+    onWidthChange(draggedArtifactWidth(drag.current.startWidth, drag.current.startX, e.clientX, window.innerWidth, chromeWidth))
   }
   function onHandleUp(e: PointerEvent<HTMLDivElement>) {
     if (!drag.current) return
+    const { startWidth, startX } = drag.current
     drag.current = null
     setDragging(false)
     try { e.currentTarget.releasePointerCapture(e.pointerId) } catch { /* already released */ }
-    onWidthCommit?.(width)
+    // Commit from the event, not the render-closed width: the last pointermove
+    // setState may not have committed before pointerup lands.
+    const next = draggedArtifactWidth(startWidth, startX, e.clientX, window.innerWidth, chromeWidth)
+    onWidthChange(next)
+    onWidthCommit?.(next)
   }
   function onHandleKey(e: KeyboardEvent<HTMLDivElement>) {
     // The handle is on the left edge: ArrowLeft grows the panel.
     const delta = e.key === 'ArrowLeft' ? ARTIFACT_KEY_STEP : e.key === 'ArrowRight' ? -ARTIFACT_KEY_STEP : 0
     if (!delta) return
     e.preventDefault()
-    const next = clampArtifactWidth(width + delta, window.innerWidth)
+    const next = clampArtifactWidth(width + delta, window.innerWidth, chromeWidth)
     onWidthChange(next)
     onWidthCommit?.(next)
   }
@@ -111,6 +118,7 @@ export function ArtifactPanel({ artifact, open, width, onWidthChange, onWidthCom
       data-testid="artifact-panel"
       data-open={shown}
       aria-hidden={!open}
+      inert={!open}
     >
       <aside
         className="absolute inset-y-0 right-0 flex flex-col border-s bg-card"
@@ -123,6 +131,8 @@ export function ArtifactPanel({ artifact, open, width, onWidthChange, onWidthCom
           aria-orientation="vertical"
           aria-label={t('playground.artifactResize')}
           aria-valuenow={Math.round(width)}
+          aria-valuemin={ARTIFACT_MIN_WIDTH}
+          aria-valuemax={maxArtifactWidth(typeof window === 'undefined' ? 1280 : window.innerWidth, chromeWidth)}
           tabIndex={0}
           onPointerDown={onHandleDown}
           onPointerMove={onHandleMove}

@@ -73,9 +73,11 @@ function formatTime(value: string): string {
 }
 
 function penaltyClass(value: number): string {
-  if (value >= 8) return 'bg-red-600/15 text-red-700 dark:text-red-400'
-  if (value >= 5) return 'bg-orange-600/15 text-orange-700 dark:text-orange-400'
-  if (value >= 3) return 'bg-amber-600/15 text-amber-700 dark:text-amber-400'
+  // The top tier is the error tier: same destructive red as everywhere else.
+  // Lower tiers keep their severity hues, darkened to hold 4.5:1 on the tint.
+  if (value >= 8) return 'bg-destructive/10 text-destructive'
+  if (value >= 5) return 'bg-orange-600/15 text-orange-800 dark:text-orange-400'
+  if (value >= 3) return 'bg-amber-600/15 text-amber-800 dark:text-amber-400'
   if (value > 0) return 'bg-emerald-600/15 text-emerald-700 dark:text-emerald-400'
   return 'bg-muted text-muted-foreground'
 }
@@ -204,7 +206,7 @@ export function PenaltyInspector() {
                 {row.cooldowns.length === 0 ? (
                   <span className="text-muted-foreground">{t('penaltyInspector.noCooldown')}</span>
                 ) : row.cooldowns.map(cooldown => (
-                  <span key={`${cooldown.keyId}:${cooldown.expiresAtMs}`} className="inline-flex items-center gap-1 rounded-full bg-sky-600/15 px-2 py-0.5 text-sky-700 dark:text-sky-400">
+                  <span key={`${cooldown.keyId}:${cooldown.expiresAtMs}`} className="inline-flex items-center gap-1 rounded-full bg-primary/15 px-2 py-0.5 text-primary">
                     {t('penaltyInspector.cooldownChip', {
                       key: cooldown.keyLabel || `#${cooldown.keyId}`,
                       time: formatDuration(cooldown.expiresInMs),
@@ -215,7 +217,7 @@ export function PenaltyInspector() {
                       disabled={resetCooldown.isPending}
                       aria-label={t('penaltyInspector.resetCooldown')}
                       title={t('penaltyInspector.resetCooldown')}
-                      className="rounded-full p-0.5 transition-colors hover:bg-sky-700/20 disabled:opacity-50"
+                      className="rounded-full p-0.5 transition-colors hover:bg-primary/20 disabled:opacity-50"
                     >
                       <RefreshCcw className="size-3" />
                     </button>

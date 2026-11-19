@@ -47,7 +47,7 @@ export default function FusionPage() {
   const { t } = useI18n()
   const queryClient = useQueryClient()
 
-  const { data, isLoading } = useQuery<FusionConfigResponse>({
+  const { data, isLoading, isError, error } = useQuery<FusionConfigResponse>({
     queryKey: ['fusion-config'],
     queryFn: () => apiFetch('/api/settings/fusion'),
   })
@@ -90,6 +90,7 @@ export default function FusionPage() {
   )
 
   // Hydrate local state from the server once it loads.
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (!data) return
     setMode(data.config.mode)
@@ -99,6 +100,7 @@ export default function FusionPage() {
     setStrategy(data.config.strategy)
     setExposePanel(data.config.expose_panel)
   }, [data])
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const maxK = data?.maxK ?? 8
 
@@ -137,7 +139,12 @@ export default function FusionPage() {
         actions={<ModelsTabs />}
       />
 
-      {isLoading ? (
+      {isError ? (
+        <p role="alert" className="rounded-3xl border border-destructive/40 bg-destructive/10 px-5 py-4 text-sm text-destructive">
+          {t('fusion.loadFailed')}{' '}
+          {error instanceof Error ? error.message : ''}
+        </p>
+      ) : isLoading ? (
         <p className="text-sm text-muted-foreground">{t('common.loading')}</p>
       ) : (
         <div className="space-y-8">
@@ -147,11 +154,12 @@ export default function FusionPage() {
               <h2 className="text-sm font-medium">{t('fusion.panelSource')}</h2>
               <p className="text-xs text-muted-foreground mt-0.5">{t('fusion.panelSourceHelp')}</p>
             </div>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
               {(['auto', 'explicit'] as Mode[]).map(m => (
                 <button
                   key={m}
                   type="button"
+                  aria-pressed={mode === m}
                   onClick={() => setMode(m)}
                   className={`rounded-xl border p-3 text-left transition-colors ${
                     mode === m ? 'border-foreground bg-muted/50' : 'hover:bg-muted/30'
@@ -186,6 +194,7 @@ export default function FusionPage() {
                         value={panelQuery}
                         onChange={e => setPanelQuery(e.target.value)}
                         placeholder={t('fusion.searchPlaceholder')}
+                        aria-label={t('fusion.searchPlaceholder')}
                         className="pl-8"
                       />
                     </div>
@@ -215,6 +224,7 @@ export default function FusionPage() {
                         <button
                           key={o.value}
                           type="button"
+                          aria-pressed={selected}
                           disabled={atCap}
                           onClick={() => toggleModel(o.value)}
                           className={`flex w-full items-center gap-3 px-3 py-2 text-left transition-colors ${
@@ -248,6 +258,7 @@ export default function FusionPage() {
               <Input
                 type="number" min={1} max={maxK} value={k}
                 onChange={e => setK(Number(e.target.value))}
+                aria-label={t('fusion.panelSize')}
                 className="w-28"
               />
             </section>
@@ -303,7 +314,7 @@ export default function FusionPage() {
               <h2 className="text-sm font-medium">{t('fusion.exposePanel')}</h2>
               <p className="text-xs text-muted-foreground mt-0.5">{t('fusion.exposePanelHelp')}</p>
             </div>
-            <Switch checked={exposePanel} onCheckedChange={setExposePanel} />
+            <Switch checked={exposePanel} onCheckedChange={setExposePanel} aria-label={t('fusion.exposePanel')} />
           </section>
 
           {/* Usage hint */}

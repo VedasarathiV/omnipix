@@ -52,13 +52,16 @@ export function ProxySettingsSection() {
   })
 
   // Sync from server when the query refetches; keep the user's typed value
-  // in between (controlled input).
+  // in between (controlled input). Field-level deps resync only when the
+  // server values actually change, not on every refetch identity change.
+  /* eslint-disable react-hooks/set-state-in-effect */
   useEffect(() => {
     if (data) {
       setProxyUrl(data.proxyUrl)
       setProxyMode(data.proxyMode)
     }
-  }, [data?.proxyUrl, data?.proxyMode])
+  }, [data?.proxyUrl, data?.proxyMode]) // eslint-disable-line react-hooks/exhaustive-deps
+  /* eslint-enable react-hooks/set-state-in-effect */
 
   const saveProxy = useMutation({
     meta: { silenceToast: true },
@@ -128,7 +131,7 @@ export function ProxySettingsSection() {
             disabled={saveProxy.isPending || !data}
           />
           {active && enabled && (
-            <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-medium">
+            <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 font-medium">
               {t('common.active')}
             </span>
           )}

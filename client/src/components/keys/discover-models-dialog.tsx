@@ -157,7 +157,7 @@ export function DiscoverModelsDialog({
         )}
 
         {discover.isError && (
-          <p className="mt-4 text-xs text-destructive">{(discover.error as Error).message}</p>
+          <p role="alert" className="mt-4 text-xs text-destructive">{(discover.error as Error).message}</p>
         )}
 
         {discover.isSuccess && models.length === 0 && (
@@ -193,14 +193,14 @@ export function DiscoverModelsDialog({
                   {/* Same chips as the models table, so a discovered row reads
                       the way a registered one will. */}
                   {model.vision && (
-                    <span title={t('models.visionTitle')} className="shrink-0 rounded-full bg-cyan-600/15 px-1.5 py-0.5 text-[10px] text-cyan-700 dark:bg-cyan-400/15 dark:text-cyan-400">
+                    <span title={t('models.visionTitle')} className="shrink-0 rounded-full bg-vision/15 px-1.5 py-0.5 text-[10px] text-vision">
                       {t('models.vision')}
                     </span>
                   )}
                   {/* #1051: a non-chat model registers into its own table (or,
                       for video, is skipped), so say what the row IS up front. */}
                   {model.kind && (
-                    <span className="shrink-0 rounded-full bg-violet-600/15 px-1.5 py-0.5 text-[10px] text-violet-700 dark:bg-violet-400/15 dark:text-violet-400">
+                    <span className="shrink-0 rounded-full bg-accent px-1.5 py-0.5 text-[10px] text-accent-foreground">
                       {model.kind}
                     </span>
                   )}
@@ -236,7 +236,7 @@ export function DiscoverModelsDialog({
         )}
 
         {register.isError && (
-          <p className="mt-3 text-xs text-destructive">{(register.error as Error).message}</p>
+          <p role="alert" className="mt-3 text-xs text-destructive">{(register.error as Error).message}</p>
         )}
 
         <div className="mt-5 flex items-center justify-end gap-2">

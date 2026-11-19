@@ -99,11 +99,11 @@ export function LiquidComposer({
               aria-label={webSearch?.enabled ? `${labels.add} · ${webSearch.label}` : labels.add}
               title={webSearch?.enabled ? `${labels.add} · ${webSearch.label}` : labels.add}
             >
-              <Plus className={`size-4 ${webSearch?.enabled ? 'text-sky-600 dark:text-sky-300' : ''}`} />
+              <Plus className={`size-4 ${webSearch?.enabled ? 'text-primary' : ''}`} />
               {webSearch?.enabled && (
                 <span
                   data-testid="web-search-indicator"
-                  className="pointer-events-none absolute top-1.5 right-1.5 size-1.5 rounded-full bg-sky-500"
+                  className="pointer-events-none absolute top-1.5 right-1.5 size-1.5 rounded-full bg-primary"
                 />
               )}
             </DropdownMenuTrigger>

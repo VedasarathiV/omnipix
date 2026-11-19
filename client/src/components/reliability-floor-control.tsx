@@ -20,6 +20,7 @@ export function ReliabilityFloorControl() {
 
   const [text, setText] = useState(floor == null ? '' : String(floor))
   // Re-sync when the server value changes under us (poll, or another tab).
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { setText(floor == null ? '' : String(floor)) }, [floor])
 
   const mutation = useMutation({

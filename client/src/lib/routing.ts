@@ -415,6 +415,9 @@ export function isGroupDepleted(
   return members.length > 0 && members.every(m => isMemberDepleted(rateUsage.get(m.modelDbId)))
 }
 
+// Categorical provider hues for legends and dots. Deliberately outside the
+// theme's accent system (see index.css): ~40 providers must stay mutually
+// distinct, which no single-hue ramp can do.
 export const platformColors: Record<string, string> = {
   google:      '#4285f4',
   groq:        '#f55036',

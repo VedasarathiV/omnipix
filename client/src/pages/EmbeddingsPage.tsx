@@ -14,7 +14,7 @@ import { arrayMove, SortableContext, sortableKeyboardCoordinates, useSortable, v
 import { CSS } from '@dnd-kit/utilities'
 import { ArrowDown, ArrowUp, Layers } from 'lucide-react'
 import { apiFetch } from '@/lib/api'
-import { dragDots } from '@/components/model-table'
+import { dragDots } from '@/components/drag-dots'
 import { Button } from '@/components/ui/button'
 import { ConfirmButton } from '@/components/confirm-button'
 import { EmptyState } from '@/components/empty-state'
@@ -139,7 +139,7 @@ function SortableProviderRow({
           </button>
         </div>
       )}
-      <Switch checked={p.enabled} onCheckedChange={onToggle} />
+      <Switch checked={p.enabled} onCheckedChange={onToggle} aria-label={t('embeddings.toggleEnabled', { name: `${p.platform} ${p.modelId}` })} />
       {p.isCustom && (
         <ConfirmButton
           className="text-muted-foreground hover:text-destructive"
@@ -160,7 +160,7 @@ export default function EmbeddingsPage() {
   const [localFamilies, setLocalFamilies] = useState<Family[] | null>(null)
   const [localDefault, setLocalDefault] = useState<string | null>(null)
 
-  const { data, isLoading } = useQuery<EmbeddingsData>({
+  const { data, isLoading, isError, error } = useQuery<EmbeddingsData>({
     queryKey: ['embeddings'],
     queryFn: () => apiFetch('/api/embeddings'),
   })
@@ -276,7 +276,12 @@ export default function EmbeddingsPage() {
           />
         )}
 
-        {isLoading ? (
+        {isError ? (
+          <p role="alert" className="rounded-3xl border border-destructive/40 bg-destructive/10 px-5 py-4 text-sm text-destructive">
+            {t('embeddings.loadFailed')}{' '}
+            {error instanceof Error ? error.message : ''}
+          </p>
+        ) : isLoading ? (
           <>
             <CardSkeleton />
             <CardSkeleton />

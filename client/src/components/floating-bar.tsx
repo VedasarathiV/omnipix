@@ -5,8 +5,10 @@ import { useEffect, useState, type ReactNode } from 'react'
 // duration of the exit animation).
 export function FloatingBar({ show, children }: { show: boolean; children: ReactNode }) {
   const [render, setRender] = useState(show)
+  // Remount instantly on show; the delayed hide below is the exit animation.
   useEffect(() => {
     if (show) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setRender(true)
       return
     }

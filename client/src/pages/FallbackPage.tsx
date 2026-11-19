@@ -50,6 +50,8 @@ import { PenaltyInspector } from '@/components/penalty-inspector'
 import { PeakHoursControls } from '@/components/peak-hours-controls'
 import { ReliabilityFloorControl } from '@/components/reliability-floor-control'
 import { ProviderMomentControl } from '@/components/provider-moment-control'
+import { ContentGuardControl } from '@/components/content-guard-control'
+import { SemanticCacheControl } from '@/components/semantic-cache-control'
 import { DecisionRoutingPopover, DecisionSetupGuide } from '@/components/decision-routing-popover'
 import { ChainManager } from '@/components/chain-manager'
 
@@ -138,6 +140,7 @@ export default function FallbackPage() {
   // (#1047): merely masking them meant switching A→B→A resurrected A's stale
   // unsaved rows over freshly fetched data, with only a refresh clearing them.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setStaged(prev => (prev && prev.profileId !== activeProfileId ? null : prev))
   }, [activeProfileId])
 
@@ -538,6 +541,12 @@ export default function FallbackPage() {
                   timeouts and transport drops steer the key without counting
                   against the model's reliability. Off by default. */}
               <ProviderMomentControl />
+              {/* Gateway-side content guardrails (opt-in): PII redaction and a
+                  prompt blocklist applied identically for every provider. */}
+              <ContentGuardControl />
+              {/* Semantic cache threshold (opt-in): serve near-duplicate
+                  prompts from the response cache without provider quota. */}
+              <SemanticCacheControl />
             </div>
           )}
 
