@@ -145,6 +145,15 @@ describe('agent runs', () => {
     expect((await call('POST', '/api/agents/runs', { ...base, maxTokens: 20_000_000 })).status).toBe(400);
   });
 
+  it('validates review requests and lands clone failures loudly', async () => {
+    expect((await call('POST', '/api/agents/review', { repo: 'git@x:y.git', base: 'main' })).status).toBe(400);
+    expect((await call('POST', '/api/agents/review', { repo: 'https://x.test/y.git' })).status).toBe(400);
+    // Unroutable https URL: clone fails fast, run row lands errored, no hang.
+    const failed = await call('POST', '/api/agents/review', { repo: 'https://127.0.0.1:9/y.git', base: 'main' });
+    expect(failed.status).toBe(502);
+    expect(failed.body.error.message).toBeTruthy();
+  });
+
   it.each([
     [{}, 'expected string'],
     [{ goal: '' }, 'Too small'],

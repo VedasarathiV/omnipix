@@ -1,0 +1,102 @@
+name: 'OmniPix PR Review'
+description: 'Have your OmniPix gateway review this pull request and post the verdict as a comment.'
+inputs:
+  gateway-url:
+    description: 'OmniPix server base URL, e.g. https://omnipix.example.com'
+    required: true
+  dashboard-token:
+    description: 'Dashboard session token with access to /api/agents'
+    required: true
+  model:
+    description: 'Model id for the review run, or auto'
+    required: false
+    default: 'auto'
+  instructions:
+    description: 'Extra review focus, e.g. "pay attention to SQL injection"'
+    required: false
+    default: ''
+  max-steps:
+    description: 'Review run step budget'
+    required: false
+    default: '12'
+  timeout-minutes:
+    description: 'How long to wait for the review run'
+    required: false
+    default: '15'
+runs:
+  using: 'composite'
+  steps:
+    - name: Start review run
+      id: start
+      shell: bash
+      env:
+        GATEWAY_URL: ${{ inputs.gateway-url }}
+        DASHBOARD_TOKEN: ${{ inputs.dashboard-token }}
+      run: |
+        payload=$(jq -n \
+          --arg repo "${{ github.event.pull_request.head.repo.clone_url }}" \
+          --arg base "${{ github.event.pull_request.base.ref }}" \
+          --arg head "${{ github.event.pull_request.head.ref }}" \
+          --arg instructions "${{ inputs.instructions }}" \
+          --arg model "${{ inputs.model }}" \
+          --argjson maxSteps ${{ inputs.max-steps }} \
+          '{repo: $repo, base: $base, head: $head, instructions: $instructions, model: $model, maxSteps: $maxSteps}')
+        resp=$(curl -sS --max-time 300 -X POST "$GATEWAY_URL/api/agents/review" \
+          -H "Authorization: Bearer $DASHBOARD_TOKEN" \
+          -H 'Content-Type: application/json' \
+          -d "$payload")
+        id=$(echo "$resp" | jq -r '.id // empty')
+        if [ -z "$id" ]; then
+          echo "OmniPix review failed to start: $resp"
+          exit 1
+        fi
+        echo "run_id=$id" >> "$GITHUB_OUTPUT"
+
+    - name: Wait for verdict
+      id: wait
+      if: always() && steps.start.outputs.run_id != ''
+      shell: bash
+      env:
+        GATEWAY_URL: ${{ inputs.gateway-url }}
+        DASHBOARD_TOKEN: ${{ inputs.dashboard-token }}
+      run: |
+        deadline=$(( $(date +%s) + ${{ inputs.timeout-minutes }} * 60 ))
+        while [ "$(date +%s)" -lt "$deadline" ]; do
+          if ! run=$(curl -sS --max-time 30 "$GATEWAY_URL/api/agents/runs/${{ steps.start.outputs.run_id }}" \
+            -H "Authorization: Bearer $DASHBOARD_TOKEN"); then
+            sleep 15
+            continue
+          fi
+          status=$(echo "$run" | jq -r '.status')
+          if [ "$status" != "running" ] && [ "$status" != "awaiting_approval" ]; then
+            echo "$run" | jq -r '.final_answer // .error // "no verdict"' > verdict.md
+            echo "status=$status" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          sleep 15
+        done
+        echo "OmniPix review timed out"
+        exit 1
+
+    - name: Post PR comment
+      if: always()
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        [ -f verdict.md ] || echo "Review did not finish (see logs)." > verdict.md
+        {
+          echo "## OmniPix review (${{ steps.wait.outputs.status || 'timed out' }})"
+          echo
+          cat verdict.md
+        } > comment.md
+        gh pr comment "${{ github.event.pull_request.number }}" --body-file comment.md
+
+    - name: Fail on errored review
+      if: always()
+      shell: bash
+      run: |
+        if [ "${{ steps.wait.outputs.status }}" != "done" ]; then
+          echo "OmniPix review did not complete successfully."
+          exit 1
+        fi

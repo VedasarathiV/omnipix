@@ -107,6 +107,48 @@ describe('arena evals', () => {
     expect(item.checks).toContainEqual({ type: 'shell', value: 'python3 -m pytest -q' });
   });
 
+  it('validates repo sources on items', async () => {
+    const base = (repo: unknown) => ({
+      name: 'repo-suite',
+      items: [{
+        id: 't1', prompt: 'Fix it.', checks: [{ type: 'shell', value: 'npm test' }],
+        agent: { repo, files: {} },
+      }],
+    });
+    const badUrl = await call('POST', '/api/arena/suites', base({ url: 'git@github.com:x/y.git' }));
+    expect(badUrl.status).toBe(400);
+    expect(badUrl.body.error.message).toContain('https');
+    const badRef = await call('POST', '/api/arena/suites', base({ url: 'https://github.com/x/y.git', ref: '../evil' }));
+    expect(badRef.status).toBe(400);
+    const badDir = await call('POST', '/api/arena/suites', base({ url: 'https://github.com/x/y.git', dir: '../out' }));
+    expect(badDir.status).toBe(400);
+    const ok = await call('POST', '/api/arena/suites', base({ url: 'https://github.com/x/y.git', ref: 'v1.0.0' }));
+    expect(ok.status).toBe(201);
+    expect(ok.body.suite.items[0].agent.repo).toMatchObject({ url: 'https://github.com/x/y.git', ref: 'v1.0.0' });
+  });
+
+  it('imports benchmark instances as coding-task items', async () => {
+    const { status, body } = await call('POST', '/api/arena/suites/import', {
+      name: 'bench-mini',
+      description: 'Imported.',
+      instances: [{
+        id: 'tb-1',
+        prompt: 'Make the tests pass.',
+        repo: { url: 'https://github.com/x/y.git', ref: 'abc1234' },
+        tests: ['python3 -m pytest -q'],
+        files: { 'conftest.py': '# seed' },
+      }],
+    });
+    expect(status).toBe(201);
+    const [item] = body.suite.items;
+    expect(item.checks).toEqual([{ type: 'shell', value: 'python3 -m pytest -q' }]);
+    expect(item.agent.repo).toMatchObject({ url: 'https://github.com/x/y.git', ref: 'abc1234' });
+    expect(item.agent.files).toEqual({ 'conftest.py': '# seed' });
+    expect((await call('POST', '/api/arena/suites/import', {
+      name: 'bench-mini', instances: [{ id: 'x', prompt: 'y', tests: ['true'] }],
+    })).status).toBe(409);
+  });
+
   it('rejects unknown recipes', async () => {
     const { status, body } = await call('POST', '/api/arena/suites', {
       name: 'bad-recipe',

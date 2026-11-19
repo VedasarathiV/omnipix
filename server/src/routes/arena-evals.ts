@@ -17,7 +17,7 @@ import {
   executeAgentRun,
 } from '../services/agent-runtime.js';
 import { createSession } from '../services/agent-sessions.js';
-import { resolveInRoot, runWorkspace } from '../lib/workspace.js';
+import { cloneRepoAtRef, resolveInRoot, runWorkspace } from '../lib/workspace.js';
 import { unknownMcpTools, unknownNames } from './agent-runs.js';
 import type { ChatMessage } from '@omnipix/shared/types.js';
 
@@ -36,10 +36,17 @@ const checkSchema = z.object({
 // Coding-task items: the prompt runs as an agent in a seeded workspace and
 // shell checks grade the result (SWE-bench shape). String checks still apply
 // to the final answer, so an item can mix both.
+const repoSchema = z.object({
+  url: z.string().trim().min(1).max(500),
+  ref: z.string().trim().min(1).max(120).optional(),
+  dir: z.string().trim().min(1).max(200).optional(),
+});
+
 const agentItemSchema = z.object({
   tools: z.array(z.string().trim().min(1).max(128)).max(AGENT_MAX_TOOLS).optional(),
   maxSteps: z.number().int().min(1).max(AGENT_MAX_STEPS).optional(),
   files: z.record(z.string().trim().min(1).max(200), z.string().max(20000)).optional(),
+  repo: repoSchema.optional(),
 }).refine(
   agent => {
     if (!agent.files) return true;
@@ -88,7 +95,7 @@ interface SuiteItem {
   id: string;
   prompt: string;
   checks: EvalCheck[];
-  agent?: { tools?: string[]; maxSteps?: number; files?: Record<string, string> };
+  agent?: { tools?: string[]; maxSteps?: number; files?: Record<string, string>; repo?: { url: string; ref?: string; dir?: string } };
 }
 
 /** Expand recipe names into shell checks. Returns an error message when a
@@ -115,7 +122,7 @@ function expandRecipes(items: Array<{ id: string; checks: Array<{ type: string; 
 function validateItems(items: Array<{
   id: string;
   checks: Array<{ type: string; value?: string }>;
-  agent?: { tools?: string[]; maxSteps?: number; files?: Record<string, string> };
+  agent?: { tools?: string[]; maxSteps?: number; files?: Record<string, string>; repo?: { url: string; ref?: string; dir?: string } };
 }>): string | null {
   for (const item of items) {
     const shells = item.checks.filter(c => c.type === 'shell');
@@ -137,6 +144,18 @@ function validateItems(items: Array<{
         return `Item '${item.id}': seed file escapes the workspace: ${rel}`;
       }
     }
+    if (item.agent.repo) {
+      const { url, ref, dir } = item.agent.repo;
+      if (!/^https:\/\/.+/.test(url)) {
+        return `Item '${item.id}': repo url must be https.`;
+      }
+      if (ref !== undefined && (!/^[A-Za-z0-9][A-Za-z0-9._\-/]*$/.test(ref) || ref.includes('..') || ref.includes('@{'))) {
+        return `Item '${item.id}': invalid repo ref.`;
+      }
+      if (dir !== undefined && (path.isAbsolute(dir) || dir.split(/[\\/]/).includes('..'))) {
+        return `Item '${item.id}': repo dir escapes the workspace: ${dir}`;
+      }
+    }
   }
   return null;
 }
@@ -150,6 +169,63 @@ evalRouter.get('/verify-recipes', (_req: Request, res: Response) => {
 evalRouter.get('/suites', (_req: Request, res: Response) => {
   const rows = getDb().prepare('SELECT * FROM eval_suites ORDER BY builtin DESC, name ASC').all() as SuiteRow[];
   res.json({ suites: rows.map(toSuite) });
+});
+
+// Benchmark import: convert Terminal-Bench-shaped instances (task + repo +
+// test commands) into coding-task suite items. SWE-bench instances map the
+// same way: problem_statement -> prompt, test patch content -> seed files,
+// FAIL_TO_PASS commands -> shell checks.
+const benchmarkInstanceSchema = z.object({
+  id: z.string().trim().min(1).max(80),
+  prompt: z.string().trim().min(1).max(8000),
+  repo: z.object({
+    url: z.string().trim().min(1).max(500),
+    ref: z.string().trim().min(1).max(120).optional(),
+  }).optional(),
+  tests: z.array(z.string().trim().min(1).max(2000)).min(1).max(8),
+  files: z.record(z.string().trim().min(1).max(200), z.string().max(20000)).optional(),
+  maxSteps: z.number().int().min(1).max(AGENT_MAX_STEPS).optional(),
+});
+
+const benchmarkImportSchema = z.object({
+  name: z.string().trim().min(1).max(60).regex(/^[a-z0-9][a-z0-9-]*$/, 'Lowercase letters, digits, and dashes.'),
+  description: z.string().max(500).default(''),
+  instances: z.array(benchmarkInstanceSchema).min(1).max(EVAL_MAX_ITEMS),
+});
+
+evalRouter.post('/suites/import', (req: Request, res: Response) => {
+  const parsed = benchmarkImportSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: { message: parsed.error.issues.map(e => e.message).join(', ') } });
+    return;
+  }
+  const { name, description, instances } = parsed.data;
+  const ids = instances.map(i => i.id);
+  if (new Set(ids).size !== ids.length) {
+    res.status(400).json({ error: { message: 'Duplicate item ids in suite.' } });
+    return;
+  }
+  const items = instances.map(i => ({
+    id: i.id,
+    prompt: i.prompt,
+    checks: i.tests.map(t => ({ type: 'shell' as const, value: t })),
+    agent: { ...(i.maxSteps !== undefined ? { maxSteps: i.maxSteps } : {}), ...(i.repo ? { repo: i.repo } : {}), ...(i.files ? { files: i.files } : {}) },
+  }));
+  const invalid = validateItems(items);
+  if (invalid) {
+    res.status(400).json({ error: { message: invalid } });
+    return;
+  }
+  try {
+    getDb().prepare(
+      'INSERT INTO eval_suites (name, description, items_json, builtin) VALUES (?, ?, ?, 0)',
+    ).run(name, description, JSON.stringify(items));
+  } catch {
+    res.status(409).json({ error: { message: `Suite '${name}' already exists.` } });
+    return;
+  }
+  const row = getDb().prepare('SELECT * FROM eval_suites WHERE name = ?').get(name) as SuiteRow;
+  res.status(201).json({ suite: toSuite(row) });
 });
 
 evalRouter.post('/suites', (req: Request, res: Response) => {
@@ -316,6 +392,10 @@ async function executeEvalRun(
               maxSteps: item.agent.maxSteps ?? 12, sessionId: sessionId(), autoApprove: true,
             });
             const ws = runWorkspace(agentRunId);
+            if (item.agent.repo) {
+              const target = item.agent.repo.dir ? resolveInRoot(ws, item.agent.repo.dir) : ws;
+              await cloneRepoAtRef(item.agent.repo.url, target, item.agent.repo.ref);
+            }
             for (const [rel, content] of Object.entries(item.agent.files ?? {})) {
               const abs = resolveInRoot(ws, rel);
               fs.mkdirSync(path.dirname(abs), { recursive: true });

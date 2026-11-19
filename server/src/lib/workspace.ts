@@ -346,3 +346,91 @@ export function grepSearch(root: string, pattern: string, limit = 50): GrepMatch
 export function __setRipgrepAvailable(value: boolean | null): void {
   rgAvailable = value;
 }
+
+function runGitRaw(args: string[], opts: { cwd?: string; timeoutMs: number }): Promise<string> {
+  return new Promise<string>((resolve, reject) => {
+    // No shell: argv array, so URLs and refs cannot inject commands.
+    const child = spawn('git', args, {
+      cwd: opts.cwd,
+      env: { ...process.env, GIT_TERMINAL_PROMPT: '0', GIT_OPTIONAL_LOCKS: '0' },
+      timeout: opts.timeoutMs,
+      windowsHide: true,
+    });
+    let out = '';
+    let err = '';
+    child.stdout?.on('data', (d: Buffer) => { out += d.toString('utf8'); });
+    child.stderr?.on('data', (d: Buffer) => { err += d.toString('utf8'); });
+    child.on('error', (e: Error) => reject(new Error(`git failed: ${e.message}`)));
+    child.on('close', (code: number | null) => {
+      if (code !== 0) {
+        reject(new Error(`git ${args[0]} failed: ${(err || out).trim().slice(0, 1000) || `exit ${code}`}`));
+        return;
+      }
+      resolve(out.trim());
+    });
+  });
+}
+
+/**
+ * Clone an https repo into an empty dir, optionally at a branch/tag/SHA.
+ * Shared by benchmark eval items and the PR-review endpoint: unattended
+ * server-side clones are https-only (no ssh keys or file URLs on the
+ * server), shallow, timed out, and never prompt for credentials.
+ */
+export async function cloneRepoAtRef(url: string, targetDir: string, ref?: string, timeoutMs = 120_000): Promise<void> {
+  if (!/^https:\/\/.+/.test(url)) throw new Error('clone URL must be https');
+  const wanted = ref?.trim() || undefined;
+  if (wanted) cleanRef(wanted, 'ref');
+  try {
+    const probed = spawnSync('git', ['--version'], { encoding: 'utf8', timeout: 5000 });
+    if (probed.status !== 0) throw new Error('unavailable');
+  } catch {
+    throw new Error('git is not installed in this environment');
+  }
+  fs.mkdirSync(targetDir, { recursive: true });
+  if (fs.readdirSync(targetDir).length > 0) throw new Error('clone target is not empty');
+  const isSha = !!wanted && /^[0-9a-f]{4,64}$/i.test(wanted);
+  if (wanted && !isSha) {
+    await runGitRaw(['clone', '--depth', '1', '--branch', wanted, url, targetDir], { timeoutMs });
+    return;
+  }
+  await runGitRaw(['clone', '--depth', '1', url, targetDir], { timeoutMs });
+  if (isSha && wanted) {
+    await runGitRaw(['-C', targetDir, 'fetch', '--depth', '1', 'origin', wanted], { timeoutMs });
+    await runGitRaw(['-C', targetDir, 'checkout', '--detach', wanted], { timeoutMs });
+  }
+}
+
+function cleanRef(ref: string, what: string): string {
+  const clean = ref.trim();
+  if (!/^[A-Za-z0-9][A-Za-z0-9._\-/]*$/.test(clean) || clean.includes('..') || clean.includes('@{')) {
+    throw new Error(`invalid ${what}: ${ref}`);
+  }
+  return clean;
+}
+
+/**
+ * Fetch one ref into an existing clone (shallow, timed out). Used by the
+ * PR-review endpoint to bring the base ref into a head checkout.
+ */
+export async function fetchRefInto(cwd: string, ref: string, timeoutMs = 120_000): Promise<void> {
+  await runGitRaw(['-C', cwd, 'fetch', '--depth', '100', 'origin', cleanRef(ref, 'ref')], { timeoutMs });
+}
+
+/**
+ * Short diff stat between a base ref and the checkout. Never throws: review
+ * prompts degrade to the file list, then to nothing, rather than failing.
+ */
+export async function diffStat(cwd: string, base: string, timeoutMs = 60_000): Promise<string> {
+  try {
+    const stat = await runGitRaw(['-C', cwd, 'diff', '--stat', cleanRef(base, 'base'), 'HEAD'], { timeoutMs });
+    return stat.slice(0, 4000);
+  } catch {
+    try {
+      const names = await runGitRaw(['-C', cwd, 'diff', '--name-only', cleanRef(base, 'base'), 'HEAD'], { timeoutMs });
+      return `Changed files:\n${names.slice(0, 2000)}`;
+    } catch {
+      return '(diff unavailable)';
+    }
+  }
+}

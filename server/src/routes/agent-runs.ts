@@ -20,6 +20,7 @@ import {
 import { createSession, getSession, touchSession } from '../services/agent-sessions.js';
 import { createCheckpoint, getCheckpoint, listCheckpoints, restoreCheckpoint } from '../services/checkpoints.js';
 import { listProposals, resolveProposal, searchRuns } from '../services/learning-loop.js';
+import { cloneRepoAtRef, diffStat, fetchRefInto, runWorkspace } from '../lib/workspace.js';
 
 export const agentRunsRouter = Router();
 
@@ -114,6 +115,61 @@ agentRunsRouter.post('/runs', (req: Request, res: Response) => {
   // Fire and forget: the loop persists every step, so polling and SSE both
   // work; a synchronous throw here can only come from setup, already validated.
   void executeAgentRun(id, { goal, model, tools, skills, maxSteps, maxTokens, projectKey, planMode, compactions }).catch((err: unknown) => {
+    getDb().prepare("UPDATE agent_runs SET status = 'error', error = ?, finished_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ? AND status IN ('running', 'awaiting_approval')")
+      .run(err instanceof Error ? err.message : String(err), id);
+  });
+  res.status(202).json(getAgentRun(id));
+});
+
+const reviewSchema = z.object({
+  repo: z.string().trim().min(1).max(500),
+  base: z.string().trim().min(1).max(120),
+  head: z.string().trim().min(1).max(120).optional(),
+  instructions: z.string().trim().max(2000).optional(),
+  model: z.string().trim().min(1).max(200).optional(),
+  maxSteps: z.number().int().min(1).max(AGENT_MAX_STEPS).optional(),
+});
+
+// PR review: clone the repo at head into a run workspace, then launch a
+// read-only review agent over base...HEAD. The GitHub Action polls the run
+// and posts the verdict. Read-only tools only — a reviewer never writes.
+const REVIEW_TOOLS = ['read_file', 'grep_search', 'git_status', 'git_diff', 'git_log', 'memory_read'];
+
+agentRunsRouter.post('/review', async (req: Request, res: Response) => {
+  const parsed = reviewSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: { message: parsed.error.issues.map(e => e.message).join(', ') } });
+    return;
+  }
+  const { repo, base, head, instructions, model, maxSteps } = parsed.data;
+  if (!/^https:\/\/.+/.test(repo)) {
+    res.status(400).json({ error: { message: 'repo must be an https URL' } });
+    return;
+  }
+  const goal = [
+    `Review pull request ${base}...${head ?? 'HEAD'} of ${repo} for correctness, security, and tests.`,
+    'Read the changed files with the read tools; check for bugs, injection risks, and missing or broken tests.',
+    instructions ? `Operator focus: ${instructions}` : '',
+    'Reply with ONLY: a first line "Verdict: APPROVE" or "Verdict: COMMENT" or "Verdict: REQUEST_CHANGES", then the findings list.',
+  ].filter(Boolean).join('\n');
+  const sessionId = createSession(`PR review: ${repo}`);
+  const id = createAgentRun({ goal, model, tools: REVIEW_TOOLS, skills: ['code-reviewer'], maxSteps, sessionId, projectKey: '' });
+  touchSession(sessionId);
+  try {
+    const ws = runWorkspace(id);
+    await cloneRepoAtRef(repo, ws, head);
+    await fetchRefInto(ws, base);
+    const stat = await diffStat(ws, base);
+    getDb().prepare('UPDATE agent_runs SET goal = ? WHERE id = ?')
+      .run(`${goal}\n\nDiff stat:\n${stat}`, id);
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    getDb().prepare("UPDATE agent_runs SET status = 'error', error = ?, finished_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?").run(message, id);
+    res.status(502).json({ error: { message } });
+    return;
+  }
+  const finalGoal = (getDb().prepare('SELECT goal FROM agent_runs WHERE id = ?').get(id) as { goal: string }).goal;
+  void executeAgentRun(id, { goal: finalGoal, model, tools: REVIEW_TOOLS, skills: ['code-reviewer'], maxSteps, autoApprove: true }).catch((err: unknown) => {
     getDb().prepare("UPDATE agent_runs SET status = 'error', error = ?, finished_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ? AND status IN ('running', 'awaiting_approval')")
       .run(err instanceof Error ? err.message : String(err), id);
   });
