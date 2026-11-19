@@ -22,12 +22,13 @@ name: CLI release
 # attaches provenance automatically.
 #
 # One-time setup on npmjs.com (Package settings → Trusted Publisher):
-#   Organization or user: YOUR-GITHUB-USER
-#   Repository:           omnipix
+#   Organization or user: VedasarathiV
+#   Repository:           <your GitHub repo name for OmniPix>
 #   Workflow filename:    cli-release.yml
 # Trusted publishing cannot bootstrap a package that does not exist yet — npm
 # has no package settings page to configure until the first version is up — so
-# 0.3.0 was published manually. Every version after it goes through here.
+# publish the first version by hand (`npm publish -w cli`), configure the
+# trusted publisher above, and every version after it goes through here.
 #
 # Requires npm >= 11.5.1 and Node >= 22.14.0 for OIDC, hence Node 24 below
 # (still inside the repo's engines range of >=20.18 <25).

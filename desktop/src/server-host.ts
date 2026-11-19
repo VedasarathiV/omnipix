@@ -18,6 +18,7 @@ import { startCooldownProbe } from '../../server/src/services/cooldown-probe.js'
 import { startModelProbe } from '../../server/src/services/model-probe.js';
 import { startCustomModelSync } from '../../server/src/services/custom-model-sync.js';
 import { startBuiltinModelDiscovery } from '../../server/src/services/builtin-model-discovery.js';
+import { startSecurityScanScheduler } from '../../server/src/services/security-scans.js';
 import { startAutomationScheduler } from '../../server/src/services/automations.js';
 import { startBackupScheduler, createBackup } from '../../server/src/services/backups.js';
 import { isAutoUpdateCheckEnabled } from '../../server/src/routes/update.js';
@@ -161,6 +162,7 @@ export async function startServer(opts: StartOptions): Promise<ServerHandle> {
   startCustomModelSync(getDb(), scheduler);
   startBuiltinModelDiscovery(getDb(), scheduler);
   startAutomationScheduler(scheduler);
+  startSecurityScanScheduler(scheduler);
   // Post-sleep recovery — the menu-bar app on a laptop is the canonical
   // lid-close case: flush pooled sockets and force-re-probe every key so the
   // first request after wake doesn't ride a dead connection or a pre-sleep

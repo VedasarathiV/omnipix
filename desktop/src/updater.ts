@@ -28,7 +28,11 @@ const { autoUpdater } = electronUpdater;
 // call sites below no-op (or explain) when it is empty.
 const RELEASES_URL = process.env.OMNIPIX_RELEASES_URL?.trim() ?? '';
 // The Store's own page for this app: Store installs get their updates there.
-const STORE_URL = 'ms-windows-store://pdp/?productid=9PBN6G8K2B7F';
+// Set OMNIPIX_MSSTORE_PRODUCT_ID at build time from Partner Center's product
+// identity page. Empty in standalone builds, which fall through to the
+// releases page / notice below instead of opening a stranger's listing.
+const STORE_PRODUCT_ID = process.env.OMNIPIX_MSSTORE_PRODUCT_ID?.trim() ?? '';
+const STORE_URL = STORE_PRODUCT_ID ? `ms-windows-store://pdp/?productid=${STORE_PRODUCT_ID}` : '';
 const BACKGROUND_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const FIRST_BACKGROUND_CHECK_MS = 60 * 1000;
 
@@ -280,7 +284,7 @@ export async function installUpdate(): Promise<UpdateState> {
 export async function checkFromTray(): Promise<void> {
   const locale = hooks?.getLocale() ?? 'en';
   if (state.phase === 'unsupported') {
-    if (state.reason === 'store') {
+    if (state.reason === 'store' && STORE_URL) {
       await shell.openExternal(STORE_URL);
       return;
     }

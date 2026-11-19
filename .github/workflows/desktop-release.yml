@@ -511,8 +511,9 @@ jobs:
           path: desktop/dist-store/*.msix
           if-no-files-found: error
 
-  # Sends the Store MSIX to Partner Center (product 9PBN6G8K2B7F) on a version
-  # tag. Off unless the repository variable MSSTORE_SUBMIT is set:
+  # Sends the Store MSIX to Partner Center on a version tag. Off unless the
+  # repository variables MSSTORE_SUBMIT (draft|auto) AND MSSTORE_APP_ID (your
+  # Partner Center product id) are both set:
   #   draft  upload the package and leave the submission as a DRAFT; someone
   #          clicks "Submit for certification" in Partner Center
   #   auto   upload and submit for certification straight away
@@ -524,7 +525,7 @@ jobs:
   # Store certification then takes 1-3 days, independent of the GitHub release.
   store:
     name: Submit to Microsoft Store
-    if: startsWith(github.ref, 'refs/tags/') && (vars.MSSTORE_SUBMIT == 'draft' || vars.MSSTORE_SUBMIT == 'auto')
+    if: startsWith(github.ref, 'refs/tags/') && (vars.MSSTORE_SUBMIT == 'draft' || vars.MSSTORE_SUBMIT == 'auto') && vars.MSSTORE_APP_ID != ''
     needs: [build]
     runs-on: windows-latest
     steps:
@@ -547,10 +548,11 @@ jobs:
         shell: bash
         env:
           MODE: ${{ vars.MSSTORE_SUBMIT }}
+          APP_ID: ${{ vars.MSSTORE_APP_ID }}
         run: |
           set -euo pipefail
           ls -l store-package
-          args=(publish store-package --inputDirectory store-package --appId 9PBN6G8K2B7F --output-stream stdout)
+          args=(publish store-package --inputDirectory store-package --appId "$APP_ID" --output-stream stdout)
           if [ "$MODE" != auto ]; then args+=(--noCommit); fi
           msstore "${args[@]}"
 

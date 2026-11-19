@@ -23,7 +23,7 @@ describe('updateSupport', () => {
   });
 
   it('leaves a Microsoft Store install to the Store, whatever else is true', () => {
-    const execPath = 'C:\\Program Files\\WindowsApps\\TashAhmed.OmniPix_0.16.30.0_x64__6nczed04ys4da\\app\\OmniPix.exe';
+    const execPath = 'C:\\Program Files\\WindowsApps\\PublisherName.OmniPix_0.1.0.0_x64__publisherhash\\app\\OmniPix.exe';
     expect(updateSupport({ ...base, platform: 'win32', execPath, windowsStore: true }, () => true))
       .toEqual({ phase: 'unsupported', reason: 'store' });
     expect(updateSupport({ ...base, platform: 'win32', execPath, windowsStore: true, feed: 'http://127.0.0.1:8099/' }))

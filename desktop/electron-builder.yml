@@ -78,13 +78,15 @@ win:
 # unsigned NSIS .exe outright; an MSIX submitted to the Store is signed by
 # Microsoft, so Store installs run with Smart App Control on. Built only by
 # `npm run dist:store` / the release workflow's Store step, never alongside the
-# NSIS target. The identity values must match Partner Center's Product
-# identity page for product 9PBN6G8K2B7F exactly, or the Store rejects the
-# upload. Tile images live in store-assets/appx (the store build points
-# buildResources there, because build/ here is compiled app code).
+# NSIS target. The identity values must match YOUR Partner Center Product
+# identity page exactly, or the Store rejects the upload: reserve the app
+# name in Partner Center, then set identityName + publisher from the identity
+# page before running the store build. Tile images live in store-assets/appx
+# (the store build points buildResources there, because build/ here is
+# compiled app code).
 appx:
-  identityName: TashAhmed.OmniPix
-  publisher: CN=157744EA-1B8F-40BE-9B6E-1FE92036B40F
+  identityName: YOUR-PARTNER-CENTER-IDENTITY-NAME
+  publisher: CN=YOUR-PARTNER-CENTER-PUBLISHER-ID
   publisherDisplayName: OmniPix
   applicationId: OmniPix
   displayName: OmniPix
