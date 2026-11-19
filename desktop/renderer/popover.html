@@ -2,6 +2,9 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
+<!-- Tight CSP: this page is inline script + inline style only (all data comes
+     over the preload IPC bridge, never fetch), so everything else is denied. -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline';" />
 <style>
   /* Theme variables: dark by default (deep black glass), body.light flips
      them. The theme is driven by the dashboard's toggle via main.ts. */
@@ -311,8 +314,16 @@
     window.omnipix.setLoginItem(loginOn);
   });
 
-  window.omnipix.onRefresh(refresh);
-  refresh();
+  function showRefreshError() {
+    // A failed snapshot must say so: without this the popover sits on stale
+    // placeholders with no hint that anything went wrong.
+    const dot = document.querySelector('.status .dot');
+    if (dot) dot.style.background = '#ff453a';
+    setText('status-label', 'unreachable');
+  }
+
+  window.omnipix.onRefresh(() => { refresh().catch(showRefreshError); });
+  refresh().catch(showRefreshError);
 </script>
 </body>
 </html>

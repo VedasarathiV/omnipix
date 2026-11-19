@@ -8,16 +8,59 @@ import { Writable } from 'node:stream';
 import { fileURLToPath } from 'node:url';
 import { applyGeneratedFiles, printDryRunDiff } from './config-files.js';
 import { detectChatGptClient } from './detect.js';
-import { getTool, tools } from './tools.js';
+import { getTool, toolNeedsCatalog, tools } from './tools.js';
 import { resolveLaunchModel, type ResolvedModel } from './models.js';
 import { DOCTOR_TOOLS, diagnose, exitCodeFor, formatReport, type ToolReport } from './doctor.js';
 import { keysHelp, runKeys, type KeyCommandOptions } from './keys.js';
+import { agentHelp, hooksHelp, runAgent, runHooks, runSkills, skillsHelp } from './agents.js';
+import { runScan, scanHelp } from './scan.js';
+import { evalHelp, runEval } from './eval.js';
+import { cacheHelp, guardHelp, runCache, runGuard } from './guard.js';
+import { mcpHelp, runMcp } from './mcp.js';
+import { automateHelp, memoryHelp, runAutomate, runMemory } from './assistant.js';
 import type { CatalogModel, GenerateContext } from './types.js';
 
 interface CliOptions extends KeyCommandOptions {
   apiKey?: string;
   profile: string;
   model?: string;
+  goal?: string;
+  tools?: string;
+  skills?: string;
+  maxSteps?: number;
+  compactions?: number;
+  name?: string;
+  description?: string;
+  instructions?: string;
+  bundle?: string;
+  suite?: string;
+  models?: string;
+  inbound?: string;
+  outbound?: string;
+  patterns?: string;
+  threshold?: number;
+  sessionId?: number;
+  transport?: string;
+  command?: string;
+  cmdArgs?: string;
+  serverUrl?: string;
+  env?: string;
+  headers?: string;
+  tool?: string;
+  toolArgs?: string;
+  auto?: boolean;
+  plan?: boolean;
+  event?: string;
+  tasksJson?: string;
+  crewMode?: string;
+  preset?: string;
+  inputsJson?: string;
+  budget?: number;
+  value?: string;
+  scope?: string;
+  project?: string;
+  importance?: number;
+  schedule?: string;
 }
 
 function rootUrl(url: string): string {
@@ -75,6 +118,14 @@ export function parseArgs(argv: string[]): { command?: string; options: CliOptio
       options.dryRun = true;
       continue;
     }
+    if (arg === '--auto') {
+      options.auto = true;
+      continue;
+    }
+    if (arg === '--plan') {
+      options.plan = true;
+      continue;
+    }
     const equals = arg.indexOf('=');
     const flag = equals < 0 ? arg : arg.slice(0, equals);
     const inline = equals < 0 ? undefined : arg.slice(equals + 1);
@@ -83,6 +134,18 @@ export function parseArgs(argv: string[]): { command?: string; options: CliOptio
       flag === '--url' || flag === '--api-key' || flag === '--profile'
       || flag === '--model' || flag === '--timeout'
       || flag === '--token' || flag === '--key' || flag === '--id'
+      || flag === '--goal' || flag === '--tools' || flag === '--skills'
+      || flag === '--max-steps' || flag === '--compactions' || flag === '--name' || flag === '--description'
+      || flag === '--instructions' || flag === '--bundle' || flag === '--suite' || flag === '--models'
+      || flag === '--inbound' || flag === '--outbound' || flag === '--patterns'
+      || flag === '--threshold' || flag === '--session'
+      || flag === '--transport' || flag === '--command' || flag === '--cmd-args'
+      || flag === '--server-url' || flag === '--env' || flag === '--headers'
+      || flag === '--tool' || flag === '--tool-args'
+      || flag === '--tasks' || flag === '--budget' || flag === '--mode' || flag === '--preset' || flag === '--inputs'
+      || flag === '--value' || flag === '--scope' || flag === '--project'
+      || flag === '--importance' || flag === '--schedule'
+      || flag === '--event'
     ) {
       if (inline === undefined) index += 1;
       if (!value || (inline === undefined && value.startsWith('-'))) {
@@ -99,6 +162,76 @@ export function parseArgs(argv: string[]): { command?: string; options: CliOptio
           throw new Error('--id must be a positive integer');
         }
         options.keyId = Number(value);
+      }
+      else if (flag === '--goal') options.goal = value;
+      else if (flag === '--tools') options.tools = value;
+      else if (flag === '--skills') options.skills = value;
+      else if (flag === '--max-steps') {
+        const steps = Number(value);
+        if (!Number.isInteger(steps) || steps < 1 || steps > 25) {
+          throw new Error(`--max-steps must be an integer from 1 to 25, got '${value}'`);
+        }
+        options.maxSteps = steps;
+      }
+      else if (flag === '--compactions') {
+        const compactions = Number(value);
+        if (!Number.isInteger(compactions) || compactions < 0 || compactions > 3) {
+          throw new Error(`--compactions must be an integer from 0 to 3, got '${value}'`);
+        }
+        options.compactions = compactions;
+      }
+      else if (flag === '--name') options.name = value;
+      else if (flag === '--description') options.description = value;
+      else if (flag === '--instructions') options.instructions = value;
+      else if (flag === '--bundle') options.bundle = value;
+      else if (flag === '--suite') options.suite = value;
+      else if (flag === '--models') options.models = value;
+      else if (flag === '--inbound') options.inbound = value;
+      else if (flag === '--outbound') options.outbound = value;
+      else if (flag === '--patterns') options.patterns = value;
+      else if (flag === '--threshold') {
+        const threshold = Number(value);
+        if (!Number.isFinite(threshold) || threshold < 0 || threshold > 1) {
+          throw new Error(`--threshold must be a number from 0 to 1, got '${value}'`);
+        }
+        options.threshold = threshold;
+      }
+      else if (flag === '--session') {
+        if (!/^[1-9]\d*$/.test(value) || !Number.isSafeInteger(Number(value))) {
+          throw new Error('--session must be a positive integer');
+        }
+        options.sessionId = Number(value);
+      }
+      else if (flag === '--transport') options.transport = value;
+      else if (flag === '--command') options.command = value;
+      else if (flag === '--cmd-args') options.cmdArgs = value;
+      else if (flag === '--server-url') options.serverUrl = value;
+      else if (flag === '--env') options.env = value;
+      else if (flag === '--headers') options.headers = value;
+      else if (flag === '--tool') options.tool = value;
+      else if (flag === '--tool-args') options.toolArgs = value;
+      else if (flag === '--value') options.value = value;
+      else if (flag === '--scope') options.scope = value;
+      else if (flag === '--project') options.project = value;
+      else if (flag === '--importance') {
+        const importance = Number(value);
+        if (!Number.isFinite(importance) || importance < 0 || importance > 1) {
+          throw new Error(`--importance must be a number from 0 to 1, got '${value}'`);
+        }
+        options.importance = importance;
+      }
+      else if (flag === '--schedule') options.schedule = value;
+      else if (flag === '--event') options.event = value;
+      else if (flag === '--tasks') options.tasksJson = value;
+      else if (flag === '--mode') options.crewMode = value;
+      else if (flag === '--preset') options.preset = value;
+      else if (flag === '--inputs') options.inputsJson = value;
+      else if (flag === '--budget') {
+        const budget = Number(value);
+        if (!Number.isInteger(budget) || budget < 1000) {
+          throw new Error(`--budget must be an integer of at least 1000, got '${value}'`);
+        }
+        options.budget = budget;
       }
       else options.model = value;
       continue;
@@ -160,12 +293,12 @@ async function promptForKey(provider = false): Promise<string> {
   }
 }
 
-async function catalog(url: string, apiKey: string, availableOnly = true): Promise<CatalogModel[]> {
+async function catalog(url: string, apiKey: string, availableOnly = true, timeoutMs?: number): Promise<CatalogModel[]> {
   let response: Response;
   try {
     response = await fetch(`${rootUrl(url)}/v1/models${availableOnly ? '?available=true' : ''}`, {
       headers: { Authorization: `Bearer ${apiKey}` },
-      signal: AbortSignal.timeout(10_000),
+      signal: AbortSignal.timeout(timeoutMs ?? 10_000),
     });
   } catch (error) {
     const cause = error instanceof Error && error.cause instanceof Error
@@ -207,10 +340,10 @@ export interface Catalogs {
  * RECORDS that it degraded, so the degradation can be reported instead of
  * silently reinstating the ambiguity.
  */
-export async function catalogs(url: string, apiKey: string): Promise<Catalogs> {
-  const available = await catalog(url, apiKey);
+export async function catalogs(url: string, apiKey: string, timeoutMs?: number): Promise<Catalogs> {
+  const available = await catalog(url, apiKey, true, timeoutMs);
   try {
-    return { available, full: await catalog(url, apiKey, false) };
+    return { available, full: await catalog(url, apiKey, false, timeoutMs) };
   } catch (error) {
     return {
       available,
@@ -265,7 +398,8 @@ function help(): string {
     'OmniPix coding-agent setup and provider key management',
     '',
     'Usage:',
-    '  omnipix <command> [--url URL] [--api-key KEY] [--profile NAME] [--model ID] [--dry-run]',
+    '  omnipix <command> [--url URL] [--api-key KEY] [--profile NAME] [--model ID] [--timeout MS] [--dry-run]',
+    '  (each command accepts only the flags it uses — the rest are rejected)',
     '',
     'Commands:',
     ...tools.map(tool => `  ${tool.command.padEnd(17)} ${tool.name}`),
@@ -275,6 +409,16 @@ function help(): string {
     '  launch-codex      Run Codex CLI with provider overrides and injected credentials',
     '  list              List supported coding agents',
     '  keys              Add, list, remove, or test provider keys (keys --help)',
+    '  agent             Run and follow gateway agent runs (agent --help)',
+    '  skills            Manage agent skills (skills --help)',
+    '  hooks             Manage agent lifecycle hooks (hooks --help)',
+    '  scan               Run and inspect security scans (scan --help)',
+    '  eval              Run eval suites and show scorecards (eval --help)',
+    '  guard             View and set content guardrails (guard --help)',
+    '  cache             Cache stats, semantic threshold, flush (cache --help)',
+    '  mcp               Manage outbound MCP servers (mcp --help)',
+    '  memory            Long-term memory list/add/delete (memory --help)',
+    '  automate          Scheduled automations (automate --help)',
     '',
     'Environment:',
     '  OMNIPIX_URL, OMNIPIX_API_KEY, OMNIPIX_DASHBOARD_TOKEN (keys only)',
@@ -284,8 +428,12 @@ function help(): string {
 async function setup(command: string, options: CliOptions): Promise<void> {
   const tool = getTool(command.replace(/^setup-/, ''));
   if (!tool) throw new Error(`Unknown setup command '${command}'`);
-  const apiKey = options.apiKey ?? await promptForKey();
-  const rosters = await catalogs(options.url, apiKey);
+  // A tool that ignores its context needs neither a key nor the catalog.
+  const needsCatalog = toolNeedsCatalog(tool.id);
+  const apiKey = needsCatalog ? (options.apiKey ?? await promptForKey()) : (options.apiKey ?? '');
+  const rosters = needsCatalog
+    ? await catalogs(options.url, apiKey, options.timeoutMs)
+    : { available: [], full: [] };
   // --model was parsed but never reached the generators, so `setup-x --model y`
   // silently wrote whatever primaryModel() preferred. Validate it against the
   // unfiltered catalog (so an out-of-quota model is not reported as a typo)
@@ -403,7 +551,7 @@ export function claudeLaunchEnv(
 
 async function launchClaude(options: CliOptions): Promise<number> {
   const apiKey = options.apiKey ?? await promptForKey();
-  const rosters = await catalogs(options.url, apiKey);
+  const rosters = await catalogs(options.url, apiKey, options.timeoutMs);
   // Resolved here for the warning; claudeLaunchEnv resolves again to build the
   // environment. Both are pure calls over the same two rosters, so they cannot
   // reach different verdicts — keeping claudeLaunchEnv a side-effect-free env
@@ -429,7 +577,7 @@ export function codexArgs(url: string, selected: string): string[] {
 
 async function launchCodex(options: CliOptions): Promise<number> {
   const apiKey = options.apiKey ?? await promptForKey();
-  const rosters = await catalogs(options.url, apiKey);
+  const rosters = await catalogs(options.url, apiKey, options.timeoutMs);
   const selected = (
     resolvePinnedModel(options.model, rosters)
     ?? resolveLaunchModel(undefined, rosters.available, rosters.full)
@@ -454,27 +602,75 @@ async function runDoctor(options: CliOptions): Promise<number> {
   return exitCodeFor(reports);
 }
 
+/** Flags each command actually reads. Anything else is rejected in main()
+ *  with the command named, instead of being silently ignored downstream. */
+const COMMAND_FLAGS: Record<string, readonly string[]> = {
+  keys: ['--url', '--token', '--key', '--id', '--timeout'],
+  doctor: ['--url', '--timeout'],
+  list: [],
+  launch: ['--url', '--api-key', '--model', '--profile', '--timeout'],
+  'launch-codex': ['--url', '--api-key', '--model', '--timeout'],
+  'setup-cursor': [],
+  agent: ['--url', '--token', '--timeout', '--goal', '--model', '--tools', '--skills', '--max-steps', '--compactions', '--session', '--auto', '--plan', '--tasks', '--budget', '--mode', '--preset', '--inputs'],
+  skills: ['--url', '--token', '--timeout', '--name', '--description', '--instructions', '--bundle'],
+  hooks: ['--url', '--token', '--timeout', '--name', '--event', '--tool', '--command'],
+  scan: ['--url', '--token', '--timeout', '--schedule'],
+  eval: ['--url', '--token', '--timeout', '--suite', '--models'],
+  guard: ['--url', '--token', '--timeout', '--inbound', '--outbound', '--patterns'],
+  cache: ['--url', '--token', '--timeout', '--threshold'],
+  mcp: ['--url', '--token', '--timeout', '--name', '--transport', '--command', '--cmd-args', '--server-url', '--env', '--headers', '--tool', '--tool-args'],
+  memory: ['--url', '--token', '--timeout', '--key', '--value', '--scope', '--project', '--importance'],
+  automate: ['--url', '--token', '--timeout', '--name', '--goal', '--schedule', '--model'],
+};
+const SETUP_FLAGS = ['--url', '--api-key', '--profile', '--model', '--timeout', '--dry-run'];
+
+function flagsFor(command: string): readonly string[] | null {
+  if (command in COMMAND_FLAGS) return COMMAND_FLAGS[command];
+  if (command.startsWith('setup-')) return SETUP_FLAGS;
+  return null; // Unknown command: let dispatch report it.
+}
+
 export async function main(argv = process.argv.slice(2)): Promise<number> {
   const { command, options } = parseArgs(argv);
   if (!command || command === 'help' || argv.includes('--help') || argv.includes('-h')) {
-    process.stdout.write(`${command === 'keys' ? keysHelp() : help()}\n`);
+    const text = command === 'keys' ? keysHelp()
+      : command === 'agent' ? agentHelp()
+      : command === 'skills' ? skillsHelp()
+      : command === 'hooks' ? hooksHelp()
+      : command === 'scan' ? scanHelp()
+      : command === 'eval' ? evalHelp()
+      : command === 'guard' ? guardHelp()
+      : command === 'cache' ? cacheHelp()
+      : command === 'mcp' ? mcpHelp()
+      : command === 'memory' ? memoryHelp()
+      : command === 'automate' ? automateHelp()
+      : help();
+    process.stdout.write(`${text}\n`);
     return 0;
   }
+  const allowed = flagsFor(command);
   for (const arg of argv) {
+    if (!arg.startsWith('--')) continue;
     const flag = arg.split('=', 1)[0];
-    if (command !== 'keys' && ['--token', '--key', '--id'].includes(flag)) {
-      throw new Error(`${flag} is only supported by keys`);
+    if (flag === '--help') continue;
+    if (!['keys', 'agent', 'skills', 'hooks', 'scan', 'eval', 'guard', 'cache', 'mcp', 'memory', 'automate'].includes(command) && ['--token', '--key', '--id'].includes(flag)) {
+      throw new Error(`${flag} is only supported by keys, agent, skills, hooks, scan, eval, guard, cache, mcp, memory, and automate`);
     }
     if (command === 'keys' && ['--api-key', '--profile', '--model'].includes(flag)) {
       throw new Error(`${flag} is not supported by keys; use keys --help for available options`);
     }
+    // keys/agent/skills/hooks/eval/guard/cache/mcp --dry-run keeps its own specific error inside the runner.
+    if (allowed && !allowed.includes(flag) && !(['keys', 'agent', 'skills', 'hooks', 'scan', 'eval', 'guard', 'cache', 'mcp', 'memory', 'automate'].includes(command) && flag === '--dry-run')) {
+      throw new Error(`${flag} is not supported by ${command}`);
+    }
   }
   if (command === 'keys') return runKeys(options, () => promptForKey(true));
-  // `doctor` and `keys` take positional arguments. Every other
-  // one rejects them here, BEFORE dispatch — checking after the setup-* branch
-  // would let `setup-claude typo` run with the stray word silently ignored,
-  // where it used to be an error.
-  if (command !== 'doctor' && options.args.length) {
+  // `doctor`, `keys`, `agent`, `skills`, `hooks`, `scan`, `eval`, `guard`, `cache`,
+  // and `mcp` take positional arguments. Every other one rejects them here,
+  // BEFORE dispatch — checking after the setup-* branch would let
+  // `setup-claude typo` run with the stray word silently ignored, where it
+  // used to be an error.
+  if (!['doctor', 'keys', 'agent', 'skills', 'hooks', 'scan', 'eval', 'guard', 'cache', 'mcp', 'memory', 'automate'].includes(command) && options.args.length) {
     throw new Error(`Unknown option: ${options.args[0]}`);
   }
   if (command === 'list') {
@@ -490,6 +686,16 @@ export async function main(argv = process.argv.slice(2)): Promise<number> {
   if (command === 'doctor') return runDoctor(options);
   if (command === 'launch') return launchClaude(options);
   if (command === 'launch-codex') return launchCodex(options);
+  if (command === 'agent') return runAgent(options);
+  if (command === 'skills') return runSkills(options);
+  if (command === 'hooks') return runHooks(options);
+  if (command === 'scan') return runScan(options);
+  if (command === 'eval') return runEval(options);
+  if (command === 'guard') return runGuard(options);
+  if (command === 'cache') return runCache(options);
+  if (command === 'mcp') return runMcp(options);
+  if (command === 'memory') return runMemory(options);
+  if (command === 'automate') return runAutomate(options);
   throw new Error(`Unknown command '${command}'\n\n${help()}`);
 }
 
@@ -502,19 +708,20 @@ function isDirectExecution(): boolean {
   }
 }
 
-/** Minimum Node major this CLI actually runs on: `AbortSignal.timeout`
- *  (17.3), global `fetch` (18), `node:readline/promises` (17.4) — rounded to
- *  the package's engines floor of 20. npm treats `engines` as a warning by
+/** Minimum Node this CLI actually runs on, mirroring the package's engines
+ *  floor of >=20.18.0: `AbortSignal.timeout` (17.3), global `fetch` (18),
+ *  `node:readline/promises` (17.4). npm treats `engines` as a warning by
  *  default (and npm 6, still common on Windows boxes hitting #1283, ignores it
  *  for `npx`), so without this check an unsupported runtime gets a stack
  *  trace instead of a sentence. Returns null when the runtime is fine. */
 export function unsupportedNodeVersion(
   version: string | undefined = process.versions.node,
-  major: number | undefined = Number(version?.split('.')[0]),
 ): string | null {
-  if (!version || !Number.isFinite(major)) return null; // Non-Node runtimes: don't guess.
-  if (major >= 20) return null;
-  return `omnipix requires Node.js 20 or newer (found ${version}). Install one from https://nodejs.org and re-run.`;
+  if (!version) return null; // Non-Node runtimes: don't guess.
+  const [major, minor] = version.split('.').map(Number);
+  if (!Number.isFinite(major)) return null;
+  if (major > 20 || (major === 20 && (Number.isFinite(minor) ? minor : 0) >= 18)) return null;
+  return `omnipix requires Node.js 20.18 or newer (found ${version}). Install one from https://nodejs.org and re-run.`;
 }
 
 if (isDirectExecution()) {

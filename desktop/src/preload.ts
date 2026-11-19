@@ -1,17 +1,32 @@
 // Built to build/preload.cjs (CommonJS — the reliable preload format).
 // Runs in the renderer before any page script: seeds the dashboard session
 // token into localStorage so AuthGate's very first /api/auth/status call is
-// authenticated. The token arrives via additionalArguments (process.argv),
-// which avoids templating strings into executeJavaScript.
+// authenticated. The token arrives as a 0600 userData file whose PATH is in
+// additionalArguments (never the token itself — argv is world-readable via
+// ps); read it synchronously to preserve seed-before-first-paint ordering,
+// then delete it so the secret never rests on disk past startup.
 import { contextBridge, ipcRenderer } from 'electron';
+import fs from 'node:fs';
 
 const TOKEN_KEY = 'omnipix_dashboard_token';
-const arg = process.argv.find((a) => a.startsWith('--omnipix-token='));
+const arg = process.argv.find((a) => a.startsWith('--omnipix-token-file='));
 if (arg) {
+  const file = arg.slice('--omnipix-token-file='.length);
   try {
-    window.localStorage.setItem(TOKEN_KEY, arg.slice('--omnipix-token='.length));
-  } catch {
-    // localStorage unavailable — the dashboard will show its login screen.
+    const token = fs.readFileSync(file, 'utf8').trim();
+    // Seed BEFORE deleting: a setItem throw must not destroy a valid token.
+    if (token) window.localStorage.setItem(TOKEN_KEY, token);
+    try {
+      fs.unlinkSync(file);
+    } catch {
+      // Already gone — harmless (the main process also unlinks on close).
+    }
+  } catch (err) {
+    // Token file missing/unreadable or localStorage unavailable — the
+    // dashboard shows its login screen (or fetches a fresh session via
+    // __OMNIPIX_SESSION__). Warn so a persistently broken handoff is visible
+    // in the log instead of failing silently every launch.
+    console.warn('[desktop] dashboard session handoff failed:', err instanceof Error ? err.message : err);
   }
 }
 
@@ -29,6 +44,17 @@ contextBridge.exposeInMainWorld('__OMNIPIX_PLATFORM__', process.platform);
 // this one only ever hands back a session for the account the window already
 // runs as.
 contextBridge.exposeInMainWorld('__OMNIPIX_SESSION__', () => ipcRenderer.invoke('omnipix:session-token'));
+
+// Push-to-talk dictation: the global hotkey (main process) toggles recording
+// in the dashboard; the renderer reports which accelerator actually stuck so
+// the UI can name it.
+contextBridge.exposeInMainWorld('__OMNIPIX_DICTATION__', {
+  hotkey: () => ipcRenderer.invoke('omnipix:dictation-hotkey'),
+  onToggle: (cb: () => void) => {
+    ipcRenderer.on('omnipix:dictation-toggle', cb);
+    return () => { ipcRenderer.removeListener('omnipix:dictation-toggle', cb); };
+  },
+});
 
 // "Start on system startup" for the dashboard's Settings dialog. Mirrors the
 // popover's login-item toggle, but as a narrow get/set pair the dashboard can

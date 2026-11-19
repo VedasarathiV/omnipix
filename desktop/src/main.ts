@@ -1,13 +1,14 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { app, dialog, ipcMain, clipboard, nativeTheme, net, screen, shell, type Tray } from 'electron';
+import { app, dialog, globalShortcut, ipcMain, clipboard, nativeTheme, net, screen, shell, type Tray } from 'electron';
 import { startServer, ensureSessionToken, getUnifiedApiKey, isAutoUpdateCheckEnabled, backupBeforeUpdate, outboundProxyUrl, setCatalogFallbackFetch } from './server.mjs';
 import { loadConfig, saveConfig } from './config.js';
 import { installFileLogger } from './logger.js';
 import { buildTray, refreshTrayLocale } from './tray.js';
 import { trayIsInMenuBar } from './tray-visibility.js';
 import { shouldOpenDashboardOnLaunch } from './tray-platform.js';
-import { openDashboard } from './window.js';
+import { getDashboardWindow, openDashboard } from './window.js';
+import { registerDictationHotkey } from './dictation-hotkey.js';
 import { todayStats, hourlyRequests, successRateToday } from './stats.js';
 import { normalizeLocale, nativeStrings, type NativeLocale } from './i18n.js';
 import { installGpuRecovery } from './gpu-recovery-host.js';
@@ -344,6 +345,29 @@ if (!app.requestSingleInstanceLock()) {
         openDashboard(port, sessionToken);
         if (!welcomedBefore) saveConfig({ ...loadConfig(), launchDashboardShown: true });
       }
+
+      // System-wide push-to-talk: the hotkey brings up the dashboard and
+      // toggles recording there; the renderer owns capture/transcription.
+      const dictationAccelerator = registerDictationHotkey(
+        (accelerator, cb) => globalShortcut.register(accelerator, cb),
+        () => {
+          const win = getDashboardWindow();
+          if (win && !win.isDestroyed()) {
+            if (!win.isVisible()) win.show();
+            win.focus();
+          } else {
+            openDashboard(port, sessionToken);
+          }
+          getDashboardWindow()?.webContents.send('omnipix:dictation-toggle');
+        },
+      );
+      if (dictationAccelerator) {
+        console.log(`[desktop] dictation hotkey: ${dictationAccelerator}`);
+      } else {
+        console.warn('[desktop] no dictation hotkey registered: every candidate is taken by another app.');
+      }
+      ipcMain.handle('omnipix:dictation-hotkey', () => dictationAccelerator);
+      app.on('will-quit', () => globalShortcut.unregisterAll());
 
       // Dev-only UI verification: OMNIPIX_SHOT=1 opens the popover and the
       // dashboard, captures both to /tmp, and quits. OMNIPIX_SHOT=hold opens

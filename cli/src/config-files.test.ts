@@ -567,6 +567,23 @@ describe('safe config writes', () => {
     expect(fs.readFileSync(target, 'utf8')).toContain('model = "auto"');
   });
 
+  it('chmods a sensitive-file backup to 0600 along with the file itself', () => {
+    if (process.platform === 'win32') return; // POSIX permission bits only.
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'omnipix-cli-'));
+    temporary.push(directory);
+    const target = path.join(directory, 'auth.json');
+    fs.writeFileSync(target, '{"key":"old"}\n', { mode: 0o644 });
+    const result = applyGeneratedFile({
+      path: target,
+      format: 'json',
+      value: { key: 'new' },
+      sensitive: true,
+    }, false);
+    expect(result.backupPath).toBeTruthy();
+    expect(fs.statSync(result.backupPath!).mode & 0o777).toBe(0o600);
+    expect(fs.statSync(target).mode & 0o777).toBe(0o600);
+  });
+
   it('does not write in dry-run mode', () => {
     const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'omnipix-cli-'));
     temporary.push(directory);

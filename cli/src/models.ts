@@ -67,7 +67,7 @@ export function resolveLaunchModel(
     throw new UnknownModelError(
       `No model '${id}' in this gateway's catalog.`
       + (suggestions.length ? ` Did you mean: ${suggestions.join(', ')}?` : '')
-      + ' Run `omnipix list-models` to see what is registered.',
+      + ' Check the gateway /v1/models list for what is registered.',
     );
   }
 

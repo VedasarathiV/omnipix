@@ -9,5 +9,8 @@ contextBridge.exposeInMainWorld('omnipix', {
   copyApiKey: () => ipcRenderer.invoke('omnipix:copy-api-key'),
   setLoginItem: (open: boolean) => ipcRenderer.invoke('omnipix:set-login-item', open),
   quit: () => ipcRenderer.invoke('omnipix:quit'),
-  onRefresh: (cb: () => void) => ipcRenderer.on('omnipix:refresh', cb),
+  onRefresh: (cb: () => void) => {
+    ipcRenderer.on('omnipix:refresh', cb);
+    return () => { ipcRenderer.removeListener('omnipix:refresh', cb); };
+  },
 });

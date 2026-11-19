@@ -408,6 +408,9 @@ function commitPlannedWrite(plan: PlannedWrite): ApplyResult {
   if (exists) {
     backupPath = `${file.path}.backup-${timestamp()}`;
     fs.copyFileSync(file.path, backupPath);
+    // A backup of a sensitive file carries the same secrets: it gets the
+    // same permissions, not the process default (typically 0644).
+    if (file.sensitive) fs.chmodSync(backupPath, 0o600);
   }
   const temporary = `${file.path}.omnipix-${process.pid}.tmp`;
   fs.writeFileSync(temporary, plan.rendered, { mode: file.sensitive ? 0o600 : 0o644 });

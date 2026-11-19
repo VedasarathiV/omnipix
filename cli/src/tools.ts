@@ -1193,6 +1193,16 @@ export const tools: ToolDefinition[] = metadata.map(([
   generate,
 }));
 
+/**
+ * Tools whose generator ignores its context entirely (guide-only output with
+ * no models, no key, no URL): setup skips the key prompt and the catalog
+ * fetch for these, so a down gateway cannot break them. Defaults to true —
+ * a future guide tool that reads the context keeps working.
+ */
+export function toolNeedsCatalog(id: string): boolean {
+  return id !== 'cursor';
+}
+
 export function getTool(id: string): ToolDefinition | undefined {
   return tools.find(tool => tool.id === id);
 }

@@ -36,9 +36,10 @@ dashboard (or the tray popover in the desktop app).
 | `setup-zcode` | ZCode (`zcode`) |
 | `setup-cursor` | Cursor |
 | `setup-generic` | Any OpenAI-compatible client |
+| `doctor [tool…]` | Check whether a tool's requests actually reach this gateway |
 | `launch` | Run Claude Code with credentials injected into the child process |
 | `launch-codex` | Run Codex the same way |
-| `list` | Print the supported tools and their base URLs |
+| `list` | Print the supported tools as id, protocol, and base-URL kind (`root` or `/v1`) |
 | `keys` | Add, list, remove, or test provider keys (`keys --help`) |
 
 ## Options
@@ -49,6 +50,7 @@ dashboard (or the tray popover in the desktop app).
 | `--api-key KEY` | Unified API key |
 | `--profile NAME` | Name the generated profile/provider entry |
 | `--model ID` | Pin a specific model instead of the catalog default |
+| `--timeout MS` | Raise the probe wait on a slow link (`doctor`, `keys`) |
 | `--dry-run` | Print the diff and write nothing |
 
 `OMNIPIX_URL` and `OMNIPIX_API_KEY` work in place of `--url` / `--api-key`.

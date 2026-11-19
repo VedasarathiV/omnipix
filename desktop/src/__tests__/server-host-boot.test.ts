@@ -91,6 +91,12 @@ vi.mock('../../../server/src/services/builtin-model-discovery.js', () => ({
   }),
 }));
 
+vi.mock('../../../server/src/services/automations.js', () => ({
+  startAutomationScheduler: vi.fn(() => {
+    calls.push('startAutomationScheduler');
+  }),
+}));
+
 vi.mock('../../../server/src/lib/wake-detect.js', () => ({
   startWakeDetect: vi.fn(() => {
     calls.push('startWakeDetect');
@@ -184,6 +190,7 @@ describe('desktop server boot sequence (#949)', () => {
       'startBackupScheduler',
       'startCustomModelSync',
       'startBuiltinModelDiscovery',
+      'startAutomationScheduler',
       'startWakeDetect',
     ]);
   });

@@ -21,11 +21,17 @@ describe('dashboard window chrome per platform', () => {
     expect(mac.autoHideMenuBar).toBeUndefined();
     expect(mac.titleBarStyle).toBe('hiddenInset');
     expect(mac.vibrancy).toBe('sidebar');
+    expect(mac.visualEffectState).toBe('followWindow');
     expect(mac.backgroundColor).toBe('#00000000');
   });
 
   it('gives every platform an opaque background except macOS, which is glass', () => {
-    expect(platformChrome('win32').backgroundColor).toBe('#09090b');
-    expect(platformChrome('linux').backgroundColor).toBe('#09090b');
+    for (const platform of ['win32', 'linux'] as const) {
+      const chrome = platformChrome(platform);
+      expect(chrome.backgroundColor).toBe('#09090b');
+      expect(chrome.titleBarStyle).toBeUndefined();
+      expect(chrome.vibrancy).toBeUndefined();
+      expect(chrome.visualEffectState).toBeUndefined();
+    }
   });
 });

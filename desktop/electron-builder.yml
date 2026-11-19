@@ -52,6 +52,9 @@ mac:
     - target: zip
   extendInfo:
     LSUIElement: 1
+    # Without this, first microphone access kills the renderer instead of
+    # prompting — push-to-talk dictation needs it declared.
+    NSMicrophoneUsageDescription: OmniPix uses the microphone for push-to-talk dictation.
 # The DMG is the file people actually download, so it is the file macOS
 # quarantines and assesses. electron-builder signs and notarizes the .app inside
 # but leaves the DMG itself unsigned, which leaves `spctl -t install` on the

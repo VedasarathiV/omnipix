@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { claudeLaunchEnv, codexArgs, main, parseArgs, resolvePinnedModel, unsupportedNodeVersion } from './index.js';
 import { UnknownModelError } from './models.js';
 import type { CatalogModel } from './types.js';
@@ -67,6 +67,34 @@ describe('CLI arguments and launchers', () => {
     await expect(main(['launch', 'typo'])).rejects.toThrow('Unknown option: typo');
     // ...and doctor still takes them.
     expect(parseArgs(['doctor', 'claude']).options.args).toEqual(['claude']);
+  });
+
+  it('rejects flags the command does not read instead of ignoring them', async () => {
+    await expect(main(['doctor', '--model', 'x'])).rejects.toThrow('--model is not supported by doctor');
+    await expect(main(['doctor', '--dry-run'])).rejects.toThrow('--dry-run is not supported by doctor');
+    await expect(main(['list', '--url', 'http://x'])).rejects.toThrow('--url is not supported by list');
+    await expect(main(['launch', '--dry-run'])).rejects.toThrow('--dry-run is not supported by launch');
+    await expect(main(['launch-codex', '--profile', 'work'])).rejects.toThrow('--profile is not supported by launch-codex');
+    await expect(main(['setup-cursor', '--model', 'x'])).rejects.toThrow('--model is not supported by setup-cursor');
+  });
+
+  it('setup-cursor needs no gateway: no key prompt, no catalog fetch', async () => {
+    const fetchSpy = vi.fn(async () => { throw new Error('must not fetch'); });
+    const previousFetch = globalThis.fetch;
+    globalThis.fetch = fetchSpy as unknown as typeof fetch;
+    const out: string[] = [];
+    const previousWrite = process.stdout.write.bind(process.stdout);
+    (process.stdout as any).write = (chunk: unknown) => { out.push(String(chunk)); return true; };
+    try {
+      // No --api-key and stdin is not a TTY here: if setup prompted for a
+      // key or fetched the catalog, this would throw instead of printing.
+      expect(await main(['setup-cursor'])).toBe(0);
+      expect(out.join('')).toContain('Cursor');
+      expect(fetchSpy).not.toHaveBeenCalled();
+    } finally {
+      globalThis.fetch = previousFetch;
+      (process.stdout as any).write = previousWrite;
+    }
   });
 
   const models: CatalogModel[] = [
@@ -246,16 +274,17 @@ describe('CLI arguments and launchers', () => {
   // (only the interactive key prompt needs it), and this pure check turns an
   // old runtime into one clear sentence before main() runs.
   describe('unsupportedNodeVersion (#1283)', () => {
-    it('accepts Node 20 and newer', () => {
+    it('accepts Node 20.18 and newer', () => {
       expect(unsupportedNodeVersion('20.18.0')).toBeNull();
+      expect(unsupportedNodeVersion('20.19.6')).toBeNull();
       expect(unsupportedNodeVersion('22.5.1')).toBeNull();
       expect(unsupportedNodeVersion('26.9.0')).toBeNull();
     });
 
     it('rejects the older runtimes from the issue reports', () => {
-      for (const version of ['12.22.12', '14.21.3', '16.20.2', '18.19.0', '19.9.0']) {
+      for (const version of ['12.22.12', '14.21.3', '16.20.2', '18.19.0', '19.9.0', '20.0.0', '20.17.0']) {
         const message = unsupportedNodeVersion(version);
-        expect(message).toContain('Node.js 20 or newer');
+        expect(message).toContain('Node.js 20.18 or newer');
         expect(message).toContain(version);
       }
     });
