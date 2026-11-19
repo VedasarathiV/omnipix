@@ -153,7 +153,7 @@ jobs:
       - name: Build client + desktop bundles
         shell: bash
         run: |
-          npm run build -w client
+          npm run build -w studio
           npm --prefix desktop run build:all
           # Stage client/dist into desktop/ so electron-builder's extraResources
           # source stays inside desktop/ (no `../`). Belt-and-suspenders with the

@@ -12,11 +12,11 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const src = path.resolve(__dirname, '../../client/dist');
+const src = path.resolve(__dirname, '../../studio/dist');
 const dest = path.resolve(__dirname, '../client-dist');
 
 if (!fs.existsSync(src)) {
-  console.error(`stage-client: ${src} not found — build the web client first (npm run build -w client).`);
+  console.error(`stage-client: ${src} not found — build the studio UI first (npm run build -w studio).`);
   process.exit(1);
 }
 

@@ -5,7 +5,8 @@
     "shared",
     "server",
     "client",
-    "cli"
+    "cli",
+    "studio"
   ],
   "scripts": {
     "dev": "concurrently --kill-others-on-fail --names server,client \"npm run dev -w server\" \"npm run dev -w client\"",
@@ -13,12 +14,12 @@
     "test": "npm run test:bootstrap && npm run test:hooks && npm run test -w server && npm run test -w cli && npm run test -w client --if-present",
     "test:bootstrap": "node --test scripts/dev-bootstrap.test.mjs",
     "test:hooks": "node --test .claude/hooks/contributing-check.test.mjs",
-    "build": "npm run build -w server && npm run build -w cli && npm run build -w client",
+    "build": "npm run build -w server && npm run build -w cli && npm run build -w client && npm run build -w studio",
     "lint": "npm run lint -w server && npm run lint -w cli",
     "build:server": "npm run build -w server",
     "test:migrations": "npm run test:migrations -w server",
     "desktop:dev": "npm run build -w client && npm --prefix desktop run dev",
-    "desktop:dist": "npm run build -w client && npm --prefix desktop run dist",
+    "desktop:dist": "npm run build -w studio && npm --prefix desktop run dist",
     "desktop:dist:mac:x64": "npm run build -w client && npm --prefix desktop run dist:mac:x64",
     "desktop:dist:win": "npm run build -w client && npm --prefix desktop run dist:win",
     "desktop:dist:linux": "npm run build -w client && npm --prefix desktop run dist:linux",
