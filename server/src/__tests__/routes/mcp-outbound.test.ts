@@ -190,4 +190,38 @@ describe('outbound MCP registry', () => {
     expect(py.body.server).toMatchObject({ name: 'py', transport: 'stdio', command: 'uvx' });
     expect((await call('POST', '/api/mcp/install', { name: 'io.missing/srv' })).status).toBe(404);
   });
+
+  it('browses the registry catalog with search and cursors', async () => {
+    const seen: string[] = [];
+    globalThis.fetch = (async (url: string) => {
+      seen.push(String(url));
+      return Response.json({
+        servers: [
+          {
+            server: {
+              name: 'io.github.acme/notes', title: 'Notes', description: 'Notes server.', version: '1.2.0',
+              packages: [{ registryType: 'npm', identifier: '@acme/mcp-notes', transport: 'stdio' }],
+            },
+            _meta: { 'io.modelcontextprotocol.registry/official': { isLatest: true } },
+          },
+          { server: { description: 'Nameless entry is skipped.' } },
+        ],
+        metadata: { nextCursor: 'cursor-1', count: 2 },
+      });
+    }) as unknown as typeof fetch;
+    const page = await call('GET', '/api/mcp/registry?q=notes&limit=10');
+    expect(page.status).toBe(200);
+    expect(page.body.nextCursor).toBe('cursor-1');
+    expect(page.body.servers).toEqual([{
+      name: 'io.github.acme/notes', title: 'Notes', description: 'Notes server.', version: '1.2.0',
+      isLatest: true, transports: ['stdio'],
+    }]);
+    expect(seen[0]).toContain('search=notes');
+    expect(seen[0]).toContain('limit=10');
+    expect((await call('GET', '/api/mcp/registry?limit=0')).status).toBe(400);
+    expect((await call('GET', '/api/mcp/registry?limit=51')).status).toBe(400);
+
+    globalThis.fetch = (async () => new Response('down', { status: 500 })) as unknown as typeof fetch;
+    expect((await call('GET', '/api/mcp/registry')).status).toBe(502);
+  });
 });

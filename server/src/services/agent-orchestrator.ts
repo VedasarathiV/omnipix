@@ -19,6 +19,7 @@ import {
 } from './agent-runtime.js';
 import { createSession } from './agent-sessions.js';
 import { runCheck } from './agent-verify.js';
+import { emitWebhook } from './webhooks.js';
 import {
   blackboardList,
   blackboardRead,
@@ -799,6 +800,53 @@ export function stopGroup(id: number): void {
   }
 }
 
+/**
+ * Resume a stopped or failed group: flip it back to running, requeue stopped
+ * tasks, retry error tasks that still have attempts left, and unskip tasks
+ * whose blockers are running again. Done tasks (and their handoffs) are
+ * untouched, so resume continues the graph instead of restarting it.
+ * Throws for an unknown group or one that is not stopped/failed.
+ */
+export function resumeGroup(id: number): GroupDetail {
+  const group = getGroup(id);
+  if (!group) throw new Error('Group not found');
+  if (group.status !== 'stopped' && group.status !== 'error') {
+    throw new Error(`Group is ${group.status}; only stopped or failed groups resume`);
+  }
+  if (liveDrivers.has(id)) throw new Error('Group driver is still running');
+  const db = getDb();
+  db.prepare(
+    "UPDATE agent_tasks SET status = 'pending', run_id = NULL, finished_at = NULL WHERE group_id = ? AND status = 'stopped'",
+  ).run(id);
+  db.prepare(
+    "UPDATE agent_tasks SET status = 'pending', run_id = NULL, error = NULL, finished_at = NULL WHERE group_id = ? AND status = 'error' AND attempts < max_attempts",
+  ).run(id);
+  // Unskip transitively: a skipped task runs again when every dependency is
+  // done, already pending, or was just requeued. Iterate to a fixpoint so
+  // chains unblock in dependency order.
+  for (;;) {
+    const rows = db.prepare('SELECT id, depends_on_json, status FROM agent_tasks WHERE group_id = ?').all(id) as {
+      id: number; depends_on_json: string; status: string;
+    }[];
+    const runnable = new Set(
+      rows.filter(r => r.status === 'done' || r.status === 'pending').map(r => r.id),
+    );
+    let unskipped = 0;
+    for (const row of rows) {
+      if (row.status !== 'skipped') continue;
+      const deps = JSON.parse(row.depends_on_json) as number[];
+      if (deps.every(dep => runnable.has(dep))) {
+        db.prepare("UPDATE agent_tasks SET status = 'pending', finished_at = NULL WHERE id = ?").run(row.id);
+        unskipped++;
+      }
+    }
+    if (!unskipped) break;
+  }
+  db.prepare('UPDATE agent_groups SET status = ?, error = NULL, finished_at = NULL WHERE id = ?').run('running', id);
+  stopFlags.delete(id);
+  return getGroup(id)!;
+}
+
 function blackboardContext(groupId: number): string {
   const entries = blackboardList(groupId);
   if (!entries.length) return '';
@@ -907,6 +955,7 @@ function finishGroup(groupId: number, status: 'done' | 'error' | 'stopped', erro
     `UPDATE agent_groups SET status = ?, error = ?, finished_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ?`,
   ).run(status, error ?? null, groupId);
   stopFlags.delete(groupId);
+  emitWebhook('group.finished', { groupId, status });
 }
 
 /**

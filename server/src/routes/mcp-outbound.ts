@@ -11,7 +11,7 @@ import {
   testMcpServer,
   updateMcpServer,
 } from '../services/mcp-servers.js';
-import { defaultLocalName, fetchRegistryEntry, planRegistryInstall } from '../services/mcp-registry.js';
+import { defaultLocalName, fetchRegistryEntry, planRegistryInstall, searchRegistry } from '../services/mcp-registry.js';
 
 // Outbound MCP registry (Phase 2): CRUD for MCP servers the agent loop
 // calls out to, plus test/call helpers. (routes/mcp.ts is the INBOUND MCP
@@ -32,6 +32,29 @@ const serverSchema = z.object({
 
 mcpOutboundRouter.get('/servers', (_req: Request, res: Response) => {
   res.json({ servers: listMcpServers() });
+});
+
+// Browse the official MCP registry catalog (?q=, ?limit=, ?cursor=) so the
+// dashboard can offer one-click installs without knowing server names.
+mcpOutboundRouter.get('/registry', async (req: Request, res: Response) => {
+  const first = (value: unknown): string | undefined =>
+    typeof value === 'string' ? value : Array.isArray(value) && typeof value[0] === 'string' ? value[0] : undefined;
+  const rawLimit = first(req.query.limit);
+  let limit: number | undefined;
+  if (rawLimit !== undefined && rawLimit.trim() !== '') {
+    const parsed = Number(rawLimit);
+    if (!Number.isInteger(parsed) || parsed < 1 || parsed > 50) {
+      res.status(400).json({ error: { message: 'limit must be an integer between 1 and 50' } });
+      return;
+    }
+    limit = parsed;
+  }
+  try {
+    const page = await searchRegistry({ q: first(req.query.q), limit, cursor: first(req.query.cursor) });
+    res.json(page);
+  } catch (err) {
+    res.status(502).json({ error: { message: err instanceof Error ? err.message : String(err) } });
+  }
 });
 
 mcpOutboundRouter.post('/servers', (req: Request, res: Response) => {

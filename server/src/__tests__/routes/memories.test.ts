@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Express } from 'express';
 import { createApp } from '../../app.js';
-import { initDb } from '../../db/index.js';
+import { initDb, getDb } from '../../db/index.js';
 import { mintDashboardToken, isGatedApiPath } from '../helpers/auth.js';
 
 let app: Express;
@@ -101,5 +101,38 @@ describe('memories', () => {
     expect((await call('DELETE', '/api/memories/docs?project=acme')).status).toBe(400);
     expect((await call('GET', '/api/memories/docs', undefined, false)).status).toBe(401);
     expect((await call('POST', '/api/memories/ingest', { url: 'https://x.test', project: 'p' }, false)).status).toBe(401);
+  });
+
+  it('syncs stale docs and keeps content on fetch failure', async () => {
+    globalThis.fetch = vi.fn(async () => new Response(
+      '<html><head><title>Guide</title></head><body><h1>Auth</h1><p>Use bearer tokens.</p></body></html>',
+      { status: 200, headers: { 'content-type': 'text/html' } },
+    )) as unknown as typeof fetch;
+    await call('POST', '/api/memories/ingest', { url: 'https://docs.test/guide', project: 'acme' });
+
+    // Fresh doc: sync skips it.
+    const skipped = await call('POST', '/api/memories/docs/sync', { project: 'acme' });
+    expect(skipped.body).toMatchObject({ synced: [], failed: [], skipped: 1 });
+
+    // Aged doc: sync re-fetches and replaces.
+    getDb().prepare("UPDATE doc_chunks SET created_at = '2020-01-01T00:00:00.000Z'").run();
+    globalThis.fetch = vi.fn(async () => new Response(
+      '<html><head><title>Guide v2</title></head><body><h1>Auth</h1><p>Use API keys now.</p></body></html>',
+      { status: 200, headers: { 'content-type': 'text/html' } },
+    )) as unknown as typeof fetch;
+    const synced = await call('POST', '/api/memories/docs/sync', {});
+    expect(synced.body.synced).toHaveLength(1);
+    expect(synced.body.synced[0]).toMatchObject({ title: 'Guide v2' });
+
+    // Fetch failure: stale content stays, failure reported per-doc.
+    getDb().prepare("UPDATE doc_chunks SET created_at = '2020-01-01T00:00:00.000Z'").run();
+    globalThis.fetch = vi.fn(async () => new Response('down', { status: 500 })) as unknown as typeof fetch;
+    const failed = await call('POST', '/api/memories/docs/sync', {});
+    expect(failed.body.failed).toHaveLength(1);
+    const found = await call('GET', '/api/memories/docs/search?project=acme&q=API keys');
+    expect(found.body.chunks).toHaveLength(1);
+
+    expect((await call('POST', '/api/memories/docs/sync', { maxAgeHours: -1 })).status).toBe(400);
+    expect((await call('POST', '/api/memories/docs/sync', {}, false)).status).toBe(401);
   });
 });

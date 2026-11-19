@@ -80,6 +80,8 @@ const TASK_OUTPUTS_FILENAME = '20261119_000020_task_outputs.ts';
 const SKILL_BUNDLES_FILENAME = '20261119_000021_skill_bundles.ts';
 const VOICE_MODELS_FILENAME = '20261119_000022_voice_models.ts';
 const APPROVAL_RULES_FILENAME = '20261119_000023_approval_rules.ts';
+const WEBHOOKS_FILENAME = '20261119_000024_webhooks.ts';
+const DEBATES_FILENAME = '20261119_000025_debates.ts';
 
 interface SchemaRow {
   type: string;
@@ -207,6 +209,8 @@ describe('migration round trip', () => {
         SKILL_BUNDLES_FILENAME,
         VOICE_MODELS_FILENAME,
         APPROVAL_RULES_FILENAME,
+        WEBHOOKS_FILENAME,
+        DEBATES_FILENAME,
       ]);
     } finally {
       db.close();

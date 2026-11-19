@@ -242,6 +242,37 @@ describe('agent groups', () => {
     expect((await call('POST', '/api/agents/groups/99999/stop')).status).toBe(404);
   });
 
+  it('resumes stopped groups and refuses live or finished ones', async () => {
+    let release!: (value: Response) => void;
+    const gate = new Promise<Response>(resolve => { release = resolve; });
+    globalThis.fetch = vi.fn(async () => gate) as unknown as typeof fetch;
+    const grouped = await call('POST', '/api/agents/groups', {
+      goal: 'Pausable', tasks: [{ name: 'only', role: 'coder', goal: 'Hang then finish' }],
+    });
+    // Live group: resume is a conflict, not a second driver.
+    expect((await call('POST', `/api/agents/groups/${grouped.body.id}/resume`)).status).toBe(409);
+    expect((await call('POST', '/api/agents/groups/99999/resume')).status).toBe(404);
+    for (let i = 0; i < 100; i++) {
+      const detail = await call('GET', `/api/agents/groups/${grouped.body.id}`);
+      if (detail.body.tasks[0].run_id != null) break;
+      await new Promise(r => setTimeout(r, 50));
+    }
+    expect((await call('POST', `/api/agents/groups/${grouped.body.id}/stop`)).status).toBe(200);
+    release(completion({ role: 'assistant', content: 'too late' }));
+    const stopped = await waitForGroup(grouped.body.id);
+    expect(stopped.status).toBe('stopped');
+    // Resume requeues the stopped task and drives it to done.
+    globalThis.fetch = vi.fn(async () => completion({ role: 'assistant', content: 'finished after resume' })) as unknown as typeof fetch;
+    const resumed = await call('POST', `/api/agents/groups/${grouped.body.id}/resume`);
+    expect(resumed.status).toBe(202);
+    expect(resumed.body.status).toBe('running');
+    const done = await waitForGroup(grouped.body.id);
+    expect(done.status).toBe('done');
+    expect(done.tasks[0].result_summary).toBe('finished after resume');
+    // Finished group: nothing to resume.
+    expect((await call('POST', `/api/agents/groups/${grouped.body.id}/resume`)).status).toBe(409);
+  });
+
   it('auto-plans a graph from the goal through the model', async () => {
     globalThis.fetch = vi.fn(async () => completion({
       role: 'assistant',

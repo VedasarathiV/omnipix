@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { getDb, getSetting, setSetting } from '../db/index.js';
 import { notify } from '../lib/notifications.js';
+import { emitWebhook } from './webhooks.js';
 import type { Scheduler } from '../lib/scheduler.js';
 import { walkWorkspaceFiles, workspaceRoot } from '../lib/workspace.js';
 import { nextCronFire, parseCron } from './automations.js';
@@ -190,6 +191,12 @@ export function runSecurityScan(trigger: 'manual' | 'scheduled'): ScanRow {
         sample.map(f => `${f.workspace}/${f.file}:${f.line} [${f.pattern}]`).join('\n'),
         '/agents?tab=assistant',
       );
+      emitWebhook('security.scan', {
+        scanId: row.id,
+        newCount,
+        findingCount,
+        sample: sample.map(f => ({ workspace: f.workspace, file: f.file, line: f.line, pattern: f.pattern })),
+      });
     }
     return getScan(row.id)!;
   } catch (err) {

@@ -23,6 +23,8 @@ import { memoriesRouter } from './routes/memories.js';
 import { automationsRouter } from './routes/automations.js';
 import { notificationsRouter } from './routes/notifications.js';
 import { logsRouter } from './routes/logs.js';
+import { diagnosticsRouter } from './routes/diagnostics.js';
+import { webhooksRouter } from './routes/webhooks.js';
 import { modelsRouter } from './routes/models.js';
 import { proxyRouter } from './routes/proxy.js';
 import { responsesRouter } from './routes/responses.js';
@@ -330,6 +332,8 @@ export function createApp(config?: Config) {
   // of /api — these lines name providers, models and key ids, so the unified
   // /v1 key must not open them.
   app.use('/api/logs', requireAuth, logsRouter);
+  app.use('/api/diagnostics', requireAuth, diagnosticsRouter);
+  app.use('/api/webhooks', requireAuth, webhooksRouter);
   app.use('/api/models', requireAuth, modelsRouter);
   app.use('/api/profiles', requireAuth, profilesRouter);
   app.use('/api/fallback', requireAuth, fallbackRouter);

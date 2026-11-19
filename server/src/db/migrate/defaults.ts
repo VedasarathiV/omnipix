@@ -76,6 +76,8 @@ import * as taskOutputs from '../migrations/20261119_000020_task_outputs.js';
 import * as skillBundles from '../migrations/20261119_000021_skill_bundles.js';
 import * as voiceModels from '../migrations/20261119_000022_voice_models.js';
 import * as approvalRules from '../migrations/20261119_000023_approval_rules.js';
+import * as webhooks from '../migrations/20261119_000024_webhooks.js';
+import * as debates from '../migrations/20261119_000025_debates.js';
 
 export interface MigrationModule {
   up(db: Db): void;
@@ -163,6 +165,8 @@ export const TASK_OUTPUTS_FILENAME = '20261119_000020_task_outputs.ts';
 export const SKILL_BUNDLES_FILENAME = '20261119_000021_skill_bundles.ts';
 export const VOICE_MODELS_FILENAME = '20261119_000022_voice_models.ts';
 export const APPROVAL_RULES_FILENAME = '20261119_000023_approval_rules.ts';
+export const WEBHOOKS_FILENAME = '20261119_000024_webhooks.ts';
+export const DEBATES_FILENAME = '20261119_000025_debates.ts';
 
 export const DEFAULT_MIGRATIONS: readonly DefaultMigration[] = [
   { filename: LEGACY_BASELINE_FILENAME, module: legacyBaseline },
@@ -242,4 +246,6 @@ export const DEFAULT_MIGRATIONS: readonly DefaultMigration[] = [
   { filename: SKILL_BUNDLES_FILENAME, module: skillBundles },
   { filename: VOICE_MODELS_FILENAME, module: voiceModels },
   { filename: APPROVAL_RULES_FILENAME, module: approvalRules },
+  { filename: WEBHOOKS_FILENAME, module: webhooks },
+  { filename: DEBATES_FILENAME, module: debates },
 ];

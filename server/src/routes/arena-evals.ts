@@ -3,7 +3,7 @@ import path from 'node:path';
 import { Router } from 'express';
 import type { Request, Response } from 'express';
 import { z } from 'zod';
-import { getDb } from '../db/index.js';
+import { getDb, getSetting, setSetting } from '../db/index.js';
 import { runModelCall } from '../services/fusion.js';
 import { routePinnedModel, pinnedModelFitsRequestSize, resolveFusionCandidate, routingReserveTokens } from '../services/router.js';
 import { estimateInputTokens, messageHasImage } from '../lib/content.js';
@@ -17,6 +17,7 @@ import {
   executeAgentRun,
 } from '../services/agent-runtime.js';
 import { createSession } from '../services/agent-sessions.js';
+import { emitWebhook } from '../services/webhooks.js';
 import { cloneRepoAtRef, resolveInRoot, runWorkspace } from '../lib/workspace.js';
 import { unknownMcpTools, unknownNames } from './agent-runs.js';
 import type { ChatMessage } from '@omnipix/shared/types.js';
@@ -27,6 +28,34 @@ const EVAL_TAG = 'eval';
 const EVAL_MAX_MODELS = 6;
 const EVAL_MAX_ITEMS = 50;
 const EVAL_ATTEMPTS = 2;
+
+// Eval guard: evals burn provider quota per item per model, so launches are
+// serialized (one running at a time) and capped per UTC day. A scheduled
+// caller that fires into the guard gets a 429 naming the blocker instead of
+// silently stacking expensive runs.
+const EVAL_GUARD_SETTING = 'eval_max_runs_per_day';
+const EVAL_GUARD_DEFAULT = 10;
+const EVAL_GUARD_MAX = 1000;
+
+function evalGuardLimit(): number {
+  const raw = Number(getSetting(EVAL_GUARD_SETTING) ?? EVAL_GUARD_DEFAULT);
+  if (!Number.isInteger(raw) || raw < 1) return EVAL_GUARD_DEFAULT;
+  return Math.min(raw, EVAL_GUARD_MAX);
+}
+
+function evalRunsToday(): number {
+  return (
+    getDb()
+      .prepare("SELECT COUNT(*) AS c FROM eval_runs WHERE substr(created_at, 1, 10) = substr(strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), 1, 10)")
+      .get() as { c: number }
+  ).c;
+}
+
+function runningEvalIds(): number[] {
+  return (
+    getDb().prepare("SELECT id FROM eval_runs WHERE status = 'running' ORDER BY id").all() as { id: number }[]
+  ).map((row) => row.id);
+}
 
 const checkSchema = z.object({
   type: z.enum(CHECK_TYPES as unknown as [string, ...string[]]),
@@ -343,6 +372,7 @@ async function executeEvalRun(
   const fail = (message: string) => {
     db.prepare("UPDATE eval_runs SET status = 'error', error = ?, finished_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?")
       .run(message, runId);
+    emitWebhook('eval.finished', { evalId: runId, suite: suiteName, status: 'error' });
   };
   try {
     const suite = db.prepare('SELECT * FROM eval_suites WHERE name = ?').get(suiteName) as SuiteRow | undefined;
@@ -472,6 +502,13 @@ async function executeEvalRun(
     const results = await Promise.all(resolved.map(runModel));
     db.prepare("UPDATE eval_runs SET status = 'done', results_json = ?, finished_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now') WHERE id = ?")
       .run(JSON.stringify(results), runId);
+    emitWebhook('eval.finished', {
+      evalId: runId,
+      suite: suiteName,
+      status: 'done',
+      passed: results.reduce((a, r) => a + r.passed, 0),
+      total: results.reduce((a, r) => a + r.total, 0),
+    });
   } catch (err) {
     fail(err instanceof Error ? err.message : String(err));
   }
@@ -499,6 +536,25 @@ evalRouter.post('/evals', (req: Request, res: Response) => {
       return;
     }
   }
+  const running = runningEvalIds();
+  if (running.length > 0) {
+    res.status(429).json({
+      error: { message: `Eval ${running[0]} is still running; evals launch one at a time.`, runningIds: running },
+    });
+    return;
+  }
+  const limit = evalGuardLimit();
+  const today = evalRunsToday();
+  if (today >= limit) {
+    res.status(429).json({
+      error: {
+        message: `Daily eval budget reached (${today}/${limit}). Raise it with PUT /api/arena/eval-guard.`,
+        runsToday: today,
+        maxRunsPerDay: limit,
+      },
+    });
+    return;
+  }
   const created = getDb().prepare(
     'INSERT INTO eval_runs (suite_id, models_json) VALUES (?, ?) RETURNING id',
   ).get(row.id, JSON.stringify(models)) as { id: number };
@@ -507,6 +563,22 @@ evalRouter.post('/evals', (req: Request, res: Response) => {
     // against a throw in the failure path itself.
   });
   res.status(202).json(getEvalRun(created.id));
+});
+
+evalRouter.get('/eval-guard', (_req: Request, res: Response) => {
+  res.json({ maxRunsPerDay: evalGuardLimit(), runsToday: evalRunsToday(), runningIds: runningEvalIds() });
+});
+
+const evalGuardSchema = z.object({ maxRunsPerDay: z.number().int().min(1).max(EVAL_GUARD_MAX) });
+
+evalRouter.put('/eval-guard', (req: Request, res: Response) => {
+  const parsed = evalGuardSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: { message: parsed.error.issues.map(e => e.message).join(', ') } });
+    return;
+  }
+  setSetting(EVAL_GUARD_SETTING, String(parsed.data.maxRunsPerDay));
+  res.json({ maxRunsPerDay: evalGuardLimit(), runsToday: evalRunsToday(), runningIds: runningEvalIds() });
 });
 
 interface EvalRunRow {

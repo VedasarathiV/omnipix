@@ -1,5 +1,6 @@
 import { getDb } from '../db/index.js';
 import { notify } from './notifications.js';
+import { emitWebhook } from '../services/webhooks.js';
 
 // Agent tool policy: every tool call is evaluated BEFORE it executes.
 //
@@ -261,6 +262,7 @@ export function parkForApproval(
   db.prepare("UPDATE agent_runs SET status = 'awaiting_approval' WHERE id = ?").run(runId);
   touchSessionForRun(runId);
   notify('approval-pending', `Approval needed: ${tool}`, summarizeToolCall(tool, args), `/agents?tab=approvals`);
+  emitWebhook('approval.created', { approvalId: row.id, runId, tool, risk: toolRisk(tool) });
   return row.id;
 }
 

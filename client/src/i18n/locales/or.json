@@ -183,7 +183,22 @@
     "autoSpeakChat": "Read chat replies aloud",
     "autoSpeakRuns": "Announce agent run results",
     "testVoice": "Test",
-    "voiceSample": "Hello! This is how I sound."
+    "voiceSample": "Hello! This is how I sound.",
+    "sectionEgress": "Egress",
+    "egressDescription": "How requests leave this machine: proxy, relay, and per-platform bypass.",
+    "egressEnabled": "Route traffic through the proxy",
+    "egressActive": "Proxy active — outbound requests go through it.",
+    "egressDirect": "Direct connection — no proxy in the path.",
+    "egressUrl": "Proxy URL",
+    "egressUrlPlaceholder": "socks5://127.0.0.1:7890",
+    "egressMode": "Proxy mode",
+    "egressModeForward": "Forward proxy",
+    "egressModeRelay": "Fetch relay",
+    "egressToken": "Relay token",
+    "egressTokenPlaceholder": "Paste a new relay token",
+    "egressTokenSaved": "Token saved — paste a new one to replace it",
+    "egressBypass": "Bypass platforms",
+    "egressBypassPlaceholder": "groq, cerebras"
   },
   "models": {
     "title": "ମଡେଲଗୁଡିକ",

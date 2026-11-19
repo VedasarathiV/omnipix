@@ -3,6 +3,7 @@ import type { Scheduler } from '../lib/scheduler.js';
 import { notify } from '../lib/notifications.js';
 import { createAgentRun, executeAgentRun, getAgentRun } from './agent-runtime.js';
 import { createSession } from './agent-sessions.js';
+import { emitWebhook } from './webhooks.js';
 
 // Scheduled automations (Phase 4): recurring agent goals on a cron schedule.
 //
@@ -207,6 +208,12 @@ export function tickAutomation(automation: AutomationRow, now = new Date()): voi
           (run.final_answer ?? run.error ?? '').slice(0, 500),
           `/agents?tab=runs&run=${run.id}`,
         );
+        emitWebhook('automation.finished', {
+          automationId: automation.id,
+          name: automation.name,
+          status: run.status,
+          runId: run.id,
+        });
         automation = getAutomation(automation.id)!;
       }
     } else if (run) {

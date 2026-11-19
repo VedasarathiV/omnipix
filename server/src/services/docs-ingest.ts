@@ -251,6 +251,48 @@ export function deleteDoc(projectKey: string, url: string): number {
   return Number(info.changes);
 }
 
+export interface DocsSyncResult {
+  synced: Array<{ project_key: string; source_url: string; title: string; chunks: number }>;
+  failed: Array<{ project_key: string; source_url: string; error: string }>;
+  skipped: number;
+}
+
+/**
+ * Refresh ingested docs older than maxAgeHours (0 = refresh everything).
+ * Sequential and polite (one fetch at a time); a failed re-fetch keeps the
+ * stale chunks — ingestUrl only replaces after a successful extract — and is
+ * reported per-doc instead of failing the sync.
+ */
+export async function syncDocs(opts: { project?: string; maxAgeHours?: number }): Promise<DocsSyncResult> {
+  const project = opts.project?.trim() || undefined;
+  const maxAgeHours = opts.maxAgeHours ?? 24;
+  const result: DocsSyncResult = { synced: [], failed: [], skipped: 0 };
+  const cutoffMs = Date.now() - maxAgeHours * 3_600_000;
+  for (const doc of listDocs(project)) {
+    const updatedMs = Date.parse(doc.updated_at);
+    if (maxAgeHours > 0 && !Number.isNaN(updatedMs) && updatedMs >= cutoffMs) {
+      result.skipped++;
+      continue;
+    }
+    try {
+      const refreshed = await ingestUrl(doc.source_url, doc.project_key);
+      result.synced.push({
+        project_key: refreshed.project_key,
+        source_url: refreshed.source_url,
+        title: refreshed.title,
+        chunks: refreshed.chunks,
+      });
+    } catch (err) {
+      result.failed.push({
+        project_key: doc.project_key,
+        source_url: doc.source_url,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+  return result;
+}
+
 function queryWords(query: string): string[] {
   return query.toLowerCase().split(/[^a-z0-9]+/).filter(w => w.length >= 2);
 }

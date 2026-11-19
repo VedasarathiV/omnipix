@@ -231,6 +231,27 @@ describe('arena evals', () => {
     expect((await call('GET', '/api/arena/evals/99999')).status).toBe(404);
   });
 
+  it('serializes eval launches and enforces the daily budget', async () => {
+    const guard = await call('GET', '/api/arena/eval-guard');
+    expect(guard.body).toMatchObject({ maxRunsPerDay: 10, runsToday: 0, runningIds: [] });
+
+    // A still-running eval blocks new launches with its id.
+    getDb().prepare("INSERT INTO eval_runs (suite_id, models_json, status) VALUES (1, '[]', 'running')").run();
+    const blocked = await call('POST', '/api/arena/evals', { suite: 'safety-basics', models: ['llama-3.1-8b-instant'] });
+    expect(blocked.status).toBe(429);
+    expect(blocked.body.error.runningIds).toEqual([1]);
+    getDb().prepare("UPDATE eval_runs SET status = 'done' WHERE id = 1").run();
+
+    // Daily budget: lower the cap, exhaust it, get 429 with counts.
+    expect((await call('PUT', '/api/arena/eval-guard', { maxRunsPerDay: 1 })).status).toBe(200);
+    const over = await call('POST', '/api/arena/evals', { suite: 'safety-basics', models: ['llama-3.1-8b-instant'] });
+    expect(over.status).toBe(429);
+    expect(over.body.error).toMatchObject({ runsToday: 1, maxRunsPerDay: 1 });
+
+    expect((await call('PUT', '/api/arena/eval-guard', { maxRunsPerDay: 0 })).status).toBe(400);
+    expect((await call('PUT', '/api/arena/eval-guard', { maxRunsPerDay: 1001 })).status).toBe(400);
+  });
+
   it('aggregates scorecards across finished runs', async () => {
     await call('POST', '/api/arena/suites', SUITE);
     globalThis.fetch = vi.fn(async () => completion('llama-3.1-8b-instant', 'Paris.')) as unknown as typeof fetch;

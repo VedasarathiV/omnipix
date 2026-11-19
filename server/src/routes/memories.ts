@@ -2,7 +2,7 @@ import { Router } from 'express';
 import type { Request, Response } from 'express';
 import { z } from 'zod';
 import { deleteMemory, getMemory, listMemories, rememberMemory, type MemoryScope } from '../services/memories.js';
-import { deleteDoc, ingestUrl, listDocs, searchDocs } from '../services/docs-ingest.js';
+import { deleteDoc, ingestUrl, listDocs, searchDocs, syncDocs } from '../services/docs-ingest.js';
 
 export const memoriesRouter = Router();
 
@@ -66,6 +66,20 @@ memoriesRouter.post('/ingest', async (req: Request, res: Response) => {
   } catch (err) {
     res.status(400).json({ error: { message: err instanceof Error ? err.message : String(err) } });
   }
+});
+
+const docsSyncSchema = z.object({
+  project: z.string().trim().min(1).max(128).optional(),
+  maxAgeHours: z.number().min(0).max(24 * 365).optional(),
+});
+
+memoriesRouter.post('/docs/sync', async (req: Request, res: Response) => {
+  const parsed = docsSyncSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    res.status(400).json({ error: { message: parsed.error.issues.map(e => e.message).join(', ') } });
+    return;
+  }
+  res.json(await syncDocs(parsed.data));
 });
 
 memoriesRouter.get('/docs', (req: Request, res: Response) => {

@@ -4,6 +4,7 @@ import {
   ChevronsUpDown,
   FlaskConical,
   Gauge,
+  Globe,
   Info,
   Loader2,
   Monitor,
@@ -29,6 +30,7 @@ import { type Theme, useTheme } from '@/theme-context'
 import { apiFetch } from '@/lib/api'
 import { useDesktopLoginItem } from '@/lib/desktop-login-item'
 import { VoiceSection } from '@/components/voice-section'
+import { EgressSection } from '@/components/egress-section'
 
 // Small info affordance used next to labels a first-time user can't be expected
 // to understand. It's a real <button> so it reaches the tooltip by keyboard
@@ -282,11 +284,12 @@ const ENGINES = [
   { id: 'hard-budget', tKey: 'engineHardBudget', lossless: false },
 ] as const
 
-type SectionId = 'general' | 'compression' | 'advanced' | 'preview' | 'voice'
+type SectionId = 'general' | 'compression' | 'advanced' | 'preview' | 'voice' | 'egress'
 
 const SECTIONS = [
   { id: 'general', tKey: 'sectionGeneral', icon: SlidersHorizontal },
   { id: 'voice', tKey: 'sectionVoice', icon: Volume2 },
+  { id: 'egress', tKey: 'sectionEgress', icon: Globe },
   { id: 'compression', tKey: 'sectionCompression', icon: Gauge },
   { id: 'advanced', tKey: 'sectionAdvanced', icon: Wrench },
   { id: 'preview', tKey: 'sectionPreview', icon: FlaskConical },
@@ -605,7 +608,7 @@ export function SettingsDialog({
   const [section, setSection] = useState<SectionId>('general')
   const state = useCompressionSettings(open)
   const { config, busy, error, save } = state
-  const compressionSection = section !== 'general' && section !== 'voice'
+  const compressionSection = section !== 'general' && section !== 'voice' && section !== 'egress'
   const loading = compressionSection && !config && busy === 'load'
 
   return (
@@ -654,6 +657,7 @@ export function SettingsDialog({
           <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:min-h-[27rem] sm:px-6 sm:py-6">
             {section === 'general' && <GeneralSection />}
             {section === 'voice' && <VoiceSection />}
+            {section === 'egress' && <EgressSection />}
             {loading && (
               <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <Loader2 className="size-4 animate-spin" />

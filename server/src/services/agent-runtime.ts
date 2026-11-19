@@ -15,6 +15,7 @@ import { learnFromRun } from './learning-loop.js';
 import { createCheckpoint } from './checkpoints.js';
 import { SPOTLIGHT_RULE, spotlight } from '../lib/spotlight.js';
 import { FALLBACK_INPUT_PER_M, FALLBACK_OUTPUT_PER_M } from '../db/model-pricing.js';
+import { emitWebhook } from './webhooks.js';
 
 // The agent runtime: a tool loop over the gateway's own router. Every model
 // call routes like any other request (auto-routing, failover, cooldowns),
@@ -297,6 +298,10 @@ function finishRun(runId: number, patch: Partial<Pick<AgentRun, 'status' | 'fina
     vals.push(value);
   }
   db.prepare(`UPDATE agent_runs SET ${sets.join(', ')} WHERE id = ?`).run(...vals, runId);
+  if (patch.status && patch.status !== 'running' && patch.status !== 'awaiting_approval') {
+    const row = db.prepare('SELECT goal FROM agent_runs WHERE id = ?').get(runId) as { goal: string } | undefined;
+    emitWebhook('run.finished', { runId, status: patch.status, goal: (row?.goal ?? '').slice(0, 500) });
+  }
 }
 
 function resolveRunModel(model: string): { dbId: number } | { auto: true } {

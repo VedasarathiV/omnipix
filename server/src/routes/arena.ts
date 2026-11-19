@@ -5,6 +5,17 @@ import { z } from 'zod';
 import { runModelCall } from '../services/fusion.js';
 import { routePinnedModel, pinnedModelFitsRequestSize, resolveFusionCandidate, routingReserveTokens } from '../services/router.js';
 import { estimateInputTokens, messageHasImage } from '../lib/content.js';
+import { getDb } from '../db/index.js';
+import {
+  createDebate,
+  executeDebate,
+  getDebate,
+  listDebates,
+  DEBATE_MAX_MODELS,
+  DEBATE_MAX_ROUNDS,
+  DEBATE_MIN_MODELS,
+  DEBATE_MIN_ROUNDS,
+} from '../services/debates.js';
 import type { ChatMessage } from '@omnipix/shared/types.js';
 
 export const arenaRouter = Router();
@@ -127,4 +138,76 @@ arenaRouter.post('/run', async (req: Request, res: Response) => {
 
   const results = await Promise.all(resolved.map(runOne));
   res.json({ execution_id: executionId, results });
+});
+
+const debateSchema = z.object({
+  prompt: z.string().trim().min(1).max(8000),
+  models: z.array(z.string().trim().min(1).max(200)).min(DEBATE_MIN_MODELS).max(DEBATE_MAX_MODELS),
+  judge: z.string().trim().min(1).max(200).optional(),
+  rounds: z.number().int().min(DEBATE_MIN_ROUNDS).max(DEBATE_MAX_ROUNDS).optional(),
+  max_tokens: z.number().int().min(1).max(128000).optional(),
+  temperature: z.number().min(0).max(2).optional(),
+});
+
+/**
+ * POST /api/arena/debates — multi-round consensus between models.
+ *
+ * Unlike /run's one-shot side-by-side, every round each model reads the other
+ * models' previous answers and may rebut or revise; a judge then delivers the
+ * verdict from the full transcript. Async (202) with durable rounds — the
+ * dashboard polls GET /debates/:id.
+ */
+arenaRouter.post('/debates', (req: Request, res: Response) => {
+  const parsed = debateSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: { message: parsed.error.issues.map(e => e.message).join(', ') } });
+    return;
+  }
+  const { prompt, models, judge, rounds, max_tokens, temperature } = parsed.data;
+  if (new Set(models).size !== models.length) {
+    res.status(400).json({ error: { message: 'Duplicate model ids in debate request.' } });
+    return;
+  }
+  const unknown: string[] = [];
+  for (const modelId of [...models, ...(judge ? [judge] : [])]) {
+    if (!resolveFusionCandidate(modelId, { allowGroupFallback: false })) unknown.push(modelId);
+  }
+  if (unknown.length > 0) {
+    res.status(400).json({ error: { message: `Unknown or disabled model(s): ${unknown.join(', ')}. Call /v1/models for the available list.` } });
+    return;
+  }
+  const debate = createDebate(getDb(), { prompt, models, judge });
+  void executeDebate(debate.id, { rounds: rounds ?? 1, max_tokens, temperature }).catch(() => {
+    // executeDebate records its own failures on the row; this only guards
+    // against a throw in the failure path itself.
+  });
+  res.status(202).json(debate);
+});
+
+arenaRouter.get('/debates', (req: Request, res: Response) => {
+  const rawLimit = typeof req.query.limit === 'string' ? req.query.limit : undefined;
+  let limit = 20;
+  if (rawLimit !== undefined && rawLimit.trim() !== '') {
+    const parsed = Number(rawLimit);
+    if (!Number.isInteger(parsed) || parsed < 1 || parsed > 100) {
+      res.status(400).json({ error: { message: 'limit must be an integer between 1 and 100' } });
+      return;
+    }
+    limit = parsed;
+  }
+  res.json({ debates: listDebates(getDb(), limit) });
+});
+
+arenaRouter.get('/debates/:id', (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) {
+    res.status(400).json({ error: { message: 'Invalid debate ID' } });
+    return;
+  }
+  const debate = getDebate(getDb(), id);
+  if (!debate) {
+    res.status(404).json({ error: { message: 'Debate not found' } });
+    return;
+  }
+  res.json(debate);
 });

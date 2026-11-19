@@ -89,6 +89,85 @@ export interface RegistryEntryMeta {
   version: string;
 }
 
+const listItemSchema = z.object({
+  server: entrySchema.extend({ title: z.string().optional() }),
+  _meta: z.object({}).passthrough().optional(),
+}).passthrough();
+
+const listResponseSchema = z.object({
+  servers: z.array(listItemSchema).optional(),
+  metadata: z.object({ nextCursor: z.string().optional() }).passthrough().optional(),
+}).passthrough();
+
+export interface RegistrySearchResult {
+  name: string;
+  title: string;
+  description: string;
+  version: string;
+  isLatest: boolean;
+  transports: string[];
+}
+
+export interface RegistrySearchPage {
+  servers: RegistrySearchResult[];
+  nextCursor: string | null;
+}
+
+function itemTransports(entry: z.infer<typeof entrySchema>): string[] {
+  const out = new Set<string>();
+  for (const r of entry.remotes ?? []) {
+    if (r.type) out.add(r.type);
+  }
+  for (const p of entry.packages ?? []) {
+    const t = packageTransport(p);
+    if (t) out.add(t);
+  }
+  return [...out];
+}
+
+/**
+ * Browse/search the registry catalog. Tolerant like the rest of this module:
+ * unknown list shapes fail with a message, and entries missing a name are
+ * skipped rather than failing the page.
+ */
+export async function searchRegistry(opts: { q?: string; limit?: number; cursor?: string }): Promise<RegistrySearchPage> {
+  const limit = Math.min(50, Math.max(1, opts.limit ?? 20));
+  const params = new URLSearchParams({ limit: String(limit) });
+  if (opts.q?.trim()) params.set('search', opts.q.trim());
+  if (opts.cursor?.trim()) params.set('cursor', opts.cursor.trim());
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+  try {
+    const res = await fetch(`${REGISTRY_BASE}/v0.1/servers?${params}`, {
+      signal: controller.signal,
+      headers: { Accept: 'application/json' },
+    });
+    if (!res.ok) throw new Error(`Registry request failed with HTTP ${res.status}.`);
+    const parsed = listResponseSchema.safeParse(await res.json());
+    if (!parsed.success) throw new Error('Registry returned an unrecognized server list.');
+    const servers: RegistrySearchResult[] = [];
+    for (const item of parsed.data.servers ?? []) {
+      const name = item.server.name?.trim();
+      if (!name) continue;
+      const official = (item._meta?.['io.modelcontextprotocol.registry/official'] ?? {}) as { isLatest?: unknown };
+      servers.push({
+        name,
+        title: item.server.title ?? '',
+        description: item.server.description ?? '',
+        version: item.server.version ?? '',
+        isLatest: official.isLatest === true,
+        transports: itemTransports(item.server),
+      });
+    }
+    return { servers, nextCursor: parsed.data.metadata?.nextCursor ?? null };
+  } catch (err) {
+    if (err instanceof Error && err.name === 'AbortError') throw new Error('Registry request timed out.');
+    throw err instanceof Error ? err : new Error(String(err));
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export async function fetchRegistryEntry(name: string, version?: string): Promise<RegistryEntryMeta> {
   const tag = (version?.trim() || 'latest').replace(/[^a-zA-Z0-9._-]/g, '');
   const url = `${REGISTRY_BASE}/v0.1/servers/${encodeURIComponent(name.trim())}/versions/${tag}`;

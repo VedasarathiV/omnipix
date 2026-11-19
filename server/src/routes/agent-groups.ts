@@ -8,6 +8,7 @@ import {
   getGroup,
   listGroups,
   planGroupTasks,
+  resumeGroup,
   stopGroup,
   substituteInputs,
   validateTaskGraph,
@@ -145,6 +146,28 @@ agentGroupsRouter.post('/groups/:id/stop', (req: Request, res: Response) => {
   }
   stopGroup(id);
   res.json(getGroup(id));
+});
+
+agentGroupsRouter.post('/groups/:id/resume', (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) {
+    res.status(400).json({ error: { message: 'Invalid group ID' } });
+    return;
+  }
+  if (!getGroup(id)) {
+    res.status(404).json({ error: { message: 'Group not found' } });
+    return;
+  }
+  try {
+    const group = resumeGroup(id);
+    // Fire and forget like create: the driver persists everything it does.
+    void driveGroup(id).catch(() => {
+      // driveLoop records its own terminal state; this guards the guard.
+    });
+    res.status(202).json(group);
+  } catch (err) {
+    res.status(409).json({ error: { message: err instanceof Error ? err.message : String(err) } });
+  }
 });
 
 agentGroupsRouter.delete('/groups/:id', (req: Request, res: Response) => {
