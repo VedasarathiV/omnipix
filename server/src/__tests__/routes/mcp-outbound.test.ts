@@ -136,4 +136,58 @@ describe('outbound MCP registry', () => {
     expect((await call('GET', '/api/mcp/tools')).body.tools).toEqual([]);
     expect((await call('POST', `/api/mcp/servers/99999/test`)).status).toBe(404);
   });
+
+  it('installs an npm server from the registry with one call', async () => {
+    globalThis.fetch = (async () => Response.json({
+      name: 'io.github.acme/notes',
+      description: 'Notes server.',
+      version: '1.2.0',
+      packages: [{
+        registryType: 'npm',
+        identifier: '@acme/mcp-notes',
+        version: '1.2.0',
+        transport: 'stdio',
+        environmentVariables: [{ name: 'NOTES_TOKEN', required: true }],
+      }],
+    })) as unknown as typeof fetch;
+    // Required env missing: loud 400, no row.
+    const missing = await call('POST', '/api/mcp/install', { name: 'io.github.acme/notes' });
+    expect(missing.status).toBe(400);
+    expect(missing.body.error.message).toContain('NOTES_TOKEN');
+    const installed = await call('POST', '/api/mcp/install', {
+      name: 'io.github.acme/notes', env: { NOTES_TOKEN: 's3cret' },
+    });
+    expect(installed.status).toBe(201);
+    expect(installed.body.server).toMatchObject({
+      name: 'notes', transport: 'stdio', command: 'npx',
+    });
+    expect(installed.body.registryVersion).toBe('1.2.0');
+    expect(JSON.stringify(installed.body)).not.toContain('s3cret');
+  });
+
+  it('prefers a hosted streamable-http endpoint when offered', async () => {
+    globalThis.fetch = (async () => Response.json({
+      name: 'com.acme/hosted',
+      version: '2.0.0',
+      remotes: [{ type: 'streamable-http', url: 'https://mcp.acme.test/mcp' }],
+      packages: [{ registryType: 'npm', identifier: '@acme/x', transport: 'stdio' }],
+    })) as unknown as typeof fetch;
+    const installed = await call('POST', '/api/mcp/install', { name: 'com.acme/hosted', as: 'acme' });
+    expect(installed.status).toBe(201);
+    expect(installed.body.server).toMatchObject({ name: 'acme', transport: 'http', url: 'https://mcp.acme.test/mcp' });
+  });
+
+  it('maps pypi and docker packages, and 404s unknown names', async () => {
+    globalThis.fetch = (async (url: string) => {
+      if (String(url).includes('missing')) return new Response('nope', { status: 404 });
+      return Response.json({
+        name: 'io.github.acme/py', version: '1.0.0',
+        packages: [{ registryType: 'pypi', identifier: 'acme-mcp', transport: 'stdio' }],
+      });
+    }) as unknown as typeof fetch;
+    const py = await call('POST', '/api/mcp/install', { name: 'io.github.acme/py' });
+    expect(py.status).toBe(201);
+    expect(py.body.server).toMatchObject({ name: 'py', transport: 'stdio', command: 'uvx' });
+    expect((await call('POST', '/api/mcp/install', { name: 'io.missing/srv' })).status).toBe(404);
+  });
 });

@@ -63,6 +63,24 @@ describe('mcp', () => {
     });
   });
 
+  it('installs from the registry with a local name and env', async () => {
+    let seenBody = '';
+    stubFetch((path, init) => {
+      if (path === '/api/mcp/install' && init.method === 'POST') {
+        seenBody = String(init.body);
+        return Response.json({ server: { id: 3, name: 'notes' } }, { status: 201 });
+      }
+      throw new Error(`Unexpected request: ${path} ${init.method}`);
+    });
+    expect(await main(['mcp', 'install', 'io.github.acme/notes', '--as', 'notes', '--env', 'NOTES_TOKEN=s3cret'])).toBe(0);
+    expect(output).toContain('installed notes (id 3)');
+    expect(JSON.parse(seenBody)).toEqual({
+      name: 'io.github.acme/notes',
+      as: 'notes',
+      env: { NOTES_TOKEN: 's3cret' },
+    });
+  });
+
   it('removes, toggles, and tests servers by name', async () => {
     stubFetch((path, init) => {
       if (path === '/api/mcp/servers') return Response.json({ servers: SERVERS });
@@ -101,7 +119,8 @@ describe('mcp', () => {
     await expect(main(['mcp', 'call'])).rejects.toThrow('--tool');
     await expect(main(['mcp', 'call', '--tool', 'mcp:a:b', '--tool-args', 'nope'])).rejects.toThrow('JSON object');
     await expect(main(['mcp', 'remove'])).rejects.toThrow('server name');
-    await expect(main(['mcp', 'frobnicate'])).rejects.toThrow('mcp list, add, remove, enable, disable, test, tools, or call');
+    await expect(main(['mcp', 'frobnicate'])).rejects.toThrow('mcp list, add, install, remove, enable, disable, test, tools, or call');
+    await expect(main(['mcp', 'install'])).rejects.toThrow('Invalid arguments for mcp install');
     await expect(main(['mcp', 'list', '--goal', 'x'])).rejects.toThrow('--goal is not supported by mcp');
     expect(fetchSpy).not.toHaveBeenCalled();
   });

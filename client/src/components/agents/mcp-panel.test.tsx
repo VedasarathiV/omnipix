@@ -103,3 +103,32 @@ it('tests a server and reports the tools', async () => {
   expect(container.textContent).toContain('Connected.')
   expect(container.textContent).toContain('read')
 })
+
+it('installs from the registry with env secrets', async () => {
+  const calls: Array<{ path: string; options?: RequestInit }> = []
+  mocked.mockImplementation(async (path: string, options?: RequestInit) => {
+    calls.push({ path, options })
+    if (!options?.method) return { servers: SERVERS } as never
+    return { server: { id: 3, name: 'notes' } } as never
+  })
+  render()
+  await flush()
+  const open = Array.from(container.querySelectorAll('button')).find(b => b.textContent?.includes('Install from registry')) as HTMLButtonElement
+  await act(async () => { open.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+  await flush()
+  await act(async () => {
+    setInput(container.querySelector('#mcp-registry-name') as HTMLInputElement, 'io.github.acme/notes')
+    const env = container.querySelector('#mcp-registry-env') as HTMLTextAreaElement
+    Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value')!.set!.call(env, 'NOTES_TOKEN=s3cret\nBLANK')
+    env.dispatchEvent(new Event('input', { bubbles: true }))
+  })
+  await flush()
+  const install = Array.from(container.querySelectorAll('button')).find(b => b.textContent === 'Install') as HTMLButtonElement
+  await act(async () => { install.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+  await flush()
+  const post = calls.find(c => c.path === '/api/mcp/install')
+  expect(JSON.parse(String(post?.options?.body))).toEqual({
+    name: 'io.github.acme/notes',
+    env: { NOTES_TOKEN: 's3cret' },
+  })
+})

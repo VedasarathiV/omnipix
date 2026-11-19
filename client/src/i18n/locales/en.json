@@ -948,7 +948,13 @@
       "empty": "No MCP servers yet.",
       "deleteConfirm": "Delete this server? Runs using its tools will fail until it is re-added.",
       "testOk": "Connected.",
-      "runTools": "MCP tools"
+      "runTools": "MCP tools",
+      "install": "Install from registry",
+      "installPlaceholder": "Registry name, e.g. io.github.owner/repo",
+      "installEnvPlaceholder": "Required secrets, one KEY=value per line (optional)",
+      "installHint": "Fetches the server entry from the official MCP registry and adds it. Secrets stay encrypted.",
+      "installing": "Installing…",
+      "installGo": "Install"
     },
     "sessions": {
       "label": "Session",

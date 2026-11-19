@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Pencil, Play, Plus, Trash2, X } from 'lucide-react'
+import { Download, Pencil, Play, Plus, Trash2, X } from 'lucide-react'
 import { apiFetch } from '@/lib/api'
 import { useI18n } from '@/i18n'
 import { Button } from '@/components/ui/button'
@@ -103,6 +103,33 @@ export function McpPanel() {
     onError: (err: Error) => setTestResult(err.message),
   })
 
+  const [installOpen, setInstallOpen] = useState(false)
+  const [regName, setRegName] = useState('')
+  const [regEnvText, setRegEnvText] = useState('')
+  const [regError, setRegError] = useState<string | null>(null)
+
+  const install = useMutation({
+    mutationFn: () => {
+      const env: Record<string, string> = {}
+      for (const line of regEnvText.split('\n')) {
+        const sep = line.indexOf('=')
+        if (sep > 0) env[line.slice(0, sep).trim()] = line.slice(sep + 1).trim()
+      }
+      return apiFetch('/api/mcp/install', {
+        method: 'POST',
+        body: JSON.stringify({ name: regName.trim(), env }),
+      })
+    },
+    onSuccess: () => {
+      setInstallOpen(false)
+      setRegName('')
+      setRegEnvText('')
+      setRegError(null)
+      invalidate()
+    },
+    onError: (err: Error) => setRegError(err.message),
+  })
+
   function openCreate() {
     setEditing(null)
     setName('')
@@ -138,11 +165,42 @@ export function McpPanel() {
         <CardDescription>{t('agents.mcp.description')}</CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-2">
-        <div>
+        <div className="flex flex-wrap gap-2">
           <Button size="sm" onClick={openCreate}>
             <Plus /> {t('agents.mcp.new')}
           </Button>
+          <Button size="sm" variant="outline" onClick={() => { setInstallOpen(v => !v); setRegError(null) }}>
+            <Download /> {t('agents.mcp.install')}
+          </Button>
         </div>
+        {installOpen && (
+          <div className="grid gap-2 rounded-xl border p-3">
+            <Input
+              id="mcp-registry-name"
+              value={regName}
+              onChange={e => setRegName(e.target.value)}
+              placeholder={t('agents.mcp.installPlaceholder')}
+              className="font-mono"
+              aria-label={t('agents.mcp.installPlaceholder')}
+            />
+            <Textarea
+              id="mcp-registry-env"
+              value={regEnvText}
+              onChange={e => setRegEnvText(e.target.value)}
+              placeholder={t('agents.mcp.installEnvPlaceholder')}
+              rows={2}
+              className="font-mono"
+              aria-label={t('agents.mcp.installEnvPlaceholder')}
+            />
+            <p className="text-[11px] text-muted-foreground">{t('agents.mcp.installHint')}</p>
+            {regError && <p role="alert" className="text-xs text-destructive">{regError}</p>}
+            <div>
+              <Button size="sm" onClick={() => install.mutate()} disabled={!regName.trim() || install.isPending}>
+                {install.isPending ? t('agents.mcp.installing') : t('agents.mcp.installGo')}
+              </Button>
+            </div>
+          </div>
+        )}
         {isLoading && <p className="text-xs text-muted-foreground">…</p>}
         {!isLoading && rows.length === 0 && (
           <p className="text-xs text-muted-foreground">{t('agents.mcp.empty')}</p>

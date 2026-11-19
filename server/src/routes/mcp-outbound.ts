@@ -11,6 +11,7 @@ import {
   testMcpServer,
   updateMcpServer,
 } from '../services/mcp-servers.js';
+import { defaultLocalName, fetchRegistryEntry, planRegistryInstall } from '../services/mcp-registry.js';
 
 // Outbound MCP registry (Phase 2): CRUD for MCP servers the agent loop
 // calls out to, plus test/call helpers. (routes/mcp.ts is the INBOUND MCP
@@ -45,6 +46,56 @@ mcpOutboundRouter.post('/servers', (req: Request, res: Response) => {
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     const status = message.includes('already exists') ? 409 : 400;
+    res.status(status).json({ error: { message } });
+  }
+});
+
+const installSchema = z.object({
+  /** Reverse-DNS registry name, e.g. io.github.owner/repo. */
+  name: z.string().trim().min(1).max(200),
+  version: z.string().trim().min(1).max(40).optional(),
+  /** Local display name; defaults to the registry name's last segment. */
+  as: z.string().trim().min(1).max(64).optional(),
+  /** Values for env vars the package declares required. */
+  env: z.record(z.string(), z.string().max(4000)).optional(),
+});
+
+// One-click install from the official MCP registry: fetch the server entry,
+// map its hosted endpoint or stdio package to our server row, and create it.
+// Required env the caller didn't supply fails loudly — no half-installed row.
+mcpOutboundRouter.post('/install', async (req: Request, res: Response) => {
+  const parsed = installSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: { message: parsed.error.issues.map(e => e.message).join(', ') } });
+    return;
+  }
+  try {
+    const { entry, version } = await fetchRegistryEntry(parsed.data.name, parsed.data.version);
+    const plan = planRegistryInstall(entry);
+    const env = parsed.data.env ?? {};
+    const missing = plan.requiredEnv.filter(v => !env[v.name]);
+    if (missing.length) {
+      res.status(400).json({
+        error: {
+          message: `Missing required env vars: ${missing.map(v => v.name).join(', ')}.`,
+          requiredEnv: plan.requiredEnv,
+        },
+      });
+      return;
+    }
+    const localName = parsed.data.as ?? defaultLocalName(parsed.data.name);
+    const id = createMcpServer({
+      name: localName,
+      transport: plan.transport,
+      command: plan.command,
+      args: plan.args,
+      url: plan.url,
+      env,
+    });
+    res.status(201).json({ server: getMcpServer(id), registryVersion: version, description: plan.description });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const status = message.includes('already exists') ? 409 : message.startsWith('No registry server') ? 404 : 502;
     res.status(status).json({ error: { message } });
   }
 });

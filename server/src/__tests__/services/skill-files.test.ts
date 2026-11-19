@@ -32,4 +32,29 @@ describe('skill files', () => {
     expect(() => parseSkillFile('---\nname: ok\ndescription: d\nenabled: maybe\n---\nbody')).toThrow('enabled');
     expect(() => parseSkillFile('---\nnot-a-field\ndescription: d\nname: ok\n---\nbody')).toThrow('bad frontmatter line');
   });
+
+  it('imports Anthropic-format packs: extra fields, lists, long bodies', () => {
+    const file = [
+      '---',
+      'name: pdf-master',
+      'description: Extract tables and text from PDFs.',
+      'license: MIT',
+      'version: 1.1.0',
+      'allowed-tools:',
+      '  - Read',
+      '  - Bash',
+      '---',
+      'Use the table tool first. ' + 'x'.repeat(30000),
+    ].join('\n');
+    const parsed = parseSkillFile(file);
+    expect(parsed.name).toBe('pdf-master');
+    expect(parsed.description).toBe('Extract tables and text from PDFs.');
+    expect(parsed.instructions.length).toBeGreaterThan(30000);
+    expect(parsed.enabled).toBe(true);
+  });
+
+  it('joins folded block-scalar descriptions', () => {
+    const file = '---\nname: folded\ndescription: >\n  First line.\n  Second line.\n---\nbody here';
+    expect(parseSkillFile(file).description).toBe('First line. Second line.');
+  });
 });

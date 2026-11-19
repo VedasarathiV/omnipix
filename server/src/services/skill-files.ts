@@ -46,12 +46,26 @@ export function parseSkillFile(content: string): ParsedSkill {
   const front = text.slice(4, end);
   const instructions = text.slice(end + 4).replace(/^\n/, '').trim();
   const fields = new Map<string, string>();
+  // Foreign frontmatter tolerance (Anthropic-format packs): multi-line values
+  // and lists we don't read (allowed-tools, license blocks) are skipped
+  // instead of rejected, so third-party SKILL.md files import. Only our own
+  // scalar fields are collected; description also accepts a YAML block scalar.
+  let collectingDescription = false;
+  const descriptionLines: string[] = [];
   for (const line of front.split('\n')) {
     if (!line.trim()) continue;
+    if (/^\s/.test(line) || line.trimStart().startsWith('- ')) {
+      if (collectingDescription) descriptionLines.push(line.trim());
+      continue;
+    }
     const sep = line.indexOf(':');
     if (sep === -1) throw new Error(`bad frontmatter line: ${line.trim().slice(0, 60)}`);
-    fields.set(line.slice(0, sep).trim().toLowerCase(), unquote(line.slice(sep + 1)));
+    const key = line.slice(0, sep).trim().toLowerCase();
+    const value = unquote(line.slice(sep + 1));
+    collectingDescription = key === 'description' && (value === '>' || value === '|');
+    fields.set(key, collectingDescription ? '' : value);
   }
+  if (descriptionLines.length) fields.set('description', descriptionLines.join(' '));
   const name = fields.get('name') ?? '';
   const description = fields.get('description') ?? '';
   if (!NAME_RE.test(name)) {
@@ -64,7 +78,7 @@ export function parseSkillFile(content: string): ParsedSkill {
     throw new Error('skill file needs instructions after the frontmatter');
   }
   if (description.length > 500) throw new Error('skill description must be at most 500 characters');
-  if (instructions.length > 20000) throw new Error('skill instructions must be at most 20000 characters');
+  if (instructions.length > 64000) throw new Error('skill instructions must be at most 64000 characters');
   const enabledRaw = fields.get('enabled');
   if (enabledRaw !== undefined && enabledRaw !== 'true' && enabledRaw !== 'false') {
     throw new Error('skill enabled must be true or false');

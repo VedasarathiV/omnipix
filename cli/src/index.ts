@@ -48,6 +48,7 @@ interface CliOptions extends KeyCommandOptions {
   headers?: string;
   tool?: string;
   toolArgs?: string;
+  asName?: string;
   auto?: boolean;
   plan?: boolean;
   event?: string;
@@ -141,7 +142,7 @@ export function parseArgs(argv: string[]): { command?: string; options: CliOptio
       || flag === '--threshold' || flag === '--session'
       || flag === '--transport' || flag === '--command' || flag === '--cmd-args'
       || flag === '--server-url' || flag === '--env' || flag === '--headers'
-      || flag === '--tool' || flag === '--tool-args'
+      || flag === '--tool' || flag === '--tool-args' || flag === '--as'
       || flag === '--tasks' || flag === '--budget' || flag === '--mode' || flag === '--preset' || flag === '--inputs'
       || flag === '--value' || flag === '--scope' || flag === '--project'
       || flag === '--importance' || flag === '--schedule'
@@ -181,6 +182,7 @@ export function parseArgs(argv: string[]): { command?: string; options: CliOptio
         options.compactions = compactions;
       }
       else if (flag === '--name') options.name = value;
+      else if (flag === '--as') options.asName = value;
       else if (flag === '--description') options.description = value;
       else if (flag === '--instructions') options.instructions = value;
       else if (flag === '--bundle') options.bundle = value;
@@ -618,7 +620,7 @@ const COMMAND_FLAGS: Record<string, readonly string[]> = {
   eval: ['--url', '--token', '--timeout', '--suite', '--models'],
   guard: ['--url', '--token', '--timeout', '--inbound', '--outbound', '--patterns'],
   cache: ['--url', '--token', '--timeout', '--threshold'],
-  mcp: ['--url', '--token', '--timeout', '--name', '--transport', '--command', '--cmd-args', '--server-url', '--env', '--headers', '--tool', '--tool-args'],
+  mcp: ['--url', '--token', '--timeout', '--name', '--transport', '--command', '--cmd-args', '--server-url', '--env', '--headers', '--tool', '--tool-args', '--as'],
   memory: ['--url', '--token', '--timeout', '--key', '--value', '--scope', '--project', '--importance'],
   automate: ['--url', '--token', '--timeout', '--name', '--goal', '--schedule', '--model'],
 };

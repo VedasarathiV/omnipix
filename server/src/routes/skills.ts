@@ -12,13 +12,13 @@ const bundleSchema = z.array(z.string().trim().min(1).max(64).regex(/^[a-z0-9][a
 const createSkillSchema = z.object({
   name: z.string().trim().min(1).max(64).regex(/^[a-z0-9][a-z0-9-]*$/, 'name must be lowercase letters, numbers, and dashes'),
   description: z.string().trim().min(1).max(500),
-  instructions: z.string().trim().min(1).max(20000),
+  instructions: z.string().trim().min(1).max(64000),
   bundle: bundleSchema.optional(),
 });
 
 const updateSkillSchema = z.object({
   description: z.string().trim().min(1).max(500).optional(),
-  instructions: z.string().trim().min(1).max(20000).optional(),
+  instructions: z.string().trim().min(1).max(64000).optional(),
   enabled: z.boolean().optional(),
   bundle: bundleSchema.optional(),
 }).refine(data => data.description !== undefined || data.instructions !== undefined || data.enabled !== undefined || data.bundle !== undefined, {
@@ -120,7 +120,7 @@ skillsRouter.get('/:name/export', (req: Request, res: Response) => {
 });
 
 const importSkillSchema = z.object({
-  content: z.string().min(1).max(25000),
+  content: z.string().min(1).max(70000),
 });
 
 skillsRouter.post('/import', (req: Request, res: Response) => {

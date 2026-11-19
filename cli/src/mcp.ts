@@ -6,6 +6,7 @@ export interface McpCommandOptions {
   url: string;
   args: string[];
   token?: string;
+  asName?: string;
   name?: string;
   transport?: string;
   command?: string;
@@ -24,6 +25,7 @@ export function mcpHelp(): string {
     'Outbound MCP servers (dashboard authentication):',
     '  omnipix mcp list',
     '  omnipix mcp add --name N --transport stdio|http [--command C] [--cmd-args a,b] [--server-url U] [--env K=V,...] [--headers H:V,...]',
+    '  omnipix mcp install <registry-name> [--as LOCAL] [--env K=V,...]',
     '  omnipix mcp remove <name>',
     '  omnipix mcp enable <name>',
     '  omnipix mcp disable <name>',
@@ -123,8 +125,8 @@ export async function runMcp(
   write: (line: string) => void = line => process.stdout.write(`${line}\n`),
 ): Promise<number> {
   const [action, nameArg, ...extra] = options.args;
-  if (!action || !['list', 'add', 'remove', 'enable', 'disable', 'test', 'tools', 'call'].includes(action)) {
-    throw new Error(`Expected mcp list, add, remove, enable, disable, test, tools, or call.\n\n${mcpHelp()}`);
+  if (!action || !['list', 'add', 'install', 'remove', 'enable', 'disable', 'test', 'tools', 'call'].includes(action)) {
+    throw new Error(`Expected mcp list, add, install, remove, enable, disable, test, tools, or call.\n\n${mcpHelp()}`);
   }
   if (options.dryRun) throw new Error('--dry-run is not supported by mcp; no request was made');
   const { request } = setup(options);
@@ -157,6 +159,17 @@ export async function runMcp(
       headers: pairs(options.headers, ':'),
     });
     write(`added ${server.name} (id ${server.id})`);
+    return 0;
+  }
+
+  if (action === 'install') {
+    if (nameArg === undefined || extra.length) throw new Error(`Invalid arguments for mcp install.\n\n${mcpHelp()}`);
+    const { server } = await request<{ server: McpServer }>('/api/mcp/install', 'POST', {
+      name: nameArg,
+      as: options.asName,
+      env: pairs(options.env, '='),
+    });
+    write(`installed ${server.name} (id ${server.id})`);
     return 0;
   }
 
