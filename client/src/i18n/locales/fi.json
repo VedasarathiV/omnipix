@@ -912,7 +912,7 @@
     "cacheSavedTokens": "{tokens} tokenia säästetty",
     "cacheHitRateHint": "{hits} osumaa vs. {misses} ohitusta palvelimen käynnistyksestä · {requests} palveluntarjoajan kutsua vältetty · {semantic}",
     "emptyHint": "Nothing to chart yet. Send your first request and volume, latency, tokens, and savings appear here.",
-    "emptyHintAction": "Open the Playground",
+    "emptyHintAction": "Open Chat",
     "loadFailed": "Could not load analytics.",
     "detailLoadFailed": "Could not load the request detail.",
     "emptyHintKeysAction": "Add provider keys"
@@ -1020,7 +1020,10 @@
     "mentionAttachFile": "Attach a file…",
     "mentionResolveFailed": "Could not load mentioned docs: {reason}",
     "slashEmpty": "Write a message after the /skill-name.",
-    "slashUnknown": "Unknown skill: {names}."
+    "slashUnknown": "Unknown skill: {names}.",
+    "emptyNoKeysTitle": "Add a provider key to start chatting.",
+    "emptyNoKeysBody": "Chat, agents, and voice all run on your own provider keys. Free tiers work — it takes a minute.",
+    "emptyNoKeysCta": "Add a provider key"
   },
   "playgroundSessions": {
     "heading": "Keskustelut",

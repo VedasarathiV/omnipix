@@ -87,7 +87,12 @@ export function Workbench({ premiumEnabled, showUpgrade, onOpenSettings, onOpenU
           </span>
         </div>
       )}
-      <div className="hidden min-h-0 flex-1 md:flex">
+      {/* One content column for every width: on mobile the page fills the
+          space under the navbar; at md+ the activity bar and sidebar join
+          the row and only this column scrolls. (The old `hidden md:flex`
+          row swallowed page content below md entirely.) */}
+      <div className="flex min-h-0 flex-1 flex-col md:flex-row">
+        <div className="hidden shrink-0 md:contents">
         <ActivityBar
           premiumEnabled={premiumEnabled}
           sidebarOpen={sidebarOpen}
@@ -125,9 +130,11 @@ export function Workbench({ premiumEnabled, showUpgrade, onOpenSettings, onOpenU
           }
         />
         {sidebarOpen && <Sidebar />}
-        <div className="flex min-w-0 flex-1 flex-col">
+        </div>
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
           {children}
           {panelOpen && (
+            <div className="hidden min-h-0 md:contents">
             <Panel
               tab={panelTab}
               onTabChange={changePanelTab}
@@ -138,6 +145,7 @@ export function Workbench({ premiumEnabled, showUpgrade, onOpenSettings, onOpenU
                 document.getElementById('workbench-panel-toggle')?.focus()
               }}
             />
+            </div>
           )}
         </div>
       </div>

@@ -1,7 +1,7 @@
 {
   "nav": {
     "models": "Modelos",
-    "playground": "Playground",
+    "playground": "Chat",
     "keys": "Chaves",
     "analytics": "Análises",
     "premium": "Premium",
@@ -912,7 +912,7 @@
     "cacheSavedTokens": "{tokens} tokens economizados",
     "cacheHitRateHint": "{hits} acertos contra {misses} erros desde o início do servidor · {requests} chamadas ao provedor evitadas · {semantic}",
     "emptyHint": "Nothing to chart yet. Send your first request and volume, latency, tokens, and savings appear here.",
-    "emptyHintAction": "Open the Playground",
+    "emptyHintAction": "Open Chat",
     "loadFailed": "Could not load analytics.",
     "detailLoadFailed": "Could not load the request detail.",
     "emptyHintKeysAction": "Add provider keys"
@@ -946,7 +946,7 @@
     "allEvents": "Todos os eventos"
   },
   "playground": {
-    "title": "Playground",
+    "title": "Chat",
     "description": "Envie uma conclusão de chat pelo roteador e veja qual provedor a atende.",
     "autoModel": "Auto (cadeia de fallback)",
     "fusionModel": "Fusão (síntese multimodelo)",
@@ -1020,7 +1020,10 @@
     "mentionAttachFile": "Attach a file…",
     "mentionResolveFailed": "Could not load mentioned docs: {reason}",
     "slashEmpty": "Write a message after the /skill-name.",
-    "slashUnknown": "Unknown skill: {names}."
+    "slashUnknown": "Unknown skill: {names}.",
+    "emptyNoKeysTitle": "Add a provider key to start chatting.",
+    "emptyNoKeysBody": "Chat, agents, and voice all run on your own provider keys. Free tiers work — it takes a minute.",
+    "emptyNoKeysCta": "Add a provider key"
   },
   "playgroundSessions": {
     "heading": "Conversas",

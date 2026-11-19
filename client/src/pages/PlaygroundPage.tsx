@@ -1430,10 +1430,22 @@ export default function PlaygroundPage() {
           {messages.length === 0 ? (
             <div className="flex items-center justify-center h-full text-center">
               <div className="space-y-2 max-w-sm">
-                <p className="text-base font-medium">{t('playground.emptyTitle')}</p>
-                <p className="text-sm text-muted-foreground">
-                  {t('playground.emptyDescription', { model: activeModelLabel })}
-                </p>
+                {availableModels.length === 0 ? (
+                  <>
+                    <p className="text-base font-medium">{t('playground.emptyNoKeysTitle')}</p>
+                    <p className="text-sm text-muted-foreground">{t('playground.emptyNoKeysBody')}</p>
+                    <Button className="mt-2" onClick={() => navigate('/keys')}>
+                      {t('playground.emptyNoKeysCta')}
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-base font-medium">{t('playground.emptyTitle')}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {t('playground.emptyDescription', { model: activeModelLabel })}
+                    </p>
+                  </>
+                )}
               </div>
             </div>
           ) : (

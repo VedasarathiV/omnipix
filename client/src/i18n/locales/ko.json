@@ -912,7 +912,7 @@
     "cacheSavedTokens": "{tokens} 토큰 절약",
     "cacheHitRateHint": "서버 시작 이후 적중 {hits}회, 실패 {misses}회 · 제공자 호출 {requests}회 절약 · {semantic}",
     "emptyHint": "Nothing to chart yet. Send your first request and volume, latency, tokens, and savings appear here.",
-    "emptyHintAction": "Open the Playground",
+    "emptyHintAction": "Open Chat",
     "loadFailed": "Could not load analytics.",
     "detailLoadFailed": "Could not load the request detail.",
     "emptyHintKeysAction": "Add provider keys"
@@ -1020,7 +1020,10 @@
     "mentionAttachFile": "Attach a file…",
     "mentionResolveFailed": "Could not load mentioned docs: {reason}",
     "slashEmpty": "Write a message after the /skill-name.",
-    "slashUnknown": "Unknown skill: {names}."
+    "slashUnknown": "Unknown skill: {names}.",
+    "emptyNoKeysTitle": "Add a provider key to start chatting.",
+    "emptyNoKeysBody": "Chat, agents, and voice all run on your own provider keys. Free tiers work — it takes a minute.",
+    "emptyNoKeysCta": "Add a provider key"
   },
   "playgroundSessions": {
     "heading": "대화",

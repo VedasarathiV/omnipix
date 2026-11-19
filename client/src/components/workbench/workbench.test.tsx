@@ -63,7 +63,7 @@ const activityLabels = () => [...container.querySelectorAll('nav[aria-label="Sec
 it('marks the route section current and hides premium when disabled', async () => {
   mount('/models/chat')
   await flush()
-  expect(activityLabels()).toEqual(['Models', 'Playground', 'Keys', 'Agents', 'Analytics'])
+  expect(activityLabels()).toEqual(['Chat', 'Agents', 'Models', 'Keys', 'Analytics'])
   const current = container.querySelector('nav[aria-label="Sections"] a[aria-current="page"]')
   expect(current?.getAttribute('aria-label')).toBe('Models')
   expect(container.textContent).toContain('page-body')

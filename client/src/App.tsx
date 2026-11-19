@@ -286,24 +286,23 @@ function PageContainer({ children }: { children: ReactNode }) {
   const location = useLocation()
   const fullBleed = FULL_BLEED_ROUTES.has(location.pathname)
   // Keyed by route so the enter animation replays on every navigation.
+  // Padded routes scroll inside this pane (the shell chrome stays fixed);
+  // full-bleed routes fill the space and scroll in their own inner panes.
   return (
-    <main key={location.pathname} className={(fullBleed ? 'flex min-h-0 flex-1 flex-col' : 'mx-auto w-full max-w-6xl px-4 py-6 sm:px-6 sm:py-8') + ' ox-enter'}>
+    <main key={location.pathname} className={(fullBleed ? 'flex min-h-0 flex-1 flex-col' : 'mx-auto w-full max-w-6xl min-h-0 flex-1 overflow-y-auto px-4 py-6 sm:px-6 sm:py-8') + ' ox-enter'}>
       <NoKeysBanner />
       {children}
     </main>
   )
 }
 
-// The shell column. Padded routes keep `min-h-screen` and scroll as a document;
-// a full-bleed route pins the shell to the dynamic viewport instead, because
-// min-height alone is a floor, not a ceiling: with an indefinite shell height
-// every flex-1 container below grows with its content and the document scrolls
-// rather than the one pane (the Playground transcript) that means to.
+// The shell column. Always pinned to the dynamic viewport: sidebar, header,
+// and activity bar stay fixed while only the content pane scrolls. Letting
+// the document scroll instead drags the whole chrome along with the page,
+// which reads as broken on every long page.
 function AppShell({ children }: { children: ReactNode }) {
-  const location = useLocation()
-  const fullBleed = FULL_BLEED_ROUTES.has(location.pathname)
   return (
-    <div className={`flex flex-col ${fullBleed ? 'h-dvh overflow-hidden' : 'min-h-screen'} ${isMacDesktop ? 'desktop-backdrop' : 'bg-background'}`}>
+    <div className={`flex h-dvh flex-col overflow-hidden ${isMacDesktop ? 'desktop-backdrop' : 'bg-background'}`}>
       {children}
     </div>
   )
@@ -326,7 +325,7 @@ function App() {
                   <PageBoundary>
                     <Suspense fallback={<RouteFallback />}>
                     <Routes>
-                      <Route path="/" element={<Navigate to="/models/chat" replace />} />
+                      <Route path="/" element={<Navigate to="/playground" replace />} />
                       <Route path="/models" element={<Navigate to="/models/chat" replace />} />
                       <Route path="/models/chat" element={<FallbackPage />} />
                       <Route path="/models/chat/:id" element={<ModelDetailPage />} />

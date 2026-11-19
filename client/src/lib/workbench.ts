@@ -9,11 +9,13 @@ export interface NavEntry {
   labelKey: string
 }
 
+// Chat first: starting a conversation is the product's front door, so it
+// leads every nav surface (mobile menu, palette, activity bar order below).
 export const navItems: NavEntry[] = [
-  { to: '/models', labelKey: 'nav.models' },
   { to: '/playground', labelKey: 'nav.playground' },
-  { to: '/keys', labelKey: 'nav.keys' },
   { to: '/agents', labelKey: 'nav.agents' },
+  { to: '/models', labelKey: 'nav.models' },
+  { to: '/keys', labelKey: 'nav.keys' },
   { to: '/analytics', labelKey: 'nav.analytics' },
   { to: '/premium', labelKey: 'nav.premium' },
 ]
@@ -66,10 +68,10 @@ export interface WorkbenchSection {
 }
 
 export const SECTIONS: WorkbenchSection[] = [
-  { id: 'models', to: '/models/chat', base: '/models', labelKey: 'nav.models', icon: Boxes },
   { id: 'playground', to: '/playground', base: '/playground', labelKey: 'nav.playground', icon: SquareTerminal },
-  { id: 'keys', to: '/keys', base: '/keys', labelKey: 'nav.keys', icon: KeyRound },
   { id: 'agents', to: '/agents', base: '/agents', labelKey: 'nav.agents', icon: Bot },
+  { id: 'models', to: '/models/chat', base: '/models', labelKey: 'nav.models', icon: Boxes },
+  { id: 'keys', to: '/keys', base: '/keys', labelKey: 'nav.keys', icon: KeyRound },
   { id: 'analytics', to: '/analytics', base: '/analytics', labelKey: 'nav.analytics', icon: ChartColumn },
   { id: 'premium', to: '/premium', base: '/premium', labelKey: 'nav.premium', icon: Sparkles },
 ]

@@ -1,7 +1,7 @@
 {
   "nav": {
     "models": "Models",
-    "playground": "Playground",
+    "playground": "Chat",
     "keys": "Keys",
     "agents": "Agents",
     "analytics": "Analytics",
@@ -1206,7 +1206,7 @@
     "cacheSavedTokens": "{tokens} tokens saved",
     "cacheHitRateHint": "{hits} hits vs {misses} misses since the server started · {requests} provider calls avoided · {semantic} near-duplicate hits",
     "emptyHint": "Nothing to chart yet. Send your first request and volume, latency, tokens, and savings appear here.",
-    "emptyHintAction": "Open the Playground",
+    "emptyHintAction": "Open Chat",
     "emptyHintKeysAction": "Add provider keys",
     "loadFailed": "Could not load analytics.",
     "detailLoadFailed": "Could not load the request detail."
@@ -1240,7 +1240,7 @@
     "allEvents": "All events"
   },
   "playground": {
-    "title": "Playground",
+    "title": "Chat",
     "description": "Send a chat completion through the router and see which provider serves it.",
     "autoModel": "Auto (fallback chain)",
     "fusionModel": "Fusion (multi-model synthesis)",
@@ -1314,7 +1314,10 @@
     "codeToggle": "Toggle code pane",
     "answeringAs": "Answering as {model}",
     "agentHandoff": "Continue in an agent session",
-    "agentHandoffTitle": "From playground chat"
+    "agentHandoffTitle": "From playground chat",
+    "emptyNoKeysTitle": "Add a provider key to start chatting.",
+    "emptyNoKeysBody": "Chat, agents, and voice all run on your own provider keys. Free tiers work — it takes a minute.",
+    "emptyNoKeysCta": "Add a provider key"
   },
   "playgroundSessions": {
     "heading": "Conversations",
@@ -1510,8 +1513,8 @@
     "step1Desc": "Connect at least one provider account. Free keys work.",
     "step1Cta": "Add keys",
     "step2Title": "Send a test request",
-    "step2Desc": "Pick any model in the Playground and say hello.",
-    "step2Cta": "Open Playground",
+    "step2Desc": "Pick any model in Chat and say hello.",
+    "step2Cta": "Open Chat",
     "step3Title": "Connect your app",
     "step3Desc": "Use your unified API key with any OpenAI-compatible client.",
     "copyKey": "Copy API key",
