@@ -21,6 +21,7 @@ import {
 } from '../services/agent-runtime.js';
 import { createSession, getSession, touchSession } from '../services/agent-sessions.js';
 import { createCheckpoint, getCheckpoint, listCheckpoints, restoreCheckpoint } from '../services/checkpoints.js';
+import { diffWorkspace, listWorkspaceFiles, readWorkspaceFile, revertWorkspaceFile, workspaceGitBranch, workspaceGitCommit, workspaceGitStatus } from '../services/run-workspace.js';
 import { listProposals, resolveProposal, searchRuns } from '../services/learning-loop.js';
 import { cloneRepoAtRef, diffStat, fetchRefInto, runWorkspace } from '../lib/workspace.js';
 
@@ -307,6 +308,126 @@ agentRunsRouter.post('/checkpoints/:id/restore', (req: Request, res: Response) =
     restoreCheckpoint(id);
     appendStep(checkpoint.run_id, 'restore', 'restore', { checkpoint_id: id, label: checkpoint.label });
     res.json({ restored: id, run: getAgentRun(checkpoint.run_id) });
+  } catch (err) {
+    res.status(400).json({ error: { message: err instanceof Error ? err.message : String(err) } });
+  }
+});
+
+// Read-only workspace views for the dashboard file tree + diff viewer.
+agentRunsRouter.get('/runs/:id/files', (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) {
+    res.status(400).json({ error: { message: 'Invalid run ID' } });
+    return;
+  }
+  try {
+    res.json({ files: listWorkspaceFiles(id) });
+  } catch (err) {
+    res.status(404).json({ error: { message: err instanceof Error ? err.message : String(err) } });
+  }
+});
+
+agentRunsRouter.get('/runs/:id/files/content', (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+  const rel = typeof req.query.path === 'string' ? req.query.path : '';
+  if (!Number.isInteger(id) || id <= 0 || !rel) {
+    res.status(400).json({ error: { message: 'Send a run ID and ?path=' } });
+    return;
+  }
+  try {
+    res.json(readWorkspaceFile(id, rel));
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const status = message === 'File not found' || message === 'Run not found' ? 404 : 400;
+    res.status(status).json({ error: { message } });
+  }
+});
+
+agentRunsRouter.get('/runs/:id/diff', (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) {
+    res.status(400).json({ error: { message: 'Invalid run ID' } });
+    return;
+  }
+  const rawAgainst = typeof req.query.against === 'string' ? req.query.against : '';
+  let against: number | null = null;
+  if (rawAgainst.trim() !== '') {
+    against = Number(rawAgainst);
+    if (!Number.isInteger(against) || against <= 0) {
+      res.status(400).json({ error: { message: 'against must be a checkpoint ID' } });
+      return;
+    }
+  }
+  try {
+    res.json(diffWorkspace(id, against));
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const status = message === 'Run not found' || message.startsWith('Checkpoint') ? 404 : 400;
+    res.status(status).json({ error: { message } });
+  }
+});
+
+const revertFileSchema = z.object({
+  path: z.string().trim().min(1).max(1024),
+  checkpointId: z.number().int().positive().optional(),
+});
+
+agentRunsRouter.post('/runs/:id/files/revert', (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) {
+    res.status(400).json({ error: { message: 'Invalid run ID' } });
+    return;
+  }
+  const parsed = revertFileSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    res.status(400).json({ error: { message: parsed.error.issues.map(e => e.message).join(', ') } });
+    return;
+  }
+  try {
+    res.json(revertWorkspaceFile(id, parsed.data.path, parsed.data.checkpointId));
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const status = message === 'Run not found' ? 404 : 400;
+    res.status(status).json({ error: { message } });
+  }
+});
+
+agentRunsRouter.get('/runs/:id/git/status', (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) {
+    res.status(400).json({ error: { message: 'Invalid run ID' } });
+    return;
+  }
+  try {
+    res.json(workspaceGitStatus(id));
+  } catch (err) {
+    res.status(404).json({ error: { message: err instanceof Error ? err.message : String(err) } });
+  }
+});
+
+agentRunsRouter.post('/runs/:id/git/commit', (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) {
+    res.status(400).json({ error: { message: 'Invalid run ID' } });
+    return;
+  }
+  const message = typeof req.body?.message === 'string' ? req.body.message : '';
+  try {
+    res.json(workspaceGitCommit(id, message));
+  } catch (err) {
+    res.status(400).json({ error: { message: err instanceof Error ? err.message : String(err) } });
+  }
+});
+
+agentRunsRouter.post('/runs/:id/git/branch', (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) {
+    res.status(400).json({ error: { message: 'Invalid run ID' } });
+    return;
+  }
+  const name = typeof req.body?.name === 'string' ? req.body.name : '';
+  try {
+    res.status(201).json(workspaceGitBranch(id, name));
   } catch (err) {
     res.status(400).json({ error: { message: err instanceof Error ? err.message : String(err) } });
   }

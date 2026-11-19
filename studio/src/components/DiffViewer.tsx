@@ -3,9 +3,9 @@ import { Check, Columns2, Rows3, Undo2 } from 'lucide-react';
 import type { DiffHunk, DiffLine } from '../types';
 import { useStudio } from '../state/store';
 
-export function DiffViewer({ path, hunks }: { path: string; hunks: DiffHunk[] }) {
+export function DiffViewer({ path, hunks, onRevert }: { path: string; hunks: DiffHunk[]; onRevert?: () => void }) {
   const [split, setSplit] = useState(true);
-  const { acceptFile, acceptedFiles, pushToast } = useStudio();
+  const { acceptFile, acceptedFiles } = useStudio();
   const accepted = acceptedFiles.has(path);
 
   if (!hunks.length) {
@@ -36,19 +36,21 @@ export function DiffViewer({ path, hunks }: { path: string; hunks: DiffHunk[] })
             >
               Accept
             </button>
-            <button
-              type="button"
-              title="Revert file"
-              onClick={() => pushToast('error', `Reverted ${path}`)}
-              className="rounded-md p-1 text-ink-dim outline-none hover:bg-base-2 hover:text-bad focus-visible:ring-2 focus-visible:ring-accent"
-            >
-              <Undo2 className="size-3.5" strokeWidth={1.5} />
-            </button>
+            {onRevert && (
+              <button
+                type="button"
+                title="Revert file to checkpoint"
+                onClick={onRevert}
+                className="rounded-md p-1 text-ink-dim outline-none hover:bg-base-2 hover:text-bad focus-visible:ring-2 focus-visible:ring-accent"
+              >
+                <Undo2 className="size-3.5" strokeWidth={1.5} />
+              </button>
+            )}
           </>
         )}
       </div>
-      {hunks.map(hunk => (
-        <HunkView key={hunk.id} path={path} hunk={hunk} split={split} />
+      {hunks.map((hunk, i) => (
+        <HunkView key={hunk.id ?? i} path={path} hunk={hunk} split={split} />
       ))}
     </div>
   );
@@ -69,27 +71,20 @@ function ViewBtn({ label, active, onClick, children }: { label: string; active: 
   );
 }
 
-function HunkView({ path, hunk, split }: { path: string; hunk: DiffHunk; split: boolean }) {
-  const { pushToast } = useStudio();
+function HunkView({ hunk, split }: { path: string; hunk: DiffHunk; split: boolean }) {
+  const [accepted, setAccepted] = useState(false);
   return (
     <div className="border-b border-line last:border-b-0">
       <div className="flex items-center gap-2 bg-base-0 px-3 py-1">
         <span className="min-w-0 flex-1 truncate font-mono text-[10px] text-ink-faint">{hunk.header}</span>
         <button
           type="button"
-          title="Accept hunk"
-          onClick={() => pushToast('ok', `Hunk accepted in ${path}`)}
-          className="rounded p-0.5 text-ink-faint outline-none hover:text-ok focus-visible:ring-2 focus-visible:ring-accent"
+          title={accepted ? 'Hunk reviewed' : 'Mark hunk reviewed'}
+          aria-pressed={accepted}
+          onClick={() => setAccepted(a => !a)}
+          className={`rounded p-0.5 outline-none focus-visible:ring-2 focus-visible:ring-accent ${accepted ? 'text-ok' : 'text-ink-faint hover:text-ok'}`}
         >
           <Check className="size-3" strokeWidth={1.5} />
-        </button>
-        <button
-          type="button"
-          title="Revert hunk"
-          onClick={() => pushToast('error', `Hunk reverted in ${path}`)}
-          className="rounded p-0.5 text-ink-faint outline-none hover:text-bad focus-visible:ring-2 focus-visible:ring-accent"
-        >
-          <Undo2 className="size-3" strokeWidth={1.5} />
         </button>
       </div>
       {split ? <SplitLines lines={hunk.lines} /> : <UnifiedLines lines={hunk.lines} />}

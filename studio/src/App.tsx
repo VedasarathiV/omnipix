@@ -1,5 +1,7 @@
 import { useState } from 'react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { StudioProvider, useStudio } from './state/store';
+import { AuthGate } from './components/AuthGate';
 import { useShortcuts } from './hooks/shortcuts';
 import { useIsMobile } from './hooks/mobile';
 import { AppShell } from './components/AppShell';
@@ -72,16 +74,24 @@ function Shell() {
   return <AppShell sidebar={<Sidebar />} main={<MainPane />} right={<RightPanel />} />;
 }
 
+const queryClient = new QueryClient({
+  defaultOptions: { queries: { retry: false, staleTime: 15_000 } },
+});
+
 export function App() {
   return (
-    <StudioProvider>
-      <Shell />
-      <CommandPalette />
-      <SettingsModal />
-      <AgentEditor />
-      <Onboarding />
-      <Splash />
-      <Toasts />
-    </StudioProvider>
+    <QueryClientProvider client={queryClient}>
+      <StudioProvider>
+        <AuthGate>
+          <Shell />
+        </AuthGate>
+        <CommandPalette />
+        <SettingsModal />
+        <AgentEditor />
+        <Onboarding />
+        <Splash />
+        <Toasts />
+      </StudioProvider>
+    </QueryClientProvider>
   );
 }

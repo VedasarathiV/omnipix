@@ -1,7 +1,12 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { AtSign, LayoutTemplate, Mic, Paperclip, Send, Slash, X } from 'lucide-react';
 import { useStudio } from '../state/store';
-import { MODELS } from '../mock/data';
+import { ModelPicker } from './ModelPicker';
+import { apiFetch, streamChat } from '../lib/api';
+import { readSampling } from './SettingsModal';
+import { startDictationRecording, transcribeAudio, type DictationRecorder } from '../lib/voice';
+import { useConversation, useDocs, useUnifiedKey, useVoiceSettings, type AgentRun, type Conversation } from '../lib/queries';
 
 const SLASH = [
   { cmd: '/plan', desc: 'Draft a plan for approval' },
@@ -12,8 +17,7 @@ const SLASH = [
   { cmd: '/clear', desc: 'Clear this chat' },
 ];
 
-const FILES = ['src/auth/session.ts', 'src/auth/rotation.ts', 'src/agent/tools.ts', 'tests/auth.test.ts'];
-const HISTORY = ['Add refresh-token rotation to the session store', 'Explain the fallback chain', 'Run evals on the new model'];
+
 const TEMPLATES = [
   { name: 'Bug fix', text: 'Reproduce the bug, write a failing test, fix it, then run the suite. Bug: ' },
   { name: 'Code review', text: 'Review the current diff for bugs, security issues, and performance. Be specific with file:line.' },
@@ -22,20 +26,142 @@ const TEMPLATES = [
 ];
 
 export function InputBar() {
-  const { mode, setMode, model, setModel, setRunStatus, pushToast } = useStudio();
+  const {
+    mode, setMode, model, pushToast, conversationId, setConversationId,
+    setActiveRunId, setStreamingReply, dictation,
+  } = useStudio();
+  const queryClient = useQueryClient();
+  const { data: keyData } = useUnifiedKey();
+  const { data: conversation } = useConversation(conversationId);
+  const { data: docsData } = useDocs();
+  const { data: voiceSettings } = useVoiceSettings();
+  const [recorder, setRecorder] = useState<DictationRecorder | null>(null);
+  const [transcribing, setTranscribing] = useState(false);
+  const lastDictationSeq = useRef(-1);
+
+  // Floating-mic takes land here.
+  useEffect(() => {
+    if (dictation && dictation.seq !== lastDictationSeq.current) {
+      lastDictationSeq.current = dictation.seq;
+      setText(current => (current ? `${current} ${dictation.text}` : dictation.text));
+      boxRef.current?.focus();
+    }
+  }, [dictation]);
+
+  async function toggleDictation() {
+    if (recorder) {
+      const take = await recorder.stop().catch((err: unknown) => {
+        pushToast('error', err instanceof Error ? err.message : 'Recording failed');
+        return null;
+      });
+      setRecorder(null);
+      if (!take) return;
+      if (!keyData?.apiKey) {
+        pushToast('error', 'Add a provider key before dictating.');
+        return;
+      }
+      setTranscribing(true);
+      try {
+        const text = await transcribeAudio(take.blob, take.filename, keyData.apiKey, voiceSettings?.sttModel ?? 'auto');
+        if (text.trim()) setText(current => (current ? `${current} ${text.trim()}` : text.trim()));
+      } catch (err) {
+        pushToast('error', err instanceof Error ? err.message : 'Transcription failed');
+      } finally {
+        setTranscribing(false);
+      }
+      return;
+    }
+    try {
+      setRecorder(await startDictationRecording());
+    } catch (err) {
+      pushToast('error', err instanceof Error ? err.message : 'Microphone unavailable');
+    }
+  }
+  const mentionFiles = (docsData?.docs ?? []).map(d => d.source_url);
+  // Prompt history (↑): the current conversation's own user messages, newest first.
+  const history = (conversation?.messages ?? [])
+    .filter(m => m.role === 'user' && typeof m.content === 'string')
+    .map(m => m.content as string)
+    .reverse();
   const [text, setText] = useState('');
-  const [chips, setChips] = useState(['src/auth/session.ts', 'src/auth/rotation.ts']);
+  const [chips, setChips] = useState<string[]>([]);
   const [menu, setMenu] = useState<'slash' | 'mention' | 'templates' | null>(null);
   const [histIdx, setHistIdx] = useState(-1);
+  const [sending, setSending] = useState(false);
   const boxRef = useRef<HTMLTextAreaElement>(null);
 
-  function send() {
-    if (!text.trim()) return;
-    setRunStatus('running');
-    pushToast('info', mode === 'ask' ? 'Asking…' : mode === 'plan' ? 'Planning…' : 'Agent running…');
-    setText('');
-    setMenu(null);
-    setHistIdx(-1);
+  async function send() {
+    const goal = text.trim();
+    if (!goal || sending) return;
+    setSending(true);
+    try {
+      if (mode === 'ask') {
+        await sendChat(goal);
+      } else {
+        const run = await apiFetch<AgentRun>('/api/agents/runs', {
+          method: 'POST',
+          body: JSON.stringify({ goal, model, planMode: mode === 'plan' }),
+        });
+        setConversationId(null);
+        setActiveRunId(run.id);
+        pushToast('info', mode === 'plan' ? `Plan requested (run #${run.id})` : `Agent running (#${run.id})`);
+        void queryClient.invalidateQueries({ queryKey: ['agent-runs'] });
+      }
+      setText('');
+      setMenu(null);
+      setHistIdx(-1);
+    } catch (err) {
+      pushToast('error', err instanceof Error ? err.message : 'Send failed');
+    } finally {
+      setSending(false);
+    }
+  }
+
+  async function sendChat(goal: string) {
+    const apiKey = keyData?.apiKey;
+    if (!apiKey) {
+      pushToast('error', 'No unified API key — add a provider key first.');
+      return;
+    }
+    let convId = conversationId;
+    let messages: Array<{ role: string; content: string }> = (conversation?.messages ?? []).map(m => ({
+      role: m.role,
+      content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content),
+    }));
+    if (convId === null) {
+      const created = await apiFetch<Conversation>('/api/conversations', {
+        method: 'POST',
+        body: JSON.stringify({ title: goal.slice(0, 80), model, messages: [] }),
+      });
+      convId = created.id;
+      setConversationId(convId);
+    }
+    messages = [...messages, { role: 'user', content: goal }];
+    await apiFetch(`/api/conversations/${convId}`, {
+      method: 'PUT',
+      body: JSON.stringify({ messages }),
+    });
+    setStreamingReply('');
+    try {
+      const sampling = readSampling();
+      const system = conversation?.systemPrompt?.trim();
+      const payload: Record<string, unknown> = {
+        model,
+        messages: system ? [{ role: 'system', content: system }, ...messages] : messages,
+        ...(sampling.temp[0] ? { temperature: sampling.temp[1] } : {}),
+        ...(sampling.topP[0] ? { top_p: sampling.topP[1] } : {}),
+        ...(sampling.maxTok[0] ? { max_tokens: sampling.maxTok[1] } : {}),
+      };
+      const full = await streamChat('/v1/chat/completions', apiKey, payload, setStreamingReply);
+      await apiFetch(`/api/conversations/${convId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ messages: [...messages, { role: 'assistant', content: full }] }),
+      });
+    } finally {
+      setStreamingReply(null);
+    }
+    void queryClient.invalidateQueries({ queryKey: ['conversations'] });
+    void queryClient.invalidateQueries({ queryKey: ['conversation', convId] });
   }
 
   return (
@@ -72,7 +198,10 @@ export function InputBar() {
         )}
         {menu === 'mention' && (
           <Menu onClose={() => setMenu(null)}>
-            {FILES.map(f => (
+            {mentionFiles.length === 0 && (
+              <p className="px-2 py-1.5 text-xs text-ink-faint">No ingested docs — add URLs on the Docs page.</p>
+            )}
+            {mentionFiles.map(f => (
               <button key={f} type="button" onClick={() => { setChips(list => [...new Set([...list, f])]); setText(t => t.replace(/@\w*$/, '')); setMenu(null); boxRef.current?.focus(); }} className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left font-mono text-xs outline-none hover:bg-base-2">
                 <AtSign className="size-3.5 text-accent" strokeWidth={1.5} />{f}
               </button>
@@ -102,11 +231,11 @@ export function InputBar() {
           }}
           onKeyDown={e => {
             if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
-            if (e.key === 'ArrowUp' && !text && histIdx < HISTORY.length - 1) {
+            if (e.key === 'ArrowUp' && !text && histIdx < history.length - 1) {
               e.preventDefault();
               const next = histIdx + 1;
               setHistIdx(next);
-              setText(HISTORY[next]);
+              setText(history[next]);
             }
             if (e.key === 'Escape') setMenu(null);
           }}
@@ -129,21 +258,21 @@ export function InputBar() {
             <option value="plan">Plan</option>
             <option value="agent">Agent</option>
           </select>
-          <select
-            aria-label="Input model"
-            value={model}
-            onChange={e => setModel(e.target.value)}
-            className="max-w-32 rounded-md bg-transparent px-1 py-1 text-xs text-ink-dim outline-none focus-visible:ring-2 focus-visible:ring-accent"
-          >
-            {MODELS.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
-          </select>
+          <ModelPicker compact />
           <div className="flex-1" />
-          <IconBtn label="Dictate (mic)" onClick={() => pushToast('info', 'Listening… (mock dictation)')}><Mic className="size-4" strokeWidth={1.5} /></IconBtn>
+          <span className={recorder ? 'animate-pulse rounded-md bg-bad/20' : transcribing ? 'animate-pulse' : ''}>
+            <IconBtn
+              label={recorder ? 'Stop and transcribe' : transcribing ? 'Transcribing…' : 'Dictate (mic)'}
+              onClick={() => void toggleDictation()}
+            >
+              <Mic className={`size-4 ${recorder ? 'text-bad' : ''}`} strokeWidth={1.5} />
+            </IconBtn>
+          </span>
           <button
             type="button"
             aria-label="Send (Enter)"
-            onClick={send}
-            disabled={!text.trim()}
+            onClick={() => void send()}
+            disabled={!text.trim() || sending}
             className="flex size-8 items-center justify-center rounded-lg bg-accent text-base-0 outline-none hover:opacity-90 focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-40"
           >
             <Send className="size-4" strokeWidth={1.5} />

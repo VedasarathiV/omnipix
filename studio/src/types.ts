@@ -1,5 +1,5 @@
-// Shared domain types for the studio prototype. Everything renders from mock
-// data; shape mirrors the real OmniPix API so wiring is mechanical later.
+// Shared domain types for the studio workspace UI. Shapes mirror the live
+// OmniPix API responses; see lib/queries.ts for the fetch layer.
 
 export type AgentMode = 'ask' | 'plan' | 'agent';
 export type RunStatus = 'idle' | 'thinking' | 'running' | 'waiting' | 'done' | 'failed';
@@ -59,7 +59,7 @@ export interface FileChange {
 }
 
 export interface DiffHunk {
-  id: string;
+  id?: string;
   header: string;
   lines: DiffLine[];
   accepted?: boolean;

@@ -1,12 +1,15 @@
 import { useEffect } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useStudio } from '../state/store';
+import { apiFetch } from '../lib/api';
 import type { RailId } from '../types';
 
 const RAIL_ORDER: RailId[] = ['chat', 'agents', 'skills', 'keys', 'evals', 'search', 'docs', 'notifications', 'voice'];
 
-/** Global keyboard map. Inputs keep their own keys; Escape stops runs. */
+/** Global keyboard map. Inputs keep their own keys; Escape stops the live run. */
 export function useShortcuts() {
-  const { setPaletteOpen, setSettingsOpen, setRail, setRunStatus, runStatus, setMode, mode, paletteOpen, settingsOpen } = useStudio();
+  const { setPaletteOpen, setSettingsOpen, setRail, setMode, mode, paletteOpen, settingsOpen, activeRunId, pushToast } = useStudio();
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -23,8 +26,16 @@ export function useShortcuts() {
         return;
       }
       if (typing) return;
-      if (e.key === 'Escape' && (runStatus === 'running' || runStatus === 'thinking')) {
-        setRunStatus('idle');
+      if (e.key === 'Escape' && activeRunId !== null) {
+        apiFetch(`/api/agents/runs/${activeRunId}/stop`, { method: 'POST' })
+          .then(() => {
+            pushToast('ok', `Run #${activeRunId} stopped`);
+            void queryClient.invalidateQueries({ queryKey: ['agent-runs'] });
+            void queryClient.invalidateQueries({ queryKey: ['agent-run', activeRunId] });
+          })
+          .catch(() => {
+            // Already landed — nothing to stop.
+          });
         return;
       }
       if (mod && e.key >= '1' && e.key <= '9') {
@@ -39,5 +50,5 @@ export function useShortcuts() {
     }
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [paletteOpen, settingsOpen, runStatus, mode, setPaletteOpen, setSettingsOpen, setRail, setRunStatus, setMode]);
+  }, [paletteOpen, settingsOpen, mode, activeRunId, setPaletteOpen, setSettingsOpen, setRail, setMode, pushToast, queryClient]);
 }

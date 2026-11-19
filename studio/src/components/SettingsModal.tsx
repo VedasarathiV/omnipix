@@ -1,7 +1,9 @@
 import { useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { X } from 'lucide-react';
-import { MODELS } from '../mock/data';
 import { useStudio } from '../state/store';
+import { apiFetch } from '../lib/api';
+import { useApprovalRules, useConversation, useModels, useVoiceSettings } from '../lib/queries';
 
 const SECTIONS = ['Model', 'Sampling', 'System prompt', 'Search', 'Voice', 'Permissions', 'Appearance', 'Shortcuts', 'Data'] as const;
 
@@ -99,24 +101,67 @@ function Toggle({ on, onFlip, label }: { on: boolean; onFlip: () => void; label:
 
 function ModelSection() {
   const { model, setModel } = useStudio();
+  const { data: models = [] } = useModels();
+  const enabled = models.filter(m => m.enabled);
   return (
     <div className="divide-y divide-line">
       <Row label="Default model" hint="Used for new chats and agent runs">
         <select value={model} onChange={e => setModel(e.target.value)} className="rounded-lg border border-line bg-base-1 px-2 py-1.5 text-xs outline-none focus-visible:ring-2 focus-visible:ring-accent">
-          {MODELS.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
+          <option value="auto">Auto (fallback chain)</option>
+          {enabled.map(m => <option key={m.id} value={m.modelId}>{m.modelId} · {m.platform}</option>)}
         </select>
       </Row>
-      <Row label="Fallback chain" hint="Auto moves to the next provider on rate limits">
-        <span className="font-mono text-xs text-ink-dim">Groq → Cerebras → Google</span>
+      <Row label="Catalog" hint="Enabled chat models behind Auto">
+        <span className="font-mono text-xs text-ink-dim">{enabled.length} models</span>
       </Row>
     </div>
   );
 }
 
+interface SamplingState {
+  temp: [boolean, number];
+  topP: [boolean, number];
+  maxTok: [boolean, number];
+}
+
+const SAMPLING_DEFAULTS: SamplingState = { temp: [false, 0.7], topP: [false, 0.9], maxTok: [false, 4096] };
+
+function loadSampling(): SamplingState {
+  try {
+    const raw = localStorage.getItem('studio.sampling');
+    if (!raw) return SAMPLING_DEFAULTS;
+    const parsed = JSON.parse(raw) as Partial<SamplingState>;
+    const valid = (v: unknown, fallback: [boolean, number]): [boolean, number] =>
+      Array.isArray(v) && typeof v[0] === 'boolean' && typeof v[1] === 'number' ? [v[0], v[1]] : fallback;
+    return {
+      temp: valid(parsed.temp, SAMPLING_DEFAULTS.temp),
+      topP: valid(parsed.topP, SAMPLING_DEFAULTS.topP),
+      maxTok: valid(parsed.maxTok, SAMPLING_DEFAULTS.maxTok),
+    };
+  } catch {
+    return SAMPLING_DEFAULTS;
+  }
+}
+
+/** Sampling overrides for chat send: only enabled sliders are transmitted. */
+export function readSampling(): SamplingState {
+  return loadSampling();
+}
+
 function SamplingSection() {
-  const [temp, setTemp] = useState<[boolean, number]>([false, 0.7]);
-  const [topP, setTopP] = useState<[boolean, number]>([false, 0.9]);
-  const [maxTok, setMaxTok] = useState<[boolean, number]>([false, 4096]);
+  const [state, setState] = useState<SamplingState>(loadSampling);
+  function set(key: keyof SamplingState, value: [boolean, number]) {
+    setState(current => {
+      const next = { ...current, [key]: value };
+      try {
+        localStorage.setItem('studio.sampling', JSON.stringify(next));
+      } catch {
+        // Private mode: preference just doesn't persist.
+      }
+      return next;
+    });
+  }
+  const { temp, topP, maxTok } = state;
   const slider = (label: string, hint: string, v: [boolean, number], set: (v: [boolean, number]) => void, min: number, max: number, step: number) => (
     <Row label={label} hint={hint}>
       <span className="flex items-center gap-2">
@@ -127,6 +172,9 @@ function SamplingSection() {
       </span>
     </Row>
   );
+  const setTemp = (v: [boolean, number]) => set('temp', v);
+  const setTopP = (v: [boolean, number]) => set('topP', v);
+  const setMaxTok = (v: [boolean, number]) => set('maxTok', v);
   return (
     <div className="divide-y divide-line">
       {slider('Temperature', 'Higher = more creative', temp, setTemp, 0, 2, 0.05)}
@@ -137,48 +185,115 @@ function SamplingSection() {
 }
 
 function SystemSection() {
-  const [text, setText] = useState('You are a careful coding assistant. Prefer minimal diffs and always run the tests you touch.');
+  const { conversationId, pushToast } = useStudio();
+  const { data: conversation } = useConversation(conversationId);
+  const [text, setText] = useState<string | null>(null);
+  const shown = text ?? conversation?.systemPrompt ?? '';
+  if (conversationId === null) {
+    return <p className="py-4 text-center text-xs text-ink-faint">Open a chat to set its system prompt.</p>;
+  }
+  async function save() {
+    try {
+      await apiFetch(`/api/conversations/${conversationId}`, { method: 'PUT', body: JSON.stringify({ systemPrompt: shown }) });
+      pushToast('ok', 'System prompt saved to this chat');
+    } catch (err) {
+      pushToast('error', err instanceof Error ? err.message : 'Save failed');
+    }
+  }
   return (
     <div>
-      <p className="mb-2 text-xs text-ink-dim">Optional. Sent as a system message before every chat.</p>
-      <textarea value={text} onChange={e => setText(e.target.value)} rows={6} className="w-full rounded-lg border border-line bg-base-0 p-2.5 font-mono text-xs outline-none focus-visible:ring-2 focus-visible:ring-accent" />
+      <p className="mb-2 text-xs text-ink-dim">Optional. Sent as a system message before this chat.</p>
+      <textarea value={shown} onChange={e => setText(e.target.value)} rows={6} className="w-full rounded-lg border border-line bg-base-0 p-2.5 font-mono text-xs outline-none focus-visible:ring-2 focus-visible:ring-accent" />
+      <button type="button" onClick={() => void save()} className="mt-2 rounded-lg border border-line px-3 py-1.5 text-xs outline-none hover:bg-base-2 focus-visible:ring-2 focus-visible:ring-accent">Save to chat</button>
     </div>
   );
 }
 
+function storedBool(key: string, fallback: boolean): boolean {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw === null ? fallback : raw === '1';
+  } catch {
+    return fallback;
+  }
+}
+
 function SearchSection() {
-  const [on, setOn] = useState(true);
+  const [on, setOn] = useState(() => storedBool('playground.webSearch', true));
+  function flip() {
+    const next = !on;
+    setOn(next);
+    try {
+      localStorage.setItem('playground.webSearch', next ? '1' : '0');
+    } catch {
+      // Private mode: preference just doesn't persist.
+    }
+  }
   return (
     <div className="divide-y divide-line">
-      <Row label="Web search" hint="Engines sync from the catalog"><Toggle on={on} onFlip={() => setOn(!on)} label="Web search" /></Row>
-      <Row label="Engines" hint="2 configured"><span className="font-mono text-xs text-ink-dim">tavily · exa</span></Row>
+      <Row label="Web search" hint="Engines sync from the catalog"><Toggle on={on} onFlip={flip} label="Web search" /></Row>
     </div>
   );
 }
 
 function VoiceSection() {
+  const { data: voice } = useVoiceSettings();
+  const { pushToast } = useStudio();
+  const queryClient = useQueryClient();
+  async function save(patch: Record<string, unknown>) {
+    try {
+      await apiFetch('/api/settings/voice', { method: 'PUT', body: JSON.stringify(patch) });
+      void queryClient.invalidateQueries({ queryKey: ['voice-settings'] });
+    } catch (err) {
+      pushToast('error', err instanceof Error ? err.message : 'Save failed');
+    }
+  }
   return (
     <div className="divide-y divide-line">
-      <Row label="Dictation model" hint="Speech-to-text for the mic"><span className="text-xs">whisper-large-v3-turbo</span></Row>
-      <Row label="Voice output" hint="Read chat responses aloud"><Toggle on={false} onFlip={() => {}} label="Voice output" /></Row>
+      <Row label="Dictation model" hint="Speech-to-text for the mic"><span className="font-mono text-xs">{voice?.sttModel ?? 'auto'}</span></Row>
+      <Row label="Voice output" hint="Read chat responses aloud">
+        <Toggle on={!!voice?.autoSpeakChat} onFlip={() => void save({ autoSpeakChat: !voice?.autoSpeakChat })} label="Voice output" />
+      </Row>
     </div>
   );
 }
 
 function PermissionsSection() {
-  const [level, setLevel] = useState('risky');
+  const { data } = useApprovalRules();
+  const { pushToast } = useStudio();
+  const queryClient = useQueryClient();
+  const rules = data?.rules ?? [];
+  const allow = rules.filter(r => r.decision === 'allow');
+  const deny = rules.filter(r => r.decision === 'deny');
+
+  async function clear(tool: string) {
+    try {
+      await apiFetch(`/api/agents/approval-rules/${encodeURIComponent(tool)}`, { method: 'DELETE' });
+      void queryClient.invalidateQueries({ queryKey: ['approval-rules'] });
+    } catch (err) {
+      pushToast('error', err instanceof Error ? err.message : 'Clear failed');
+    }
+  }
+
   return (
     <div className="divide-y divide-line">
-      <Row label="Permission level" hint="What the agent may do without asking">
-        <select value={level} onChange={e => setLevel(e.target.value)} className="rounded-lg border border-line bg-base-1 px-2 py-1.5 text-xs outline-none focus-visible:ring-2 focus-visible:ring-accent">
-          <option value="always">Ask always</option>
-          <option value="risky">Ask for risky</option>
-          <option value="auto">Auto</option>
-        </select>
+      <Row label="Always allow" hint="Tools pinned from approval prompts">
+        <span className="font-mono text-xs text-ok">{allow.length} rule{allow.length === 1 ? '' : 's'}</span>
       </Row>
-      <Row label="Protected paths" hint="Never edited without approval"><span className="font-mono text-xs text-ink-dim">.env, *.pem, main</span></Row>
-      <Row label="Always allow" hint="shell_exec · npm test"><span className="font-mono text-xs text-ok">2 rules</span></Row>
-      <Row label="Always deny" hint="rm -rf /, shutdown"><span className="font-mono text-xs text-bad">2 rules</span></Row>
+      {allow.map(r => (
+        <Row key={r.tool} label={r.tool} hint="tap Clear to ask again">
+          <button type="button" onClick={() => void clear(r.tool)} className="rounded-lg border border-line px-2 py-1 text-[11px] outline-none hover:bg-base-2 focus-visible:ring-2 focus-visible:ring-accent">Clear</button>
+        </Row>
+      ))}
+      <Row label="Always deny" hint="Tools refused automatically">
+        <span className="font-mono text-xs text-bad">{deny.length} rule{deny.length === 1 ? '' : 's'}</span>
+      </Row>
+      {deny.map(r => (
+        <Row key={r.tool} label={r.tool} hint="tap Clear to ask again">
+          <button type="button" onClick={() => void clear(r.tool)} className="rounded-lg border border-line px-2 py-1 text-[11px] outline-none hover:bg-base-2 focus-visible:ring-2 focus-visible:ring-accent">Clear</button>
+        </Row>
+      ))}
+      {rules.length === 0 && <p className="py-3 text-center text-xs text-ink-faint">No pinned rules — approvals ask every time.</p>}
     </div>
   );
 }
@@ -224,10 +339,30 @@ function ShortcutsSection() {
 
 function DataSection() {
   const { pushToast } = useStudio();
+  async function exportData() {
+    try {
+      const { backup } = await apiFetch<{ backup: { id: number; filename: string } }>('/api/backups', { method: 'POST' });
+      const token = localStorage.getItem('omnipix_dashboard_token');
+      const res = await fetch(`/api/backups/${backup.id}/download`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+      });
+      if (!res.ok) throw new Error(`Download failed (${res.status})`);
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = backup.filename;
+      link.click();
+      URL.revokeObjectURL(url);
+      pushToast('ok', 'Backup downloaded');
+    } catch (err) {
+      pushToast('error', err instanceof Error ? err.message : 'Export failed');
+    }
+  }
   return (
     <div className="divide-y divide-line">
-      <Row label="Export data" hint="Chats, settings, and keys as encrypted JSON">
-        <button type="button" onClick={() => pushToast('ok', 'Export downloaded')} className="rounded-lg border border-line px-3 py-1.5 text-xs outline-none hover:bg-base-2 focus-visible:ring-2 focus-visible:ring-accent">Export</button>
+      <Row label="Export data" hint="Full encrypted database backup">
+        <button type="button" onClick={() => void exportData()} className="rounded-lg border border-line px-3 py-1.5 text-xs outline-none hover:bg-base-2 focus-visible:ring-2 focus-visible:ring-accent">Export</button>
       </Row>
       <Row label="Diagnostics" hint="Redacted support bundle"><span className="font-mono text-xs text-ink-dim">/api/diagnostics/bundle</span></Row>
       <Row label="Storage" hint="Local-first: everything lives on this machine"><span className="font-mono text-xs text-ok">local</span></Row>

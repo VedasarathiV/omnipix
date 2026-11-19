@@ -1,6 +1,9 @@
 import { useEffect, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, KeyRound, RotateCcw, WifiOff } from 'lucide-react';
 import { useStudio } from '../state/store';
+import { apiFetch } from '../lib/api';
+import { useRun } from '../lib/queries';
 
 /** No-keys banner (§1 keep). Driven by store.hasKeys (wired to /api/keys live). */
 export function KeyBanner() {
@@ -24,30 +27,38 @@ export function KeyBanner() {
   );
 }
 
-/** Error banner with Fix/Retry, shown when the run fails. */
+/** Error banner with Retry, shown when the active run fails. */
 export function RunErrorBanner() {
-  const { runStatus, setRunStatus, pushToast } = useStudio();
-  if (runStatus !== 'failed') return null;
+  const { activeRunId, pushToast } = useStudio();
+  const { data: run } = useRun(activeRunId, true);
+  const queryClient = useQueryClient();
+  if (!run || (run.status !== 'error' && run.status !== 'stopped')) return null;
+
+  async function resume() {
+    if (activeRunId === null) return;
+    try {
+      await apiFetch(`/api/agents/runs/${activeRunId}/resume`, { method: 'POST' });
+      pushToast('ok', 'Run resumed from the step log');
+      void queryClient.invalidateQueries({ queryKey: ['agent-run', activeRunId] });
+      void queryClient.invalidateQueries({ queryKey: ['agent-runs'] });
+    } catch (err) {
+      pushToast('error', err instanceof Error ? err.message : 'Resume failed');
+    }
+  }
+
   return (
     <div role="alert" className="flex items-center gap-2 border-b border-bad/40 bg-bad/10 px-4 py-2">
       <AlertTriangle className="size-4 shrink-0 text-bad" strokeWidth={1.5} />
       <p className="min-w-0 flex-1 truncate text-xs">
-        <span className="font-semibold">Run failed:</span>
-        <span className="font-mono text-ink-dim"> oauth.test.ts — expected 401, got 200</span>
+        <span className="font-semibold">Run {run.status}:</span>
+        <span className="font-mono text-ink-dim"> {(run.error ?? 'stopped').slice(0, 160)}</span>
       </p>
       <button
         type="button"
-        onClick={() => { setRunStatus('running'); pushToast('info', 'Fixing the failure…'); }}
-        className="shrink-0 rounded-lg border border-line bg-base-1 px-2.5 py-1 text-xs outline-none hover:bg-base-2 focus-visible:ring-2 focus-visible:ring-accent"
-      >
-        Fix
-      </button>
-      <button
-        type="button"
-        onClick={() => setRunStatus('running')}
+        onClick={() => void resume()}
         className="flex shrink-0 items-center gap-1 rounded-lg bg-bad px-2.5 py-1 text-xs font-semibold text-base-0 outline-none hover:opacity-90 focus-visible:ring-2 focus-visible:ring-accent"
       >
-        <RotateCcw className="size-3" strokeWidth={1.5} /> Retry
+        <RotateCcw className="size-3" strokeWidth={1.5} /> Resume
       </button>
     </div>
   );

@@ -1,25 +1,23 @@
-import { useState } from 'react';
-import { Bot, Check, Play, Plus, Square, Users, X } from 'lucide-react';
-import { AGENTS, TIMELINE } from '../mock/data';
+import { useEffect, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
+import { Brain, Check, Play, Plus, Square, Trash2, Users } from 'lucide-react';
 import { StatusDot } from '../components/StatusDot';
 import { EmptyState } from '../components/EmptyState';
+import { ApprovalPrompt } from '../components/ApprovalPrompt';
 import { useStudio } from '../state/store';
+import { apiFetch } from '../lib/api';
+import { useApprovals, useAutomations, useGroups, useMemories, useRuns, type AgentRun } from '../lib/queries';
 
 const TABS = ['Runs', 'Teams', 'Approvals', 'Hooks', 'Automations', 'Assistant'] as const;
 
 export function AgentsPage() {
   const [tab, setTab] = useState<(typeof TABS)[number]>('Runs');
-  const { setAgentEditor } = useStudio();
   return (
     <div className="mx-auto max-w-5xl px-5 py-4">
       <div className="mb-4 flex items-center gap-3">
         <h1 className="text-lg font-semibold">Agents</h1>
-        <span className="flex-1" />
-        <button type="button" onClick={() => setAgentEditor('new')} className="flex items-center gap-1.5 rounded-lg bg-accent px-3 py-1.5 text-xs font-semibold text-base-0 outline-none hover:opacity-90 focus-visible:ring-2 focus-visible:ring-accent">
-          <Plus className="size-3.5" strokeWidth={1.5} /> New agent
-        </button>
       </div>
-      <div className="mb-4 flex gap-1 border-b border-line" role="tablist" aria-label="Agents sections">
+      <div className="mb-4 flex gap-1 overflow-x-auto border-b border-line" role="tablist" aria-label="Agents sections">
         {TABS.map(t => (
           <button
             key={t}
@@ -27,7 +25,7 @@ export function AgentsPage() {
             role="tab"
             aria-selected={tab === t}
             onClick={() => setTab(t)}
-            className={`border-b-2 px-3 py-2 text-[13px] outline-none focus-visible:ring-2 focus-visible:ring-accent ${
+            className={`shrink-0 border-b-2 px-3 py-2 text-[13px] outline-none focus-visible:ring-2 focus-visible:ring-accent ${
               tab === t ? 'border-accent font-medium' : 'border-transparent text-ink-dim hover:text-ink'
             }`}
           >
@@ -46,42 +44,97 @@ export function AgentsPage() {
 }
 
 function RunsTab() {
-  const { pushToast, setAgentEditor } = useStudio();
+  const { data } = useRuns();
+  const { setActiveRunId, setRail, activeRunId, pushToast } = useStudio();
+  const queryClient = useQueryClient();
+  const runs = data?.runs ?? [];
+  if (!runs.length) {
+    return <EmptyState icon={<Play className="size-5" strokeWidth={1.5} />} title="No agent runs yet" body="Send a message in Agent mode and the run lands here with its full step trace." />;
+  }
+  async function stop(id: number) {
+    try {
+      await apiFetch(`/api/agents/runs/${id}/stop`, { method: 'POST' });
+      pushToast('ok', `Run #${id} stopped`);
+      void queryClient.invalidateQueries({ queryKey: ['agent-runs'] });
+    } catch (err) {
+      pushToast('error', err instanceof Error ? err.message : 'Stop failed');
+    }
+  }
   return (
-    <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
-      {AGENTS.map(agent => (
-        <article key={agent.id} className="rounded-xl border border-line bg-base-1 p-4">
+    <div className="space-y-2">
+      {runs.map(run => <RunCard key={run.id} run={run} active={run.id === activeRunId} onOpen={() => { setActiveRunId(run.id); setRail('chat'); }} onStop={() => void stop(run.id)} />)}
+    </div>
+  );
+}
+
+function runStatus(run: AgentRun): 'running' | 'done' | 'failed' | 'idle' | 'waiting' {
+  if (run.status === 'running') return 'running';
+  if (run.status === 'awaiting_approval') return 'waiting';
+  if (run.status === 'done') return 'done';
+  if (run.status === 'error') return 'failed';
+  return 'idle';
+}
+
+function RunCard({ run, active, onOpen, onStop }: { run: AgentRun; active: boolean; onOpen: () => void; onStop: () => void }) {
+  return (
+    <article className={`rounded-xl border bg-base-1 p-4 ${active ? 'border-accent/60' : 'border-line'}`}>
+      <div className="flex items-center gap-2">
+        <StatusDot status={runStatus(run)} pulse />
+        <button type="button" onClick={onOpen} className="min-w-0 flex-1 truncate text-left text-sm font-medium outline-none hover:underline focus-visible:ring-2 focus-visible:ring-accent">
+          #{run.id} · {run.goal}
+        </button>
+        <span className="shrink-0 font-mono text-[11px] text-ink-dim">
+          {run.steps_used} steps · ${(run.cost_usd ?? 0).toFixed(2)}
+        </span>
+        {(run.status === 'running' || run.status === 'awaiting_approval') && (
+          <button
+            type="button"
+            onClick={onStop}
+            className="flex shrink-0 items-center gap-1 rounded-lg border border-line px-2 py-1 text-xs outline-none hover:bg-base-2 focus-visible:ring-2 focus-visible:ring-accent"
+          >
+            <Square className="size-3" strokeWidth={1.5} /> Stop
+          </button>
+        )}
+      </div>
+      {run.error && <p className="mt-1.5 truncate font-mono text-[11px] text-bad">{run.error}</p>}
+      {run.final_answer && <p className="mt-1.5 line-clamp-2 text-xs text-ink-dim">{run.final_answer}</p>}
+    </article>
+  );
+}
+
+function TeamsTab() {
+  const { data } = useGroups();
+  const { pushToast } = useStudio();
+  const queryClient = useQueryClient();
+  const groups = data?.groups ?? [];
+  if (!groups.length) {
+    return <EmptyState icon={<Users className="size-5" strokeWidth={1.5} />} title="No teams yet" body="Multi-agent crews with a shared workspace appear here." />;
+  }
+  async function act(id: number, action: 'stop' | 'resume') {
+    try {
+      await apiFetch(`/api/agents/groups/${id}/${action}`, { method: 'POST' });
+      pushToast('ok', `Group #${id} ${action === 'stop' ? 'stopped' : 'resumed'}`);
+      void queryClient.invalidateQueries({ queryKey: ['agent-groups'] });
+    } catch (err) {
+      pushToast('error', err instanceof Error ? err.message : `${action} failed`);
+    }
+  }
+  return (
+    <div className="space-y-2">
+      {groups.map(g => (
+        <article key={g.id} className="rounded-xl border border-line bg-base-1 p-4">
           <div className="flex items-center gap-2">
-            <span className="flex size-8 items-center justify-center rounded-lg bg-base-2">
-              <Bot className="size-4 text-ink-dim" strokeWidth={1.5} />
-            </span>
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-semibold">{agent.name}</p>
-              <p className="font-mono text-[11px] text-ink-dim">{agent.model} · {agent.runs} runs</p>
-            </div>
-            <StatusDot status={agent.status} pulse />
+            <Users className="size-4 shrink-0 text-ink-dim" strokeWidth={1.5} />
+            <p className="min-w-0 flex-1 truncate text-sm font-medium">#{g.id} · {g.goal}</p>
+            <span className="shrink-0 font-mono text-[11px] text-ink-dim">{g.done_count}/{g.task_count} · {g.status}</span>
           </div>
-          <p className="mt-2 line-clamp-2 text-xs text-ink-dim">{agent.systemPrompt}</p>
-          <div className="mt-2 flex flex-wrap gap-1">
-            {agent.tools.map(t => (
-              <span key={t} className="rounded-md bg-base-2 px-1.5 py-0.5 font-mono text-[10px] text-ink-dim">{t}</span>
-            ))}
-          </div>
-          <div className="mt-3 flex gap-1.5">
-            <button
-              type="button"
-              onClick={() => pushToast('info', `Test run started for ${agent.name}`)}
-              className="flex flex-1 items-center justify-center gap-1 rounded-lg border border-line px-2 py-1.5 text-xs outline-none hover:bg-base-2 focus-visible:ring-2 focus-visible:ring-accent"
-            >
-              <Play className="size-3.5" strokeWidth={1.5} /> Test run
-            </button>
-            <button
-              type="button"
-              onClick={() => setAgentEditor(agent.id)}
-              className="flex-1 rounded-lg border border-line px-2 py-1.5 text-xs outline-none hover:bg-base-2 focus-visible:ring-2 focus-visible:ring-accent"
-            >
-              Edit
-            </button>
+          <div className="mt-2.5 flex gap-1.5">
+            {(g.status === 'running' || g.status === 'awaiting_approval') && (
+              <button type="button" onClick={() => void act(g.id, 'stop')} className="rounded-lg border border-line px-2.5 py-1.5 text-xs outline-none hover:bg-base-2 focus-visible:ring-2 focus-visible:ring-accent">Stop</button>
+            )}
+            {(g.status === 'stopped' || g.status === 'error') && (
+              <button type="button" onClick={() => void act(g.id, 'resume')} className="rounded-lg border border-line px-2.5 py-1.5 text-xs outline-none hover:bg-base-2 focus-visible:ring-2 focus-visible:ring-accent">Resume</button>
+            )}
           </div>
         </article>
       ))}
@@ -89,99 +142,185 @@ function RunsTab() {
   );
 }
 
-function TeamsTab() {
-  const { pushToast } = useStudio();
+function ApprovalsTab() {
+  const { data } = useApprovals();
+  const pending = (data?.approvals ?? []).filter(a => a.status === 'pending');
+  if (!pending.length) {
+    return <EmptyState icon={<Check className="size-5" strokeWidth={1.5} />} title="Inbox zero" body="Parked tool calls land here for a human decision." />;
+  }
   return (
     <div className="space-y-3">
-      <article className="rounded-xl border border-line bg-base-1 p-4">
-        <div className="flex items-center gap-2">
-          <Users className="size-4 text-ink-dim" strokeWidth={1.5} />
-          <p className="text-sm font-semibold">Auth crew — 3 tasks, 1 running</p>
-          <span className="ml-auto flex items-center gap-1.5 font-mono text-[11px] text-ink-dim"><StatusDot status="running" pulse /> running</span>
-        </div>
-        <div className="mt-2 space-y-1">
-          {TIMELINE.slice(2, 5).map(s => (
-            <div key={s.id} className="flex items-center gap-2 rounded-lg bg-base-0 px-2.5 py-1.5 text-xs">
-              <StatusDot status={s.status} />
-              <span className="min-w-0 flex-1 truncate">{s.title}</span>
-              <span className="font-mono text-[10px] text-ink-faint">coder</span>
-            </div>
-          ))}
-        </div>
-        <div className="mt-3 flex gap-1.5">
-          <button type="button" onClick={() => pushToast('info', 'Group paused')} className="flex items-center gap-1 rounded-lg border border-line px-3 py-1.5 text-xs outline-none hover:bg-base-2 focus-visible:ring-2 focus-visible:ring-accent"><Square className="size-3.5" strokeWidth={1.5} /> Pause</button>
-          <button type="button" onClick={() => pushToast('ok', 'Group resumed')} className="flex items-center gap-1 rounded-lg border border-line px-3 py-1.5 text-xs outline-none hover:bg-base-2 focus-visible:ring-2 focus-visible:ring-accent"><Play className="size-3.5" strokeWidth={1.5} /> Resume</button>
-        </div>
-      </article>
-    </div>
-  );
-}
-
-function ApprovalsTab() {
-  const { approval, decideApproval } = useStudio();
-  if (!approval) return <EmptyState icon={<Check className="size-5" strokeWidth={1.5} />} title="Inbox zero" body="Parked tool calls land here for a human decision." />;
-  return (
-    <article className="rounded-xl border border-warn/50 bg-base-1 p-4">
-      <p className="text-sm font-semibold">shell_exec · high risk</p>
-      <pre className="mt-2 overflow-x-auto rounded-lg bg-base-0 p-2.5 font-mono text-xs break-all whitespace-pre-wrap">{approval.command}</pre>
-      <div className="mt-3 flex gap-1.5">
-        <button type="button" onClick={() => decideApproval('once')} className="rounded-lg bg-ok px-3 py-1.5 text-xs font-semibold text-base-0 outline-none hover:opacity-90 focus-visible:ring-2 focus-visible:ring-accent">Allow once</button>
-        <button type="button" onClick={() => decideApproval('always')} className="rounded-lg border border-line px-3 py-1.5 text-xs outline-none hover:bg-base-2 focus-visible:ring-2 focus-visible:ring-accent">Always allow</button>
-        <button type="button" onClick={() => decideApproval('deny')} className="flex items-center gap-1 rounded-lg border border-bad/50 px-3 py-1.5 text-xs text-bad outline-none hover:bg-bad/10 focus-visible:ring-2 focus-visible:ring-accent"><X className="size-3.5" strokeWidth={1.5} /> Deny</button>
-      </div>
-    </article>
-  );
-}
-
-const HOOKS = [
-  { event: 'pre-tool · shell_exec', action: 'Block rm -rf outside workspace', on: true },
-  { event: 'post-edit', action: 'Run prettier on changed files', on: true },
-  { event: 'pre-commit', action: 'Require tests green', on: false },
-];
-
-function HooksTab() {
-  const { pushToast } = useStudio();
-  return (
-    <div className="space-y-2">
-      {HOOKS.map(h => (
-        <div key={h.event} className="flex items-center gap-3 rounded-xl border border-line bg-base-1 px-4 py-3">
-          <div className="min-w-0 flex-1">
-            <p className="font-mono text-xs font-medium">{h.event}</p>
-            <p className="truncate text-xs text-ink-dim">{h.action}</p>
-          </div>
-          <button
-            type="button"
-            role="switch"
-            aria-checked={h.on}
-            aria-label={h.event}
-            onClick={() => pushToast('ok', `Hook ${h.on ? 'disabled' : 'enabled'}`)}
-            className={`relative h-5 w-9 shrink-0 rounded-full outline-none focus-visible:ring-2 focus-visible:ring-accent ${h.on ? 'bg-accent' : 'bg-base-2'}`}
-          >
-            <span className={`absolute top-0.5 size-4 rounded-full bg-white transition-all ${h.on ? 'left-[18px]' : 'left-0.5'}`} />
-          </button>
-        </div>
+      {pending.map(a => (
+        <ApprovalPrompt
+          key={a.id}
+          tool={a.tool}
+          approval={{
+            id: String(a.id),
+            kind: a.tool === 'shell_exec' ? 'command' : a.tool.includes('delete') ? 'delete' : 'network',
+            command: a.summary || a.tool,
+            cwd: `run #${a.run_id}`,
+            risk: (a.risk as 'low' | 'medium' | 'high') ?? 'medium',
+          }}
+        />
       ))}
     </div>
   );
 }
 
-const AUTOMATIONS = [
-  { name: 'nightly-eval', schedule: '0 2 * * *', last: 'done · 96%', on: true },
-  { name: 'inbox-digest', schedule: '0 8 * * *', last: 'done', on: true },
-  { name: 'dep-audit', schedule: '0 9 * * 1', last: 'never run', on: false },
-];
+interface HookRow {
+  id: number;
+  name: string;
+  event: string;
+  tool_filter: string;
+  command: string;
+  enabled: number;
+}
 
-function AutomationsTab() {
+function HooksTab() {
   const { pushToast } = useStudio();
+  const [hooks, setHooks] = useState<HookRow[] | null>(null);
+  const [name, setName] = useState('');
+  const [command, setCommand] = useState('');
+  const [event, setEvent] = useState('pre-tool');
+
+  async function refresh() {
+    try {
+      const res = await apiFetch<{ hooks: HookRow[] }>('/api/agents/hooks');
+      setHooks(res.hooks);
+    } catch {
+      setHooks([]);
+    }
+  }
+  useEffect(() => {
+    void refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function toggle(hook: HookRow) {
+    try {
+      await apiFetch(`/api/agents/hooks/${hook.id}`, { method: 'PATCH', body: JSON.stringify({ enabled: !hook.enabled }) });
+      void refresh();
+    } catch (err) {
+      pushToast('error', err instanceof Error ? err.message : 'Toggle failed');
+    }
+  }
+
+  async function create() {
+    if (!name.trim() || !command.trim()) {
+      pushToast('error', 'Name and command are required');
+      return;
+    }
+    try {
+      await apiFetch('/api/agents/hooks', { method: 'POST', body: JSON.stringify({ name, event, command }) });
+      setName('');
+      setCommand('');
+      pushToast('ok', 'Hook created');
+      void refresh();
+    } catch (err) {
+      pushToast('error', err instanceof Error ? err.message : 'Create failed');
+    }
+  }
+
+  async function remove(id: number) {
+    try {
+      await apiFetch(`/api/agents/hooks/${id}`, { method: 'DELETE' });
+      void refresh();
+    } catch (err) {
+      pushToast('error', err instanceof Error ? err.message : 'Delete failed');
+    }
+  }
+
   return (
     <div className="space-y-2">
-      {AUTOMATIONS.map(a => (
-        <div key={a.name} className="flex items-center gap-3 rounded-xl border border-line bg-base-1 px-4 py-3">
+      <div className="flex flex-wrap gap-1.5 rounded-xl border border-line bg-base-1 p-3">
+        <input value={name} onChange={e => setName(e.target.value)} placeholder="Hook name" aria-label="Hook name" className="min-w-32 flex-1 rounded-lg border border-line bg-base-0 px-2.5 py-1.5 text-xs outline-none placeholder:text-ink-faint focus-visible:ring-2 focus-visible:ring-accent" />
+        <select value={event} onChange={e => setEvent(e.target.value)} aria-label="Hook event" className="rounded-lg border border-line bg-base-1 px-2 py-1.5 text-xs outline-none focus-visible:ring-2 focus-visible:ring-accent">
+          <option value="pre-tool">pre-tool</option>
+          <option value="post-tool">post-tool</option>
+          <option value="pre-edit">pre-edit</option>
+          <option value="post-edit">post-edit</option>
+        </select>
+        <input value={command} onChange={e => setCommand(e.target.value)} placeholder="command to run" aria-label="Hook command" className="min-w-40 flex-[2] rounded-lg border border-line bg-base-0 px-2.5 py-1.5 font-mono text-xs outline-none placeholder:text-ink-faint focus-visible:ring-2 focus-visible:ring-accent" />
+        <button type="button" onClick={() => void create()} className="flex items-center gap-1 rounded-lg bg-accent px-3 py-1.5 text-xs font-semibold text-base-0 outline-none hover:opacity-90 focus-visible:ring-2 focus-visible:ring-accent">
+          <Plus className="size-3.5" strokeWidth={1.5} /> Add
+        </button>
+      </div>
+      {hooks === null && <p className="animate-pulse text-sm text-ink-dim">Loading hooks…</p>}
+      {(hooks ?? []).map(h => (
+        <div key={h.id} className="flex items-center gap-3 rounded-xl border border-line bg-base-1 px-4 py-3">
           <div className="min-w-0 flex-1">
-            <p className="text-[13px] font-medium">{a.name}</p>
-            <p className="font-mono text-[11px] text-ink-dim">{a.schedule} · {a.last}</p>
+            <p className="truncate text-[13px] font-medium">{h.name} <span className="font-mono text-[11px] text-ink-dim">· {h.event}{h.tool_filter ? ` · ${h.tool_filter}` : ''}</span></p>
+            <p className="truncate font-mono text-[11px] text-ink-dim">{h.command}</p>
           </div>
-          <button type="button" onClick={() => pushToast('info', `Manual run of ${a.name}`)} className="rounded-lg border border-line px-2.5 py-1.5 text-xs outline-none hover:bg-base-2 focus-visible:ring-2 focus-visible:ring-accent">Run now</button>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={!!h.enabled}
+            aria-label={h.name}
+            onClick={() => void toggle(h)}
+            className={`relative h-5 w-9 shrink-0 rounded-full outline-none focus-visible:ring-2 focus-visible:ring-accent ${h.enabled ? 'bg-accent' : 'bg-base-2'}`}
+          >
+            <span className={`absolute top-0.5 size-4 rounded-full bg-white transition-all ${h.enabled ? 'left-[18px]' : 'left-0.5'}`} />
+          </button>
+          <button
+            type="button"
+            aria-label={`Delete ${h.name}`}
+            onClick={() => void remove(h.id)}
+            className="rounded-md p-1.5 text-ink-faint outline-none hover:text-bad focus-visible:ring-2 focus-visible:ring-accent"
+          >
+            <Trash2 className="size-3.5" strokeWidth={1.5} />
+          </button>
+        </div>
+      ))}
+      {hooks?.length === 0 && <p className="py-4 text-center text-xs text-ink-faint">No hooks — deterministic scripts that run around tool calls.</p>}
+    </div>
+  );
+}
+
+function AutomationsTab() {
+  const { data } = useAutomations();
+  const { pushToast } = useStudio();
+  const queryClient = useQueryClient();
+  const automations = data?.automations ?? [];
+  if (!automations.length) {
+    return <EmptyState icon={<Play className="size-5" strokeWidth={1.5} />} title="No automations" body="Scheduled agent goals with a review-first safety gate." />;
+  }
+  async function toggle(id: number, enabled: boolean) {
+    try {
+      await apiFetch(`/api/automations/${id}`, { method: 'PATCH', body: JSON.stringify({ enabled: !enabled }) });
+      void queryClient.invalidateQueries({ queryKey: ['automations'] });
+    } catch (err) {
+      pushToast('error', err instanceof Error ? err.message : 'Toggle failed');
+    }
+  }
+  async function runNow(id: number) {
+    try {
+      await apiFetch(`/api/automations/${id}/run`, { method: 'POST' });
+      pushToast('ok', 'Manual run started — review it before the schedule fires');
+      void queryClient.invalidateQueries({ queryKey: ['automations'] });
+    } catch (err) {
+      pushToast('error', err instanceof Error ? err.message : 'Run failed');
+    }
+  }
+  return (
+    <div className="space-y-2">
+      {automations.map(a => (
+        <div key={a.id} className="flex items-center gap-3 rounded-xl border border-line bg-base-1 px-4 py-3">
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-[13px] font-medium">{a.name}{!a.reviewed && <span className="ml-2 rounded-md bg-warn/15 px-1.5 py-0.5 text-[10px] font-semibold text-warn">NEEDS REVIEW</span>}</p>
+            <p className="truncate font-mono text-[11px] text-ink-dim">{a.schedule ?? 'manual'} · last: {a.last_status ?? 'never'}</p>
+          </div>
+          <button type="button" onClick={() => void runNow(a.id)} className="shrink-0 rounded-lg border border-line px-2.5 py-1.5 text-xs outline-none hover:bg-base-2 focus-visible:ring-2 focus-visible:ring-accent">Run now</button>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={!!a.enabled}
+            aria-label={a.name}
+            onClick={() => void toggle(a.id, !!a.enabled)}
+            className={`relative h-5 w-9 shrink-0 rounded-full outline-none focus-visible:ring-2 focus-visible:ring-accent ${a.enabled ? 'bg-accent' : 'bg-base-2'}`}
+          >
+            <span className={`absolute top-0.5 size-4 rounded-full bg-white transition-all ${a.enabled ? 'left-[18px]' : 'left-0.5'}`} />
+          </button>
         </div>
       ))}
       <p className="text-xs text-ink-dim">Schedules fire only after one reviewed manual run.</p>
@@ -190,11 +329,67 @@ function AutomationsTab() {
 }
 
 function AssistantTab() {
+  const { data } = useMemories();
+  const { pushToast } = useStudio();
+  const queryClient = useQueryClient();
+  const [key, setKey] = useState('');
+  const [value, setValue] = useState('');
+  const memories = data?.memories ?? [];
+
+  async function add() {
+    if (!key.trim() || !value.trim()) {
+      pushToast('error', 'Key and value are required');
+      return;
+    }
+    try {
+      await apiFetch('/api/memories', { method: 'POST', body: JSON.stringify({ key, value, scope: 'user' }) });
+      setKey('');
+      setValue('');
+      void queryClient.invalidateQueries({ queryKey: ['memories'] });
+    } catch (err) {
+      pushToast('error', err instanceof Error ? err.message : 'Add failed');
+    }
+  }
+
+  async function remove(id: number) {
+    try {
+      await apiFetch(`/api/memories/${id}`, { method: 'DELETE' });
+      void queryClient.invalidateQueries({ queryKey: ['memories'] });
+    } catch (err) {
+      pushToast('error', err instanceof Error ? err.message : 'Delete failed');
+    }
+  }
+
   return (
-    <EmptyState
-      icon={<Bot className="size-5" strokeWidth={1.5} />}
-      title="Daily assistant"
-      body="Briefings, reminders, and standup drafts. Nothing scheduled yet."
-    />
+    <div className="space-y-2">
+      <div className="flex flex-wrap gap-1.5 rounded-xl border border-line bg-base-1 p-3">
+        <input value={key} onChange={e => setKey(e.target.value)} placeholder="key" aria-label="Memory key" className="min-w-28 flex-1 rounded-lg border border-line bg-base-0 px-2.5 py-1.5 font-mono text-xs outline-none placeholder:text-ink-faint focus-visible:ring-2 focus-visible:ring-accent" />
+        <input value={value} onChange={e => setValue(e.target.value)} placeholder="what the assistant should remember" aria-label="Memory value" className="min-w-40 flex-[2] rounded-lg border border-line bg-base-0 px-2.5 py-1.5 text-xs outline-none placeholder:text-ink-faint focus-visible:ring-2 focus-visible:ring-accent" />
+        <button type="button" onClick={() => void add()} className="flex items-center gap-1 rounded-lg bg-accent px-3 py-1.5 text-xs font-semibold text-base-0 outline-none hover:opacity-90 focus-visible:ring-2 focus-visible:ring-accent">
+          <Plus className="size-3.5" strokeWidth={1.5} /> Remember
+        </button>
+      </div>
+      {memories.length === 0 && (
+        <EmptyState icon={<Brain className="size-5" strokeWidth={1.5} />} title="No memories" body="Things you teach the assistant live here, scoped per user and project." />
+      )}
+      {memories.map(m => (
+        <div key={m.id} className="flex items-center gap-3 rounded-xl border border-line bg-base-1 px-4 py-3">
+          <Brain className="size-4 shrink-0 text-ink-dim" strokeWidth={1.5} />
+          <div className="min-w-0 flex-1">
+            <p className="font-mono text-[13px] font-medium">{m.key}</p>
+            <p className="truncate text-xs text-ink-dim">{m.value}</p>
+          </div>
+          <span className="shrink-0 rounded-md bg-base-2 px-1.5 py-0.5 font-mono text-[10px] text-ink-dim">{m.scope}</span>
+          <button
+            type="button"
+            aria-label={`Forget ${m.key}`}
+            onClick={() => void remove(m.id)}
+            className="rounded-md p-1.5 text-ink-faint outline-none hover:text-bad focus-visible:ring-2 focus-visible:ring-accent"
+          >
+            <Trash2 className="size-3.5" strokeWidth={1.5} />
+          </button>
+        </div>
+      ))}
+    </div>
   );
 }

@@ -1,8 +1,7 @@
 import { createContext, useCallback, useContext, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import type { AgentMode, RailId, RightTab, RunStatus } from '../types';
-import { APPROVAL, CHANGES, TERMINALS } from '../mock/data';
-import type { Approval } from '../types';
+import type { AgentMode, RailId, RightTab } from '../types';
+
 
 export interface Toast {
   id: number;
@@ -17,8 +16,6 @@ interface StudioState {
   setMode: (m: AgentMode) => void;
   model: string;
   setModel: (m: string) => void;
-  runStatus: RunStatus;
-  setRunStatus: (s: RunStatus) => void;
   rightOpen: boolean;
   setRightOpen: (open: boolean) => void;
   rightTab: RightTab;
@@ -31,21 +28,24 @@ interface StudioState {
   setPaletteOpen: (open: boolean) => void;
   settingsOpen: boolean;
   setSettingsOpen: (open: boolean) => void;
-  approval: Approval | null;
-  decideApproval: (decision: 'once' | 'always' | 'deny') => void;
   acceptedFiles: Set<string>;
   acceptFile: (path: string, accept: boolean) => void;
-  acceptAll: () => void;
+  acceptAll: (paths: string[]) => void;
   toasts: Toast[];
   pushToast: (kind: Toast['kind'], text: string) => void;
   dismissToast: (id: number) => void;
-  terminalId: string;
-  setTerminalId: (id: string) => void;
-  elapsedSec: number;
   hasKeys: boolean;
   setHasKeys: (has: boolean) => void;
   agentEditor: string | null;
   setAgentEditor: (id: string | null) => void;
+  conversationId: number | null;
+  setConversationId: (id: number | null) => void;
+  activeRunId: number | null;
+  setActiveRunId: (id: number | null) => void;
+  streamingReply: string | null;
+  setStreamingReply: (text: string | null) => void;
+  dictation: { text: string; seq: number } | null;
+  setDictation: (d: { text: string; seq: number } | null) => void;
 }
 
 const StudioContext = createContext<StudioState | null>(null);
@@ -54,13 +54,21 @@ let toastSeq = 1;
 
 const RAILS: RailId[] = ['chat', 'agents', 'skills', 'keys', 'evals', 'search', 'docs', 'settings', 'notifications', 'voice'];
 
-function initialRail(): RailId {
+function hashParts(): { rail: RailId; runId: number | null; conversationId: number | null } {
   const hash = window.location.hash.replace(/^#\/?/, '');
-  return (RAILS as string[]).includes(hash) ? (hash as RailId) : 'chat';
+  const [path, query] = hash.split('?');
+  const params = new URLSearchParams(query ?? '');
+  const runId = Number(params.get('run'));
+  const conversationId = Number(params.get('chat'));
+  return {
+    rail: (RAILS as string[]).includes(path) ? (path as RailId) : 'chat',
+    runId: Number.isInteger(runId) && runId > 0 ? runId : null,
+    conversationId: Number.isInteger(conversationId) && conversationId > 0 ? conversationId : null,
+  };
 }
 
 export function StudioProvider({ children }: { children: ReactNode }) {
-  const [rail, setRailState] = useState<RailId>(initialRail);
+  const [rail, setRailState] = useState<RailId>(() => hashParts().rail);
   const setRail = useCallback((next: RailId) => {
     setRailState(next);
     try {
@@ -71,19 +79,20 @@ export function StudioProvider({ children }: { children: ReactNode }) {
   }, []);
   const [mode, setMode] = useState<AgentMode>('agent');
   const [model, setModel] = useState('auto');
-  const [runStatus, setRunStatus] = useState<RunStatus>('running');
   const [rightOpen, setRightOpen] = useState(true);
   const [rightTab, setRightTab] = useState<RightTab>('changes');
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [sidebarTab, setSidebarTab] = useState<'chats' | 'files'>('files');
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [approval, setApproval] = useState<Approval | null>(APPROVAL);
   const [acceptedFiles, setAcceptedFiles] = useState<Set<string>>(new Set());
   const [toasts, setToasts] = useState<Toast[]>([]);
-  const [terminalId, setTerminalId] = useState(TERMINALS[0].id);
   const [hasKeys, setHasKeys] = useState(true);
   const [agentEditor, setAgentEditor] = useState<string | null>(null);
+  const [conversationId, setConversationId] = useState<number | null>(() => hashParts().conversationId);
+  const [activeRunId, setActiveRunId] = useState<number | null>(() => hashParts().runId);
+  const [streamingReply, setStreamingReply] = useState<string | null>(null);
+  const [dictation, setDictation] = useState<{ text: string; seq: number } | null>(null);
 
   const pushToast = useCallback((kind: Toast['kind'], text: string) => {
     const id = toastSeq++;
@@ -97,19 +106,6 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     setToasts(current => current.filter(t => t.id !== id));
   }, []);
 
-  const decideApproval = useCallback((decision: 'once' | 'always' | 'deny') => {
-    setApproval(null);
-    setRunStatus(decision === 'deny' ? 'idle' : 'running');
-    setToasts(current => [
-      ...current.slice(-3),
-      {
-        id: toastSeq++,
-        kind: decision === 'deny' ? 'error' : 'ok',
-        text: decision === 'once' ? 'Allowed once — resuming' : decision === 'always' ? 'Always allowed for shell_exec' : 'Denied — agent will work around it',
-      },
-    ]);
-  }, []);
-
   const acceptFile = useCallback((path: string, accept: boolean) => {
     setAcceptedFiles(current => {
       const next = new Set(current);
@@ -119,23 +115,25 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
-  const acceptAll = useCallback(() => {
-    setAcceptedFiles(new Set(CHANGES.map(c => c.path)));
+  const acceptAll = useCallback((paths: string[]) => {
+    setAcceptedFiles(new Set(paths));
   }, []);
 
   const value = useMemo<StudioState>(() => ({
-    rail, setRail, mode, setMode, model, setModel, runStatus, setRunStatus,
+    rail, setRail, mode, setMode, model, setModel,
     rightOpen, setRightOpen, rightTab, setRightTab,
     sidebarOpen, setSidebarOpen, sidebarTab, setSidebarTab,
     paletteOpen, setPaletteOpen, settingsOpen, setSettingsOpen,
-    approval, decideApproval, acceptedFiles, acceptFile, acceptAll,
-    toasts, pushToast, dismissToast, terminalId, setTerminalId,
-    elapsedSec: 147, hasKeys, setHasKeys, agentEditor, setAgentEditor,
+    acceptedFiles, acceptFile, acceptAll,
+    toasts, pushToast, dismissToast,
+    hasKeys, setHasKeys, agentEditor, setAgentEditor,
+    conversationId, setConversationId, activeRunId, setActiveRunId,
+    streamingReply, setStreamingReply, dictation, setDictation,
   }), [
-    rail, mode, model, runStatus, rightOpen, rightTab, sidebarOpen, sidebarTab,
-    paletteOpen, settingsOpen, approval, acceptedFiles, toasts, terminalId,
-    hasKeys, agentEditor,
-    decideApproval, acceptFile, acceptAll, pushToast, dismissToast,
+    rail, mode, model, rightOpen, rightTab, sidebarOpen, sidebarTab,
+    paletteOpen, settingsOpen, acceptedFiles, toasts,
+    hasKeys, agentEditor, conversationId, activeRunId, streamingReply, dictation,
+    acceptFile, acceptAll, pushToast, dismissToast,
   ]);
 
   return <StudioContext.Provider value={value}>{children}</StudioContext.Provider>;

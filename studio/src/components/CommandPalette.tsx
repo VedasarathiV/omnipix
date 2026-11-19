@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Bot, FileText, FolderGit2, MessageSquare, Search, Trophy } from 'lucide-react';
-import { AGENTS, EVAL_RUNS, MODELS, WORKSPACES } from '../mock/data';
 import { useStudio } from '../state/store';
+import { useConversations, useEvalSuites, useModels, useRuns } from '../lib/queries';
 
 interface Entry {
   group: string;
@@ -12,7 +12,12 @@ interface Entry {
 }
 
 export function CommandPalette() {
-  const { paletteOpen, setPaletteOpen, setRail, setModel, setSettingsOpen, pushToast } = useStudio();
+  const { paletteOpen, setPaletteOpen, setRail, setModel, setSettingsOpen, pushToast, setConversationId, setActiveRunId, setMode } = useStudio();
+  const { data: runsData } = useRuns();
+  const { data: conversations = [] } = useConversations();
+  const { data: models = [] } = useModels();
+  const runs = runsData?.runs ?? [];
+  const { data: suitesData } = useEvalSuites();
   const [query, setQuery] = useState('');
   const [index, setIndex] = useState(0);
   const inputRef = useRef<HTMLInputElement>(null);
@@ -28,25 +33,29 @@ export function CommandPalette() {
   if (!paletteOpen) return null;
 
   const entries: Entry[] = [
-    ...WORKSPACES.map(w => ({
-      group: 'Workspace', label: `Switch to ${w.name}`, hint: w.branch, icon: FolderGit2,
-      run: () => pushToast('info', `Switched to workspace ${w.name}`),
+    ...runs.slice(0, 4).map(r => ({
+      group: 'Runs', label: `#${r.id} ${r.goal.slice(0, 50)}`, hint: r.status, icon: FolderGit2,
+      run: () => { setActiveRunId(r.id); setConversationId(null); setRail('chat'); },
     })),
-    ...MODELS.map(m => ({
-      group: 'Model', label: m.label, hint: 'Set model', icon: Bot,
-      run: () => { setModel(m.id); pushToast('ok', `Model: ${m.label}`); },
+    ...conversations.slice(0, 4).map(c => ({
+      group: 'Chats', label: c.title || 'Untitled chat', hint: `${c.messageCount} msgs`, icon: MessageSquare,
+      run: () => { setConversationId(c.id); setActiveRunId(null); setRail('chat'); },
     })),
-    ...AGENTS.map(a => ({
-      group: 'Agents', label: `Open agent ${a.name}`, hint: a.model, icon: Bot,
-      run: () => setRail('agents'),
+    { group: 'Model', label: 'Auto (fallback chain)', hint: 'Set model', icon: Bot, run: () => setModel('auto') },
+    ...models.filter(m => m.enabled).slice(0, 6).map(m => ({
+      group: 'Model', label: `${m.modelId} · ${m.platform}`, hint: 'Set model', icon: Bot,
+      run: () => { setModel(m.modelId); pushToast('ok', `Model: ${m.modelId}`); },
     })),
-    ...EVAL_RUNS.slice(0, 2).map(e => ({
-      group: 'Evals', label: `${e.suite} — ${e.passRate}%`, hint: e.ts, icon: Trophy,
+    ...(suitesData?.suites ?? []).slice(0, 3).map(s => ({
+      group: 'Evals', label: s.name, hint: 'Open evals', icon: Trophy,
       run: () => setRail('evals'),
     })),
-    { group: 'Go', label: 'Search chats', hint: '⌘6', icon: Search, run: () => setRail('search') },
+    { group: 'Mode', label: 'Ask mode', hint: '⌘.', icon: Bot, run: () => setMode('ask') },
+    { group: 'Mode', label: 'Plan mode', hint: '⌘.', icon: Bot, run: () => setMode('plan') },
+    { group: 'Mode', label: 'Agent mode', hint: '⌘.', icon: Bot, run: () => setMode('agent') },
+    { group: 'Go', label: 'Search everything', hint: '⌘6', icon: Search, run: () => setRail('search') },
     { group: 'Go', label: 'Open docs', hint: '⌘7', icon: FileText, run: () => setRail('docs') },
-    { group: 'Go', label: 'New chat', hint: '⌘N', icon: MessageSquare, run: () => { setRail('chat'); pushToast('ok', 'New chat started'); } },
+    { group: 'Go', label: 'New chat', hint: '⌘N', icon: MessageSquare, run: () => { setConversationId(null); setActiveRunId(null); setRail('chat'); } },
     { group: 'Go', label: 'Open settings', hint: '⌘,', icon: Search, run: () => setSettingsOpen(true) },
   ];
 

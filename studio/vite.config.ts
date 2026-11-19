@@ -6,5 +6,11 @@ export default defineConfig({
   plugins: [react(), tailwindcss()],
   // Relative asset URLs so the bundle also runs from file:// inside Electron.
   base: './',
-  server: { port: 5174 },
+  server: {
+    port: 5174,
+    proxy: {
+      '/api': 'http://127.0.0.1:3001',
+      '/v1': 'http://127.0.0.1:3001',
+    },
+  },
 });

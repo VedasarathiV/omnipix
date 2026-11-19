@@ -1,10 +1,9 @@
 import { useState } from 'react';
 import { Check, ChevronDown, Circle, Loader2, Pencil, X } from 'lucide-react';
-import { PLAN } from '../mock/data';
 import type { PlanStep, StepStatus } from '../types';
 
-export function PlanCard() {
-  const [steps, setSteps] = useState<PlanStep[]>(PLAN);
+export function PlanCard({ steps: initial }: { steps: PlanStep[] }) {
+  const [steps, setSteps] = useState<PlanStep[]>(initial);
   const [open, setOpen] = useState(true);
   const [editing, setEditing] = useState<string | null>(null);
 

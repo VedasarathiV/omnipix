@@ -4,6 +4,7 @@ import { ChangesPanel } from './ChangesPanel';
 import { FileTree } from './FileTree';
 import { LogsPanel, PreviewPanel, TerminalPanel } from './TerminalPreview';
 import { useStudio } from '../state/store';
+import { useRunDiff } from '../lib/queries';
 
 const TABS: Array<{ id: RightTab; label: string; icon: typeof FileDiff }> = [
   { id: 'changes', label: 'Changes', icon: FileDiff },
@@ -14,7 +15,9 @@ const TABS: Array<{ id: RightTab; label: string; icon: typeof FileDiff }> = [
 ];
 
 export function RightPanel() {
-  const { rightTab, setRightTab, setRightOpen } = useStudio();
+  const { rightTab, setRightTab, setRightOpen, activeRunId } = useStudio();
+  const { data: diff } = useRunDiff(activeRunId, null);
+  const changeCount = diff?.files.length ?? 0;
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center gap-0.5 overflow-x-auto border-b border-line p-1.5" role="tablist" aria-label="Inspector">
@@ -32,8 +35,8 @@ export function RightPanel() {
           >
             <tab.icon className="size-3.5" strokeWidth={1.5} />
             <span className="hidden xl:inline">{tab.label}</span>
-            {tab.id === 'changes' && (
-              <span className="rounded-full bg-accent px-1.5 text-[10px] font-bold text-base-0">3</span>
+            {tab.id === 'changes' && changeCount > 0 && (
+              <span className="rounded-full bg-accent px-1.5 text-[10px] font-bold text-base-0">{changeCount}</span>
             )}
           </button>
         ))}

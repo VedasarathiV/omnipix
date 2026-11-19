@@ -1,10 +1,13 @@
 import { useState } from 'react';
-import { Check, ChevronDown, FolderGit2, GitBranch, Plus } from 'lucide-react';
-import { WORKSPACES } from '../mock/data';
+import { useQueryClient } from '@tanstack/react-query';
+import { Check, ChevronDown, FolderGit2, GitBranch } from 'lucide-react';
 import { StatusDot, statusLabel } from './StatusDot';
+import { ModelPicker } from './ModelPicker';
 import { useStudio } from '../state/store';
-import { MODELS } from '../mock/data';
+import { apiFetch } from '../lib/api';
+import { useGroups, useRun, useRuns } from '../lib/queries';
 import type { AgentMode } from '../types';
+import type { RunStatus } from '../types';
 
 const MODES: Array<{ id: AgentMode; label: string; hint: string }> = [
   { id: 'ask', label: 'Ask', hint: 'Answer questions, no edits (⌘.)' },
@@ -13,10 +16,36 @@ const MODES: Array<{ id: AgentMode; label: string; hint: string }> = [
 ];
 
 export function TopBar() {
-  const { mode, setMode, model, setModel, runStatus, setRunStatus, elapsedSec } = useStudio();
+  const { mode, setMode, activeRunId, setActiveRunId, setConversationId, pushToast, streamingReply } = useStudio();
+  const queryClient = useQueryClient();
+  const { data: runsData } = useRuns();
+  const { data: groupsData } = useGroups();
+  const { data: run } = useRun(activeRunId, true);
   const [wsOpen, setWsOpen] = useState(false);
-  const [ws, setWs] = useState(WORKSPACES[0]);
-  const running = runStatus === 'running' || runStatus === 'thinking';
+  const runs = (runsData?.runs ?? []).slice(0, 6);
+  const groups = (groupsData?.groups ?? []).filter(g => g.status === 'running').slice(0, 3);
+  const active = runs.find(r => r.id === activeRunId) ?? null;
+  const live: RunStatus =
+    run?.status === 'running' ? 'running'
+    : run?.status === 'awaiting_approval' ? 'waiting'
+    : run?.status === 'error' ? 'failed'
+    : run?.status === 'done' ? 'done'
+    : streamingReply !== null ? 'thinking'
+    : 'idle';
+  const running = live === 'running' || live === 'thinking';
+  const tokens = (run?.prompt_tokens ?? 0) + (run?.completion_tokens ?? 0);
+
+  async function stopRun() {
+    if (activeRunId === null) return;
+    try {
+      await apiFetch(`/api/agents/runs/${activeRunId}/stop`, { method: 'POST' });
+      pushToast('ok', `Run #${activeRunId} stopped`);
+      void queryClient.invalidateQueries({ queryKey: ['agent-runs'] });
+      void queryClient.invalidateQueries({ queryKey: ['agent-run', activeRunId] });
+    } catch (err) {
+      pushToast('error', err instanceof Error ? err.message : 'Stop failed');
+    }
+  }
 
   return (
     <header className="flex h-12 shrink-0 items-center gap-2 border-b border-line bg-base-1 px-3">
@@ -24,41 +53,53 @@ export function TopBar() {
         <button
           type="button"
           onClick={() => setWsOpen(open => !open)}
-          title="Switch workspace (⌘K)"
+          title="Switch work context (⌘K)"
           className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm font-medium outline-none hover:bg-base-2 focus-visible:ring-2 focus-visible:ring-accent"
         >
           <FolderGit2 className="size-4 text-ink-dim" strokeWidth={1.5} />
-          <span className="max-w-36 truncate">{ws.name}</span>
-          <span className="flex items-center gap-1 rounded-md bg-base-2 px-1.5 py-0.5 font-mono text-[11px] text-ink-dim">
-            <GitBranch className="size-3" strokeWidth={1.5} />
-            {ws.branch}
-            {ws.dirty > 0 && <span className="text-warn">●{ws.dirty}</span>}
-          </span>
+          <span className="max-w-36 truncate">{active ? `Run #${active.id}` : 'No run'}</span>
+          {groups.length > 0 && (
+            <span className="flex items-center gap-1 rounded-md bg-base-2 px-1.5 py-0.5 font-mono text-[11px] text-ink-dim">
+              <GitBranch className="size-3" strokeWidth={1.5} />
+              {groups.length} team{groups.length === 1 ? '' : 's'}
+            </span>
+          )}
           <ChevronDown className="size-4 text-ink-faint" strokeWidth={1.5} />
         </button>
         {wsOpen && (
-          <div className="absolute left-0 top-full z-30 mt-1 w-64 rounded-xl border border-line bg-base-1 p-1 shadow-xl">
-            {WORKSPACES.map(w => (
+          <div className="absolute left-0 top-full z-30 mt-1 w-72 rounded-xl border border-line bg-base-1 p-1 shadow-xl">
+            {runs.length === 0 && (
+              <p className="px-2 py-3 text-center text-xs text-ink-faint">No runs yet — send an Agent message.</p>
+            )}
+            {runs.map(r => (
               <button
-                key={w.id}
+                key={r.id}
                 type="button"
-                onClick={() => { setWs(w); setWsOpen(false); }}
+                onClick={() => { setActiveRunId(r.id); setConversationId(null); setWsOpen(false); }}
                 className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm outline-none hover:bg-base-2 focus-visible:ring-2 focus-visible:ring-accent"
               >
                 <FolderGit2 className="size-4 shrink-0 text-ink-dim" strokeWidth={1.5} />
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate font-medium">{w.name}</span>
-                  <span className="block truncate font-mono text-[11px] text-ink-faint">{w.branch}{w.dirty > 0 ? ` · ${w.dirty} changes` : ''}</span>
+                  <span className="block truncate font-medium">Run #{r.id}</span>
+                  <span className="block truncate font-mono text-[11px] text-ink-faint">{r.status} · {r.goal.slice(0, 60)}</span>
                 </span>
-                {w.id === ws.id && <Check className="size-4 text-ok" strokeWidth={1.5} />}
+                {r.id === activeRunId && <Check className="size-4 shrink-0 text-ok" strokeWidth={1.5} />}
               </button>
             ))}
-            <button
-              type="button"
-              className="mt-1 flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-sm text-ink-dim outline-none hover:bg-base-2 focus-visible:ring-2 focus-visible:ring-accent"
-            >
-              <Plus className="size-4" strokeWidth={1.5} /> Open folder…
-            </button>
+            {groups.length > 0 && (
+              <>
+                <p className="px-2 pt-2 pb-1 text-[11px] font-medium text-ink-faint">Live teams</p>
+                {groups.map(g => (
+                  <div key={g.id} className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-sm">
+                    <GitBranch className="size-4 shrink-0 text-ink-dim" strokeWidth={1.5} />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate font-medium">Team #{g.id}</span>
+                      <span className="block truncate font-mono text-[11px] text-ink-faint">{g.done_count}/{g.task_count} tasks</span>
+                    </span>
+                  </div>
+                ))}
+              </>
+            )}
           </div>
         )}
       </div>
@@ -83,40 +124,26 @@ export function TopBar() {
         ))}
       </div>
 
-      <select
-        aria-label="Model"
-        title="Model (⌘M)"
-        value={model}
-        onChange={e => setModel(e.target.value)}
-        className="max-w-48 rounded-lg border border-line bg-base-1 px-2 py-1.5 text-xs outline-none focus-visible:ring-2 focus-visible:ring-accent"
-      >
-        {MODELS.map(m => <option key={m.id} value={m.id}>{m.label}</option>)}
-      </select>
+      <ModelPicker />
 
-      <span className="hidden items-center gap-1.5 rounded-lg bg-base-2 px-2 py-1.5 font-mono text-[11px] text-ink-dim lg:flex" title="This run: 12.4k tokens · $0.09 · 2:27 elapsed">
-        <StatusDot status={runStatus} pulse />
-        {statusLabel(runStatus)} · {Math.floor(elapsedSec / 60)}:{String(elapsedSec % 60).padStart(2, '0')}
+      <span
+        className="hidden items-center gap-1.5 rounded-lg bg-base-2 px-2 py-1.5 font-mono text-[11px] text-ink-dim lg:flex"
+        title={run ? `Run #${run.id}: ${tokens} tokens · $${(run.cost_usd ?? 0).toFixed(2)}` : 'No active run'}
+      >
+        <StatusDot status={live} pulse />
+        {statusLabel(live)}{run ? ` · ${(tokens / 1000).toFixed(1)}k` : ''}
       </span>
 
-      {running ? (
+      {running && activeRunId !== null ? (
         <button
           type="button"
           title="Stop run (Esc)"
-          onClick={() => setRunStatus('idle')}
+          onClick={() => void stopRun()}
           className="rounded-lg bg-bad px-3 py-1.5 text-xs font-semibold text-base-0 outline-none hover:opacity-90 focus-visible:ring-2 focus-visible:ring-accent"
         >
           Stop
         </button>
-      ) : (
-        <button
-          type="button"
-          title="Run (⌘Enter)"
-          onClick={() => setRunStatus('running')}
-          className="rounded-lg bg-ok px-3 py-1.5 text-xs font-semibold text-base-0 outline-none hover:opacity-90 focus-visible:ring-2 focus-visible:ring-accent"
-        >
-          Run
-        </button>
-      )}
+      ) : null}
     </header>
   );
 }

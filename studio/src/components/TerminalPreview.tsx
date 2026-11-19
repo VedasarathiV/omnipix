@@ -1,82 +1,77 @@
 import { useState } from 'react';
-import { Copy, Monitor, Plus, Smartphone, Tablet, Trash2, X } from 'lucide-react';
-import { LOGS, TERMINALS } from '../mock/data';
+import { Copy, Monitor, Smartphone, Tablet } from 'lucide-react';
 import { useStudio } from '../state/store';
+import { useLogs, useRun, type AgentStep } from '../lib/queries';
+
+interface ShellSession {
+  id: string;
+  title: string;
+  command: string;
+  output: string;
+}
+
+/** Terminal sessions derived from the run's real shell steps. */
+function sessionsFromSteps(steps: AgentStep[]): ShellSession[] {
+  const sessions: ShellSession[] = [];
+  for (let i = 0; i < steps.length; i++) {
+    const step = steps[i];
+    if (step.kind !== 'tool_call') continue;
+    const name = step.name ?? '';
+    if (name !== 'shell_exec' && name !== 'run_check') continue;
+    const args = (step.content.arguments ?? {}) as Record<string, unknown>;
+    const command = String(args.command ?? name);
+    const result = steps[i + 1];
+    const output = result && result.kind === 'tool_result' && result.name === name
+      ? String((result.content as Record<string, unknown>).result ?? '')
+      : '(still running…)';
+    sessions.push({ id: String(step.id), title: command.slice(0, 40), command, output });
+  }
+  return sessions;
+}
 
 export function TerminalPanel() {
-  const { terminalId, setTerminalId, pushToast } = useStudio();
-  const [sessions, setSessions] = useState(TERMINALS);
-  const active = sessions.find(s => s.id === terminalId) ?? sessions[0];
-
+  const { activeRunId, pushToast } = useStudio();
+  const { data: run } = useRun(activeRunId, true);
+  const [selected, setSelected] = useState<string | null>(null);
+  if (activeRunId === null) {
+    return <p className="px-3 py-6 text-center text-xs text-ink-faint">Shell output from the active run appears here.</p>;
+  }
+  const sessions = sessionsFromSteps(run?.steps ?? []);
+  const active = sessions.find(s => s.id === selected) ?? sessions[sessions.length - 1];
+  if (!sessions.length) {
+    return <p className="px-3 py-6 text-center text-xs text-ink-faint">This run has not executed any shell commands yet.</p>;
+  }
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-center gap-1 border-b border-line px-2 py-1.5">
+      <div className="flex items-center gap-1 overflow-x-auto border-b border-line px-2 py-1.5">
         {sessions.map(s => (
           <button
             key={s.id}
             type="button"
-            onClick={() => setTerminalId(s.id)}
-            className={`flex items-center gap-1.5 rounded-md px-2 py-1 font-mono text-[11px] outline-none focus-visible:ring-2 focus-visible:ring-accent ${
-              s.id === active.id ? 'bg-base-2 text-ink' : 'text-ink-faint hover:text-ink'
+            onClick={() => setSelected(s.id)}
+            className={`shrink-0 rounded-md px-2 py-1 font-mono text-[11px] outline-none focus-visible:ring-2 focus-visible:ring-accent ${
+              active.id === s.id ? 'bg-base-2 text-ink' : 'text-ink-faint hover:text-ink'
             }`}
           >
-            {s.running && <span className="size-1.5 animate-pulse rounded-full bg-ok" />}
             {s.title}
           </button>
         ))}
+        <span className="flex-1" />
         <button
           type="button"
-          title="New terminal"
-          aria-label="New terminal"
-          onClick={() => {
-            const id = `t${sessions.length + 1}`;
-            setSessions(list => [...list, { id, title: `shell ${sessions.length + 1}`, running: false, lines: [] }]);
-            setTerminalId(id);
-          }}
+          title="Copy output"
+          aria-label="Copy output"
+          onClick={() => pushToast('ok', 'Terminal output copied')}
           className="rounded-md p-1 text-ink-faint outline-none hover:bg-base-2 hover:text-ink focus-visible:ring-2 focus-visible:ring-accent"
         >
-          <Plus className="size-3.5" strokeWidth={1.5} />
-        </button>
-        <span className="flex-1" />
-        <TermBtn label="Copy output" onClick={() => pushToast('ok', 'Terminal output copied')}>
           <Copy className="size-3.5" strokeWidth={1.5} />
-        </TermBtn>
-        <TermBtn label="Clear" onClick={() => setSessions(list => list.map(s => (s.id === active.id ? { ...s, lines: [] } : s)))}>
-          <Trash2 className="size-3.5" strokeWidth={1.5} />
-        </TermBtn>
-        {active.running && (
-          <TermBtn label="Kill session" onClick={() => setSessions(list => list.map(s => (s.id === active.id ? { ...s, running: false } : s)))}>
-            <X className="size-3.5" strokeWidth={1.5} />
-          </TermBtn>
-        )}
+        </button>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto bg-base-0 p-3 font-mono text-[11px] leading-5" aria-live="polite">
-        {active.lines.length === 0 && <p className="text-ink-faint">$ — new shell ready</p>}
-        {active.lines.map((line, i) => (
-          <p
-            key={i}
-            className={`break-all whitespace-pre-wrap ${line.kind === 'cmd' ? 'font-semibold text-ink' : line.kind === 'err' ? 'text-bad' : 'text-ink-dim'}`}
-          >
-            {line.text}
-          </p>
-        ))}
-        {active.running && <p className="animate-pulse text-accent">▊</p>}
+        <p className="font-semibold text-ink">$ {active.command}</p>
+        <p className="break-all whitespace-pre-wrap text-ink-dim">{active.output}</p>
       </div>
     </div>
-  );
-}
-
-function TermBtn({ label, onClick, children }: { label: string; onClick: () => void; children: React.ReactNode }) {
-  return (
-    <button
-      type="button"
-      title={label}
-      aria-label={label}
-      onClick={onClick}
-      className="rounded-md p-1 text-ink-faint outline-none hover:bg-base-2 hover:text-ink focus-visible:ring-2 focus-visible:ring-accent"
-    >
-      {children}
-    </button>
   );
 }
 
@@ -86,7 +81,7 @@ export function PreviewPanel() {
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center gap-1 border-b border-line px-2 py-1.5">
-        <span className="px-1 font-mono text-[11px] text-ink-dim">localhost:5174</span>
+        <span className="px-1 font-mono text-[11px] text-ink-dim">No preview server running</span>
         <span className="flex-1" />
         {(['desktop', 'tablet', 'phone'] as const).map(d => (
           <button
@@ -103,17 +98,11 @@ export function PreviewPanel() {
         ))}
       </div>
       <div className="flex min-h-0 flex-1 items-start justify-center overflow-auto bg-base-0 p-3">
-        <div style={{ width: widths[device] }} className="max-w-full overflow-hidden rounded-xl border border-line bg-base-1">
-          <div className="border-b border-line px-3 py-2 text-xs font-semibold">Mock storefront</div>
-          <div className="grid grid-cols-3 gap-2 p-3">
-            {[1, 2, 3, 4, 5, 6].map(i => (
-              <div key={i} className="rounded-lg bg-base-2 p-2">
-                <div className="mb-1.5 h-10 rounded-md bg-base-0" />
-                <div className="h-2 w-3/4 rounded bg-line" />
-                <div className="mt-1 h-2 w-1/3 rounded bg-line" />
-              </div>
-            ))}
-          </div>
+        <div style={{ width: widths[device] }} className="max-w-full rounded-xl border border-dashed border-line p-6 text-center">
+          <p className="text-xs font-medium">Nothing to preview</p>
+          <p className="mx-auto mt-1 max-w-60 text-[11px] leading-relaxed text-ink-dim">
+            Have the agent start a dev server in the workspace, then point the preview at its URL.
+          </p>
         </div>
       </div>
     </div>
@@ -121,10 +110,15 @@ export function PreviewPanel() {
 }
 
 export function LogsPanel() {
+  const { data } = useLogs();
+  const entries = data?.entries ?? [];
   return (
     <div className="min-h-0 flex-1 overflow-y-auto bg-base-0 p-3 font-mono text-[11px] leading-5">
-      {LOGS.map((line, i) => (
-        <p key={i} className="break-all whitespace-pre-wrap text-ink-dim">{line}</p>
+      {entries.length === 0 && <p className="text-ink-faint">No server log entries yet.</p>}
+      {entries.map(entry => (
+        <p key={entry.id} className="break-all whitespace-pre-wrap text-ink-dim">
+          <span className="text-ink-faint">{entry.ts}</span> [{entry.level}]{entry.source ? `[${entry.source}]` : ''} {entry.message}
+        </p>
       ))}
     </div>
   );
