@@ -210,15 +210,17 @@ describe('fallback loop time-budget hedging', () => {
     // response for nothing. Slow != stalled.
     const state = newFallbackState();
     const abortInFlight = vi.fn();
+    // Instant setup failures: the commit must land inside the 100ms budget,
+    // and two 30ms sleeps left only ~40ms of headroom for loop overhead —
+    // enough to flake under full-suite load. What this test verifies (a
+    // committed attempt streaming 250ms past the budget is never aborted)
+    // is unchanged; only the setup stops racing the clock.
+    const fast429 = async () => {
+      throw Object.assign(new Error('fake API error 429: rate limit'), { status: 429 });
+    };
     const dispatch = vi.fn()
-      .mockImplementationOnce(async () => {
-        await new Promise(r => setTimeout(r, 30));
-        throw Object.assign(new Error('fake API error 429: rate limit'), { status: 429 });
-      })
-      .mockImplementationOnce(async () => {
-        await new Promise(r => setTimeout(r, 30));
-        throw Object.assign(new Error('fake API error 429: rate limit'), { status: 429 });
-      })
+      .mockImplementationOnce(fast429)
+      .mockImplementationOnce(fast429)
       // Third attempt commits immediately, then keeps streaming well past the
       // 100ms budget — exactly the slow-but-healthy generation that used to be
       // truncated at the budget.

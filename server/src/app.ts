@@ -8,6 +8,20 @@ import { keysRouter } from './routes/keys.js';
 import { clientProfilesRouter } from './routes/client-profiles.js';
 import { conversationsRouter } from './routes/conversations.js';
 import { arenaRouter } from './routes/arena.js';
+import { evalRouter } from './routes/arena-evals.js';
+import { agentRunsRouter } from './routes/agent-runs.js';
+import { agentSessionsRouter } from './routes/agent-sessions.js';
+import { agentApprovalsRouter } from './routes/agent-approvals.js';
+import { agentGroupsRouter } from './routes/agent-groups.js';
+import { agentHooksRouter } from './routes/agent-hooks.js';
+import { securityScansRouter } from './routes/security-scans.js';
+import { reconcileOrphanedApprovals } from './lib/agent-policy.js';
+import { reconcileOrphanedGroups } from './services/agent-orchestrator.js';
+import { reconcileOrphanedRuns } from './services/agent-runtime.js';
+import { skillsRouter } from './routes/skills.js';
+import { memoriesRouter } from './routes/memories.js';
+import { automationsRouter } from './routes/automations.js';
+import { notificationsRouter } from './routes/notifications.js';
 import { logsRouter } from './routes/logs.js';
 import { modelsRouter } from './routes/models.js';
 import { proxyRouter } from './routes/proxy.js';
@@ -30,6 +44,7 @@ import { compressionRouter } from './routes/compression.js';
 import { authRouter } from './routes/auth.js';
 import { docsRouter } from './routes/docs.js';
 import { mcpRouter } from './routes/mcp.js';
+import { mcpOutboundRouter } from './routes/mcp-outbound.js';
 import { statusRouter, providersRouter } from './routes/status.js';
 import { geminiRouter } from './routes/gemini.js';
 import { ollamaRouter } from './routes/ollama.js';
@@ -50,6 +65,7 @@ const REVEAL_RATE_LIMIT_RPM = 60;
 const REVEAL_PATH_RE = /^\/[^/]+\/reveal\/?$/;
 import { errorHandler } from './middleware/errorHandler.js';
 import { collapseDoubledV1Prefix } from './middleware/doubled-v1.js';
+import { contentGuard } from './middleware/content-guard.js';
 import { clientContextMiddleware } from './lib/client-context.js';
 import type { Config } from './lib/config.js';
 import { loadConfig } from './lib/config.js';
@@ -107,6 +123,17 @@ function isTrustworthyOrigin(req: express.Request): boolean {
 export function createApp(config?: Config) {
   const cfg = config ?? loadConfig();
   const app = express();
+  // Runs parked in awaiting_approval have no waiter after a restart; fail
+  // them loudly at boot instead of hanging. Idempotent no-op normally.
+  // Same for group drivers and single-run loops, which are equally
+  // in-process-only.
+  try {
+    reconcileOrphanedApprovals();
+    reconcileOrphanedGroups();
+    reconcileOrphanedRuns();
+  } catch {
+    // DB not ready yet — never throw during app construction.
+  }
   // TRUST_PROXY (#1024): opt-in trust of X-Forwarded-* from a reverse proxy.
   // false (default) ignores forwarded headers so direct callers cannot spoof
   // the client IP; true trusts every hop; a comma-separated list of addresses
@@ -224,6 +251,11 @@ export function createApp(config?: Config) {
   );
   app.use(express.json({ limit: '10mb' }));
 
+  // Gateway-side content guardrails (PII redaction + operator blocklist).
+  // Runs after the body parsers (it reads req.body) and before every
+  // protocol router; path-scoped to chat completions inside. Off by default.
+  app.use(contentGuard());
+
   // Caller identity (IP + User-Agent) for request analytics, carried in
   // AsyncLocalStorage so logRequest() can read it from any depth.
   app.use(clientContextMiddleware);
@@ -283,6 +315,17 @@ export function createApp(config?: Config) {
   // like every other admin route; the unified /v1 key does not open it.
   app.use('/api/conversations', requireAuth, conversationsRouter);
   app.use('/api/arena', requireAuth, arenaRouter);
+  app.use('/api/arena', requireAuth, evalRouter);
+  app.use('/api/agents', requireAuth, agentRunsRouter);
+  app.use('/api/agents', requireAuth, agentSessionsRouter);
+  app.use('/api/agents', requireAuth, agentApprovalsRouter);
+  app.use('/api/agents', requireAuth, agentGroupsRouter);
+  app.use('/api/agents', requireAuth, agentHooksRouter);
+  app.use('/api/agents', requireAuth, securityScansRouter);
+  app.use('/api/skills', requireAuth, skillsRouter);
+  app.use('/api/memories', requireAuth, memoriesRouter);
+  app.use('/api/automations', requireAuth, automationsRouter);
+  app.use('/api/notifications', requireAuth, notificationsRouter);
   // Server logs for the dashboard viewer. Dashboard-session gated like the rest
   // of /api — these lines name providers, models and key ids, so the unified
   // /v1 key must not open them.
@@ -355,6 +398,10 @@ export function createApp(config?: Config) {
   // unauthenticated brute-force must not get a free throttle-less oracle here.
   app.use('/mcp', createProxyRateLimiter(cfg.proxyRateLimitRpm));
   app.use('/mcp', mcpRouter);
+  // Outbound MCP registry (Phase 2): servers THIS gateway calls out to.
+  // Dashboard-session gated — server commands and credentials must never be
+  // reachable with the unified inference key.
+  app.use('/api/mcp', requireAuth, mcpOutboundRouter);
 
   // Liveness / readiness probes for orchestrators (GET /livez, /readyz, #433).
   // Unauthenticated so a load balancer can probe them; registered before the
@@ -409,6 +456,19 @@ export function createApp(config?: Config) {
       });
     });
   }
+
+  // Unknown API paths answer JSON, never Express's default HTML error page:
+  // a mistyped /api or /v1 path is a client bug, and HTML breaks JSON
+  // clients (and the dashboard's own error parsing). Placed after the SPA
+  // fallback, which already passes API paths through untouched.
+  app.use((req, res, next) => {
+    const p = req.path;
+    if (p === '/api' || p === '/v1' || p.startsWith('/api/') || p.startsWith('/v1/') || p.startsWith('/v1beta/')) {
+      res.status(404).json({ error: { message: `Unknown API path: ${p}`, type: 'not_found' } });
+      return;
+    }
+    next();
+  });
 
   return app;
 }

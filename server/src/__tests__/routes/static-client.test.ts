@@ -37,4 +37,26 @@ describe('CLIENT_DIST override', () => {
     expect(res.status).toBe(200);
     expect(html).toContain('custom-dist');
   });
+
+  it('answers unknown API paths with JSON, not HTML', async () => {
+    process.env.CLIENT_DIST = tmpDir;
+    const app = createApp();
+    const server = app.listen(0, '127.0.0.1');
+    if (!server.listening) await new Promise<void>(resolve => server.once('listening', () => resolve()));
+    const port = (server.address() as any).port;
+
+    for (const p of ['/api/nope', '/v1/nope', '/v1beta/nope']) {
+      const res = await fetch(`http://127.0.0.1:${port}${p}`);
+      expect(res.status).toBe(404);
+      expect(res.headers.get('content-type')).toContain('application/json');
+      const body = await res.json() as { error: { message: string; type: string } };
+      expect(body.error.type).toBe('not_found');
+      expect(body.error.message).toContain(p);
+    }
+    // Non-API unknowns still get the SPA shell.
+    const spa = await fetch(`http://127.0.0.1:${port}/some/deep/link`);
+    expect(spa.status).toBe(200);
+    expect(await spa.text()).toContain('custom-dist');
+    server.close();
+  });
 });

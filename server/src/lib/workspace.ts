@@ -1,0 +1,348 @@
+import { spawn, spawnSync } from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { getDb } from '../db/index.js';
+
+// Sandboxed workspace runner for agent tools (Phase 1).
+//
+// Every agent run gets its own directory; every file or shell operation is
+// confined to it:
+//   - Paths resolve inside the run's root; `..` escapes and symlinks that
+//     point outside are rejected, never followed.
+//   - Shell commands run with cwd locked to the root, a scrubbed environment
+//     (no *KEY*/*TOKEN*/*SECRET* leaks in), a wall-clock timeout, and a
+//     denylist of destructive patterns.
+//   - Output is byte-capped so a runaway command cannot flood the trace or
+//     the model's context.
+//
+// This is the control VSCode's terminal sandboxing plays in our harness:
+// the policy tier decides WHO may act, this module decides WHERE and HOW.
+
+export const WORKSPACE_ROOT_SETTING = 'OMNIPIX_WORKSPACE_ROOT';
+
+function dbDir(): string {
+  const dbPath = process.env.OMNIPIX_DB_PATH?.trim();
+  if (!dbPath || dbPath === ':memory:') return os.tmpdir();
+  return path.dirname(path.resolve(dbPath));
+}
+
+/** Root holding every run workspace. Override with OMNIPIX_WORKSPACE_ROOT. */
+export function workspaceRoot(): string {
+  const override = process.env[WORKSPACE_ROOT_SETTING]?.trim();
+  const root = override ? path.resolve(override) : path.join(dbDir(), 'omnipix-workspaces');
+  fs.mkdirSync(root, { recursive: true });
+  return root;
+}
+
+/** The workspace directory for one run, created on first use. */
+export function runWorkspace(runId: number): string {
+  if (!Number.isSafeInteger(runId) || runId <= 0) throw new Error('invalid run id');
+  // Child runs share their parent's workspace so a delegation can act on the
+  // same files; team runs share their group's directory; standalone runs
+  // keep a private dir. The lookups are best-effort: without a DB (unit
+  // contexts) every run is standalone.
+  try {
+    // Walk to the delegation root (bounded: parent links only ever point at
+    // older rows, so a cycle is impossible, but never loop on DB content).
+    let root = runId;
+    const seen = new Set<number>([runId]);
+    for (let depth = 0; depth < 8; depth++) {
+      const row = getDb().prepare('SELECT parent_run_id FROM agent_runs WHERE id = ?').get(root) as { parent_run_id?: number | null } | undefined;
+      if (!row?.parent_run_id || seen.has(row.parent_run_id)) break;
+      seen.add(row.parent_run_id);
+      root = row.parent_run_id;
+    }
+    const task = getDb().prepare('SELECT group_id FROM agent_tasks WHERE run_id = ?').get(root) as { group_id: number } | undefined;
+    if (task) return groupWorkspace(task.group_id);
+    const dir = path.join(workspaceRoot(), `run-${root}`);
+    fs.mkdirSync(dir, { recursive: true });
+    return dir;
+  } catch {
+    // No DB — fall through to the private dir.
+  }
+  const dir = path.join(workspaceRoot(), `run-${runId}`);
+  fs.mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
+/** The shared workspace directory for one agent group, created on first use. */
+export function groupWorkspace(groupId: number): string {
+  if (!Number.isSafeInteger(groupId) || groupId <= 0) throw new Error('invalid group id');
+  const dir = path.join(workspaceRoot(), `group-${groupId}`);
+  fs.mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
+/**
+ * Resolve a workspace-relative path to an absolute one inside root.
+ * Rejects absolute paths, `..` escapes, and symlinks pointing outside.
+ */
+export function resolveInRoot(root: string, rel: string): string {
+  if (!rel || typeof rel !== 'string') throw new Error('path must be a non-empty string');
+  if (path.isAbsolute(rel)) throw new Error(`absolute paths are not allowed: ${rel}`);
+  const abs = path.resolve(root, rel);
+  const relToRoot = path.relative(root, abs);
+  if (relToRoot === '' || relToRoot.startsWith('..') || path.isAbsolute(relToRoot)) {
+    throw new Error(`path escapes the workspace: ${rel}`);
+  }
+  // Symlink check on the nearest existing ancestor: a link inside the root
+  // pointing at /etc must not become a write primitive.
+  let probe = abs;
+  for (;;) {
+    if (fs.existsSync(probe)) {
+      const real = fs.realpathSync(probe);
+      const back = path.relative(fs.realpathSync(root), real);
+      if (back.startsWith('..') || path.isAbsolute(back)) {
+        throw new Error(`path escapes the workspace via symlink: ${rel}`);
+      }
+      return abs;
+    }
+    const parent = path.dirname(probe);
+    if (parent === probe) return abs;
+    probe = parent;
+  }
+}
+
+// ── Shell ────────────────────────────────────────────────────────────────────
+
+// Denied command shapes. This is a backstop, not a sandbox proof: the cwd
+// lock, timeout, and approval tier do the real work; these catch the
+// obviously destructive one-liners before they run.
+const DENIED_PATTERNS: Array<{ pattern: RegExp; reason: string }> = [
+  { pattern: /rm\s+(-[a-z]*r[a-z]*\s+.*\/(\s|$)|.*\/\s*$)/i, reason: 'recursive remove touching /' },
+  { pattern: /:\(\)\s*{\s*:\s*\|\s*:\s*&?\s*}\s*;?\s*:/, reason: 'fork bomb' },
+  { pattern: /\b(mkfs|dd\s+.*of=|diskutil\s+erase|format\s+[a-z]:)/i, reason: 'disk formatting' },
+  { pattern: /\b(shutdown|reboot|halt|poweroff)\b/i, reason: 'power control' },
+  { pattern: /(curl|wget)\s+[^|]+\|\s*(sh|bash|zsh|pwsh|powershell)/i, reason: 'piping downloads into a shell' },
+  { pattern: /\bchmod\s+-R\s+777\s+\//, reason: 'chmod -R 777 on /' },
+  { pattern: />\s*\/dev\/(sd[a-z]|hd[a-z]|nvme)/i, reason: 'raw disk write' },
+];
+
+export function assertCommandAllowed(command: string): void {
+  for (const { pattern, reason } of DENIED_PATTERNS) {
+    if (pattern.test(command)) throw new Error(`command denied by policy (${reason})`);
+  }
+}
+
+function scrubEnv(extra?: Record<string, string>): NodeJS.ProcessEnv {
+  const kept: NodeJS.ProcessEnv = {};
+  for (const [key, value] of Object.entries(process.env)) {
+    if (value === undefined) continue;
+    // Secrets never ride into a child shell: keys, tokens, and the gateway's
+    // own encryption key stay in this process.
+    if (/KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL|ENCRYPTION/i.test(key)) continue;
+    kept[key] = value;
+  }
+  kept.CI = 'true';
+  kept.NO_COLOR = '1';
+  kept.TERM = 'dumb';
+  // Caller extras (hook payloads) ride along under the same scrub: a secret
+  // smuggled in as an extra is dropped, never exported.
+  if (extra) {
+    for (const [key, value] of Object.entries(extra)) {
+      if (/KEY|TOKEN|SECRET|PASSWORD|CREDENTIAL|ENCRYPTION/i.test(key)) continue;
+      kept[key] = value;
+    }
+  }
+  return kept;
+}
+
+export interface ShellResult {
+  stdout: string;
+  stderr: string;
+  exitCode: number | null;
+  timedOut: boolean;
+  truncated: boolean;
+}
+
+export interface ShellOptions {
+  cwd: string;
+  timeoutMs?: number;
+  maxBytes?: number;
+  onOutput?: (chunk: string, stream: 'stdout' | 'stderr') => void;
+  /** Extra env vars for the child, applied under the same secret scrub. */
+  envExtra?: Record<string, string>;
+}
+
+export const DEFAULT_SHELL_TIMEOUT_MS = 60_000;
+export const DEFAULT_SHELL_MAX_BYTES = 64 * 1024;
+
+/** Run one shell command, confined and bounded. Never throws on exit != 0. */
+export function execShell(command: string, opts: ShellOptions): Promise<ShellResult> {
+  assertCommandAllowed(command);
+  const timeoutMs = opts.timeoutMs ?? DEFAULT_SHELL_TIMEOUT_MS;
+  const maxBytes = opts.maxBytes ?? DEFAULT_SHELL_MAX_BYTES;
+  return new Promise<ShellResult>(resolve => {
+    const child = spawn(command, {
+      cwd: opts.cwd,
+      env: scrubEnv(opts.envExtra),
+      shell: process.platform === 'win32' ? true : '/bin/sh',
+      windowsHide: true,
+    });
+    let stdout = '';
+    let stderr = '';
+    let stdoutBytes = 0;
+    let stderrBytes = 0;
+    let truncated = false;
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      child.kill('SIGTERM');
+      setTimeout(() => {
+        try {
+          child.kill('SIGKILL');
+        } catch {
+          // Already dead — the exit handler below resolves.
+        }
+      }, 2000).unref?.();
+    }, timeoutMs);
+    if (typeof timer.unref === 'function') timer.unref();
+
+    const append = (stream: 'stdout' | 'stderr', data: Buffer): void => {
+      opts.onOutput?.(data.toString('utf8'), stream);
+      if (stream === 'stdout') {
+        if (stdoutBytes + data.length > maxBytes) {
+          truncated = true;
+          return;
+        }
+        stdoutBytes += data.length;
+        stdout += data.toString('utf8');
+      } else {
+        if (stderrBytes + data.length > maxBytes) {
+          truncated = true;
+          return;
+        }
+        stderrBytes += data.length;
+        stderr += data.toString('utf8');
+      }
+    };
+    child.stdout?.on('data', (data: Buffer) => append('stdout', data));
+    child.stderr?.on('data', (data: Buffer) => append('stderr', data));
+    child.on('error', () => {
+      clearTimeout(timer);
+      resolve({ stdout, stderr, exitCode: null, timedOut, truncated });
+    });
+    child.on('close', (code: number | null) => {
+      clearTimeout(timer);
+      resolve({ stdout, stderr, exitCode: code, timedOut, truncated });
+    });
+  });
+}
+
+// ── Search ───────────────────────────────────────────────────────────────────
+
+export interface GrepMatch {
+  file: string;
+  line: number;
+  text: string;
+}
+
+const SKIP_DIRS = new Set([
+  'node_modules', '.git', 'dist', 'build', 'out', '.next', 'coverage',
+  'vendor', '__pycache__', '.venv', 'venv', '.idea', '.vscode', 'target',
+]);
+const MAX_FILE_BYTES = 1024 * 1024;
+
+let rgAvailable: boolean | null = null;
+
+function hasRipgrep(): boolean {
+  if (rgAvailable !== null) return rgAvailable;
+  try {
+    const probed = spawnSync('rg', ['--version'], { encoding: 'utf8', timeout: 5000 });
+    rgAvailable = probed.status === 0;
+  } catch {
+    rgAvailable = false;
+  }
+  return rgAvailable;
+}
+
+function walkFiles(root: string, out: string[], cap: number): void {
+  let entries: fs.Dirent[];
+  try {
+    entries = fs.readdirSync(root, { withFileTypes: true });
+  } catch {
+    return;
+  }
+  for (const entry of entries) {
+    if (out.length >= cap) return;
+    if (SKIP_DIRS.has(entry.name)) continue;
+    const full = path.join(root, entry.name);
+    if (entry.isSymbolicLink()) continue;
+    if (entry.isDirectory()) {
+      walkFiles(full, out, cap);
+    } else if (entry.isFile()) {
+      out.push(full);
+    }
+  }
+}
+
+/**
+ * Regular files under root, minus dependency/build dirs and symlinks.
+ * Shared by the grep fallback and the security scanner so both see the
+ * same tree. Capped — callers that need everything pass Infinity.
+ */
+export function walkWorkspaceFiles(root: string, cap = 5000): string[] {
+  const out: string[] = [];
+  walkFiles(root, out, Math.max(0, cap));
+  out.sort();
+  return out;
+}
+
+/**
+ * Fixed-string search across the workspace. ripgrep when present (fast path),
+ * a bounded JS walk otherwise. Binary and oversized files are skipped;
+ * results are capped so a broad pattern cannot flood the trace.
+ */
+export function grepSearch(root: string, pattern: string, limit = 50): GrepMatch[] {
+  if (!pattern) throw new Error('pattern must be a non-empty string');
+  const capped = Math.min(200, Math.max(1, limit));
+  if (hasRipgrep()) {
+    const probed = spawnSync(
+      'rg', ['--fixed-strings', '--line-number', '--no-heading', '--max-count', '5',
+        '--max-filesize', '1M', '--glob', '!node_modules', '--glob', '!.git', pattern, '.'],
+      { cwd: root, encoding: 'utf8', timeout: 15000, maxBuffer: 4 * 1024 * 1024 },
+    );
+    const out: GrepMatch[] = [];
+    for (const line of (probed.stdout ?? '').split('\n')) {
+      if (out.length >= capped) break;
+      const match = /^(.+?):(\d+):(.*)$/.exec(line);
+      if (match) out.push({ file: match[1], line: Number(match[2]), text: match[3].slice(0, 300) });
+    }
+    return out;
+  }
+  const files = walkWorkspaceFiles(root, Number.POSITIVE_INFINITY);
+  const out: GrepMatch[] = [];
+  for (const full of files) {
+    if (out.length >= capped) break;
+    let stat: fs.Stats;
+    try {
+      stat = fs.statSync(full);
+    } catch {
+      continue;
+    }
+    if (stat.size > MAX_FILE_BYTES) continue;
+    let content: string;
+    try {
+      content = fs.readFileSync(full, 'utf8');
+    } catch {
+      continue;
+    }
+    if (content.includes('\0')) continue;
+    const lines = content.split('\n');
+    let perFile = 0;
+    for (let i = 0; i < lines.length && perFile < 5; i++) {
+      if (out.length >= capped) break;
+      if (lines[i].includes(pattern)) {
+        perFile++;
+        out.push({ file: path.relative(root, full), line: i + 1, text: lines[i].slice(0, 300) });
+      }
+    }
+  }
+  return out;
+}
+
+/** Test seam: force the JS fallback (or ripgrep) regardless of PATH. */
+export function __setRipgrepAvailable(value: boolean | null): void {
+  rgAvailable = value;
+}

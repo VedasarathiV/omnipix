@@ -95,10 +95,24 @@ function isBackupableTable(name: string): boolean {
   return !isInternalTable(name) && !isExcludedTable(name);
 }
 
-/** Every table a dump may contain, in a stable order. */
+/** Every table a dump may contain, in a stable order. Virtual tables (FTS5
+ *  indexes) and their shadow tables are excluded: their content is derived —
+ *  sync triggers on the base table rebuild the index as rows replay during
+ *  restore — and dumping shadow tables would replay writes SQLite owns. */
 export function listTables(db: Db = getDb()): string[] {
-  const rows = db.prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name").all() as { name: string }[];
-  return rows.map((row) => row.name).filter(isBackupableTable);
+  const rows = db.prepare("SELECT name, sql FROM sqlite_master WHERE type = 'table' ORDER BY name").all() as { name: string; sql: string | null }[];
+  const virtual = new Set(
+    rows.filter(row => row.sql && /^CREATE\s+VIRTUAL\s+TABLE/i.test(row.sql)).map(row => row.name),
+  );
+  const isShadow = (name: string): boolean => {
+    for (const table of virtual) {
+      if (name.startsWith(`${table}_`)) return true;
+    }
+    return false;
+  };
+  return rows
+    .map(row => row.name)
+    .filter(name => isBackupableTable(name) && !virtual.has(name) && !isShadow(name));
 }
 
 /* ------------------------------------------------------------------ */
@@ -260,7 +274,9 @@ function sqliteEscape(value: unknown): string {
 function sqliteCreateTable(db: Db, table: string): string | null {
   const row = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?").get(table) as { sql: string } | undefined;
   if (!row?.sql) return null;
-  return `${row.sql.replace(/^CREATE TABLE/i, 'CREATE TABLE IF NOT EXISTS')};`;
+  // Virtual tables (dumps written before the exclusion, hand-built files):
+  // the same IF NOT EXISTS guard, or restore fails on the second replay.
+  return `${row.sql.replace(/^CREATE\s+(VIRTUAL\s+)?TABLE/i, 'CREATE $1TABLE IF NOT EXISTS')};`;
 }
 
 function sqliteDumpTable(db: Db, table: string): string {

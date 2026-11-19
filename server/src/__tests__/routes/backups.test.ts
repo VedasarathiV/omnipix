@@ -107,6 +107,23 @@ describe('Backups API', () => {
     expect(usage()).toEqual({ requests: 2, tokens: 30 });
   });
 
+  it('excludes the FTS index from dumps and rebuilds it on restore', () => {
+    const db = getDb();
+    db.prepare("INSERT INTO agent_runs (goal, final_answer, status) VALUES ('index-me-please', 'an unusual answer', 'done')").run();
+    const full = createBackup(db);
+    expect(full.tables).toContain('agent_runs');
+    expect(full.tables).not.toContain('runs_fts');
+    expect(full.tables.some(t => t.startsWith('runs_fts_'))).toBe(false);
+    const sql = fs.readFileSync(dumpPath(full.id), 'utf8');
+    expect(sql).not.toContain('runs_fts');
+    restoreBackup(db, full.id);
+    const hits = db.prepare("SELECT rowid FROM runs_fts WHERE runs_fts MATCH 'unusual'").all() as { rowid: number }[];
+    expect(hits).toHaveLength(1);
+    expect(hits[0].rowid).toBe(
+      (db.prepare("SELECT id FROM agent_runs WHERE goal = 'index-me-please'").get() as { id: number }).id,
+    );
+  });
+
   it('round-trips the schedule setting', async () => {
     const put = await request(app, 'PUT', '/api/backups/schedule', {
       enabled: true,

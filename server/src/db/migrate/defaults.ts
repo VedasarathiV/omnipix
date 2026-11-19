@@ -53,6 +53,27 @@ import * as modelMonthlyUsage from '../migrations/20261111_000001_model_monthly_
 import * as profileRoutingStrategy from '../migrations/20261111_000002_profile_routing_strategy.js';
 import * as kiloFreeRefresh from '../migrations/20261117_000001_kilo_free_refresh.js';
 import * as deepseekProvider from '../migrations/20261117_000002_deepseek_provider.js';
+import * as agentRuntime from '../migrations/20261118_000001_agent_runtime.js';
+import * as evalHarness from '../migrations/20261118_000002_eval_harness.js';
+import * as semanticCache from '../migrations/20261118_000003_semantic_cache.js';
+import * as agentSessions from '../migrations/20261118_000004_agent_sessions.js';
+import * as mcpServers from '../migrations/20261118_000005_mcp_servers.js';
+import * as agentGroups from '../migrations/20261118_000006_agent_groups.js';
+import * as assistant from '../migrations/20261118_000007_assistant.js';
+import * as checkpoints from '../migrations/20261118_000008_checkpoints.js';
+import * as planMode from '../migrations/20261118_000009_plan_mode.js';
+import * as subagents from '../migrations/20261118_000010_subagents.js';
+import * as hooks from '../migrations/20261118_000011_hooks.js';
+import * as evalAgents from '../migrations/20261118_000012_eval_agents.js';
+import * as securityScans from '../migrations/20261118_000013_security_scans.js';
+import * as docChunks from '../migrations/20261118_000014_doc_chunks.js';
+import * as taskContracts from '../migrations/20261119_000015_task_contracts.js';
+import * as personaRoster from '../migrations/20261119_000016_persona_roster.js';
+import * as hierarchicalCrews from '../migrations/20261119_000017_hierarchical_crews.js';
+import * as taskGuardrails from '../migrations/20261119_000018_task_guardrails.js';
+import * as learningLoop from '../migrations/20261119_000019_learning_loop.js';
+import * as taskOutputs from '../migrations/20261119_000020_task_outputs.js';
+import * as skillBundles from '../migrations/20261119_000021_skill_bundles.js';
 
 export interface MigrationModule {
   up(db: Db): void;
@@ -117,6 +138,27 @@ export const MODEL_MONTHLY_USAGE_FILENAME = '20261111_000001_model_monthly_usage
 export const PROFILE_ROUTING_STRATEGY_FILENAME = '20261111_000002_profile_routing_strategy.ts';
 export const KILO_FREE_REFRESH_FILENAME = '20261117_000001_kilo_free_refresh.ts';
 export const DEEPSEEK_PROVIDER_FILENAME = '20261117_000002_deepseek_provider.ts';
+export const AGENT_RUNTIME_FILENAME = '20261118_000001_agent_runtime.ts';
+export const EVAL_HARNESS_FILENAME = '20261118_000002_eval_harness.ts';
+export const SEMANTIC_CACHE_FILENAME = '20261118_000003_semantic_cache.ts';
+export const AGENT_SESSIONS_FILENAME = '20261118_000004_agent_sessions.ts';
+export const MCP_SERVERS_FILENAME = '20261118_000005_mcp_servers.ts';
+export const AGENT_GROUPS_FILENAME = '20261118_000006_agent_groups.ts';
+export const ASSISTANT_FILENAME = '20261118_000007_assistant.ts';
+export const CHECKPOINTS_FILENAME = '20261118_000008_checkpoints.ts';
+export const PLAN_MODE_FILENAME = '20261118_000009_plan_mode.ts';
+export const SUBAGENTS_FILENAME = '20261118_000010_subagents.ts';
+export const HOOKS_FILENAME = '20261118_000011_hooks.ts';
+export const EVAL_AGENTS_FILENAME = '20261118_000012_eval_agents.ts';
+export const SECURITY_SCANS_FILENAME = '20261118_000013_security_scans.ts';
+export const DOC_CHUNKS_FILENAME = '20261118_000014_doc_chunks.ts';
+export const TASK_CONTRACTS_FILENAME = '20261119_000015_task_contracts.ts';
+export const PERSONA_ROSTER_FILENAME = '20261119_000016_persona_roster.ts';
+export const HIERARCHICAL_CREWS_FILENAME = '20261119_000017_hierarchical_crews.ts';
+export const TASK_GUARDRAILS_FILENAME = '20261119_000018_task_guardrails.ts';
+export const LEARNING_LOOP_FILENAME = '20261119_000019_learning_loop.ts';
+export const TASK_OUTPUTS_FILENAME = '20261119_000020_task_outputs.ts';
+export const SKILL_BUNDLES_FILENAME = '20261119_000021_skill_bundles.ts';
 
 export const DEFAULT_MIGRATIONS: readonly DefaultMigration[] = [
   { filename: LEGACY_BASELINE_FILENAME, module: legacyBaseline },
@@ -173,4 +215,25 @@ export const DEFAULT_MIGRATIONS: readonly DefaultMigration[] = [
   { filename: PROFILE_ROUTING_STRATEGY_FILENAME, module: profileRoutingStrategy },
   { filename: KILO_FREE_REFRESH_FILENAME, module: kiloFreeRefresh },
   { filename: DEEPSEEK_PROVIDER_FILENAME, module: deepseekProvider },
+  { filename: AGENT_RUNTIME_FILENAME, module: agentRuntime },
+  { filename: EVAL_HARNESS_FILENAME, module: evalHarness },
+  { filename: SEMANTIC_CACHE_FILENAME, module: semanticCache },
+  { filename: AGENT_SESSIONS_FILENAME, module: agentSessions },
+  { filename: MCP_SERVERS_FILENAME, module: mcpServers },
+  { filename: AGENT_GROUPS_FILENAME, module: agentGroups },
+  { filename: ASSISTANT_FILENAME, module: assistant },
+  { filename: CHECKPOINTS_FILENAME, module: checkpoints },
+  { filename: PLAN_MODE_FILENAME, module: planMode },
+  { filename: SUBAGENTS_FILENAME, module: subagents },
+  { filename: HOOKS_FILENAME, module: hooks },
+  { filename: EVAL_AGENTS_FILENAME, module: evalAgents },
+  { filename: SECURITY_SCANS_FILENAME, module: securityScans },
+  { filename: DOC_CHUNKS_FILENAME, module: docChunks },
+  { filename: TASK_CONTRACTS_FILENAME, module: taskContracts },
+  { filename: PERSONA_ROSTER_FILENAME, module: personaRoster },
+  { filename: HIERARCHICAL_CREWS_FILENAME, module: hierarchicalCrews },
+  { filename: TASK_GUARDRAILS_FILENAME, module: taskGuardrails },
+  { filename: LEARNING_LOOP_FILENAME, module: learningLoop },
+  { filename: TASK_OUTPUTS_FILENAME, module: taskOutputs },
+  { filename: SKILL_BUNDLES_FILENAME, module: skillBundles },
 ];
