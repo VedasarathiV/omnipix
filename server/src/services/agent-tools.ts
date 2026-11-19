@@ -5,9 +5,10 @@ import { getDb } from '../db/index.js';
 import { runSearch } from './search.js';
 import { detectChecks, runCheck } from './agent-verify.js';
 import { callMcpTool, listMcpTools, parseQualifiedName } from './mcp-servers.js';
-import { listMemories, rememberMemory } from './memories.js';
+import { listMemories } from './memories.js';
 import { docsPromptSection, searchDocs } from './docs-ingest.js';
 import { blackboardList, blackboardRead, blackboardWrite, claimFileLock, taskForRun } from '../lib/agent-coordination.js';
+import { proposeMemory } from './learning-loop.js';
 import { resolveFusionCandidate } from './router.js';
 import { execShell, grepSearch, resolveInRoot, runWorkspace } from '../lib/workspace.js';
 import { isBlockedFetchUrl } from '../lib/fetch-guard.js';
@@ -519,7 +520,7 @@ const MEMORY_TOOLS: AgentTool[] = [
     name: 'remember',
     definition: toolDefinition(
       'remember',
-      'Save a durable memory (user preference, project convention, or entity fact) for future runs. Values are PII-scrubbed.',
+      'Propose a durable memory (user preference, project convention, or entity fact) for future runs. The operator reviews it before it takes effect; values are PII-scrubbed on accept.',
       {
         key: { type: 'string', description: 'Short key, e.g. "commit-style".' },
         value: { type: 'string', description: 'The fact to remember.' },
@@ -534,16 +535,18 @@ const MEMORY_TOOLS: AgentTool[] = [
       const project = typeof args.project === 'string' && args.project.trim()
         ? args.project.trim()
         : runProjectKey(ctx.runId);
-      const { redactions } = rememberMemory({
+      // Quarantined, not written: agent memories go through the operator's
+      // review queue (learning proposals) so a confused or injected run
+      // cannot persist its own instructions into every future prompt.
+      const id = proposeMemory({
         scope,
         projectKey: project,
         key: strArg(args, 'key'),
         value: strArg(args, 'value'),
         importance: typeof args.importance === 'number' ? args.importance : undefined,
-        source: 'agent',
         runId: ctx.runId,
       });
-      return `remembered ${strArg(args, 'key')}${redactions ? ` (${redactions} PII span(s) redacted)` : ''}`;
+      return `memory proposal #${id} queued for operator review (key: ${strArg(args, 'key')})`;
     },
   },
   {

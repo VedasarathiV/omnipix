@@ -195,7 +195,7 @@ it('reviews learning proposals', async () => {
   await flush()
   expect(container.textContent).toContain('explorer')
   expect(container.textContent).toContain('Explore first.')
-  expect(container.textContent).toContain('lesson-x: Do not do that thing.')
+  expect(container.textContent).toContain('[user] lesson-x: Do not do that thing.')
   const accept = Array.from(container.querySelectorAll('button')).find(b => b.textContent === 'Accept') as HTMLButtonElement
   await act(async () => { accept.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
   await flush()

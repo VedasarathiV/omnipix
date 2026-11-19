@@ -89,3 +89,22 @@ describe('recall_docs', () => {
     expect(await tool.execute({ query: 'bearer', project: 'acme' }, { runId: 1 })).toContain('bearer tokens');
   });
 });
+
+describe('remember', () => {
+  beforeEach(() => {
+    process.env.ENCRYPTION_KEY = '0'.repeat(64);
+    initDb(':memory:');
+    getDb().prepare(
+      "INSERT INTO agent_runs (goal, model, tools_json, skills_json, status, project_key) VALUES ('g', 'auto', '[]', '[]', 'running', '')",
+    ).run();
+  });
+
+  it('quarantines durable writes as proposals instead of writing direct', async () => {
+    const tool = agentToolByName('remember')!;
+    const out = await tool.execute({ key: 'commit-style', value: 'Short subjects.' }, { runId: 1 });
+    expect(out).toContain('queued for operator review');
+    expect(getDb().prepare('SELECT COUNT(*) AS n FROM memories').get()).toMatchObject({ n: 0 });
+    const proposal = getDb().prepare("SELECT * FROM learning_proposals WHERE kind = 'memory'").get() as { title: string; status: string };
+    expect(proposal).toMatchObject({ title: 'commit-style', status: 'pending' });
+  });
+});

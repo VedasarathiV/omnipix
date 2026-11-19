@@ -4,6 +4,7 @@ import { encrypt } from '../../lib/crypto.js';
 import {
   learnFromRun,
   listProposals,
+  proposeMemory,
   resolveProposal,
   searchRuns,
 } from '../../services/learning-loop.js';
@@ -179,5 +180,28 @@ describe('learning loop', () => {
     expect(hits[0].goal).toContain('login redirect');
     expect(searchRuns('login haiku')).toHaveLength(0);
     expect(searchRuns('x')).toHaveLength(0);
+  });
+
+  it('quarantines agent memory writes for review instead of writing direct', () => {
+    const runId = seedRun();
+    const id = proposeMemory({ key: 'commit-style', value: 'Use short subjects.', scope: 'user', runId });
+    expect(id).toBeGreaterThan(0);
+    // Nothing landed in durable memory.
+    expect(getDb().prepare('SELECT COUNT(*) AS n FROM memories').get()).toMatchObject({ n: 0 });
+    const [proposal] = listProposals();
+    expect(proposal).toMatchObject({ id, kind: 'memory', title: 'commit-style', status: 'pending' });
+    // Same key twice dedups to one pending proposal.
+    expect(proposeMemory({ key: 'commit-style', value: 'Other.', scope: 'user' })).toBe(id);
+    // Accepting materializes it with PII scrubbing and importance intact.
+    const done = resolveProposal(id, true);
+    expect(done.status).toBe('accepted');
+    const row = getDb().prepare('SELECT key, value, importance FROM memories').get() as { key: string; value: string; importance: number };
+    expect(row.key).toBe('commit-style');
+    expect(row.importance).toBe(0.5);
+  });
+
+  it('rejects empty keys and project memories without a project', () => {
+    expect(() => proposeMemory({ key: '  ', value: 'x', scope: 'user' })).toThrow('non-empty');
+    expect(() => proposeMemory({ key: 'k', value: 'x', scope: 'project' })).toThrow('project key');
   });
 });

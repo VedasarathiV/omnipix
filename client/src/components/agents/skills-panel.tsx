@@ -141,7 +141,9 @@ export function SkillsPanel() {
     try {
       const body = JSON.parse(row.body_json) as Record<string, string>
       if (row.kind === 'skill') return String(body.description ?? '')
-      return `${String(body.key ?? '')}: ${String(body.value ?? '').slice(0, 160)}`
+      const scope = String(body.scope ?? 'user')
+      const where = scope === 'project' && body.projectKey ? ` @${body.projectKey}` : ''
+      return `[${scope}${where}] ${String(body.key ?? '')}: ${String(body.value ?? '').slice(0, 160)}`
     } catch {
       return ''
     }

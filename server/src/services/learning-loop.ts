@@ -26,8 +26,47 @@ export interface SkillProposalBody {
 export interface MemoryProposalBody {
   key: string;
   value: string;
-  scope: 'user' | 'project';
+  scope: 'user' | 'project' | 'entity';
   projectKey: string;
+  importance?: number;
+}
+
+/**
+ * Quarantine an agent-proposed memory for operator review instead of writing
+ * it straight into durable memory. Agent writes are the self-poisoning loop:
+ * a confused or injected run persisting its own bad instructions, which then
+ * inject into every future prompt. Returns the proposal id, or the existing
+ * pending id when the same key is already queued.
+ */
+export function proposeMemory(input: {
+  key: string;
+  value: string;
+  scope: 'user' | 'project' | 'entity';
+  projectKey?: string;
+  importance?: number;
+  runId?: number;
+}): number {
+  const db = getDb();
+  const key = input.key.trim().slice(0, 128);
+  if (!key) throw new Error('memory key must be a non-empty string');
+  const scope = input.scope;
+  const projectKey = input.projectKey?.trim() || '';
+  if (scope === 'project' && !projectKey) throw new Error('project memories need a project key');
+  const existing = db.prepare(
+    "SELECT id FROM learning_proposals WHERE status = 'pending' AND kind = 'memory' AND title = ?",
+  ).get(key) as { id: number } | undefined;
+  if (existing) return existing.id;
+  const body: MemoryProposalBody = {
+    key,
+    value: input.value.slice(0, 2000),
+    scope,
+    projectKey,
+    importance: input.importance,
+  };
+  const row = db.prepare(
+    "INSERT INTO learning_proposals (kind, title, body_json, source_run_id, status) VALUES ('memory', ?, ?, ?, 'pending') RETURNING id",
+  ).get(key, JSON.stringify(body), input.runId ?? null) as { id: number };
+  return row.id;
 }
 
 export interface ProposalRow {
@@ -228,7 +267,7 @@ export function resolveProposal(id: number, accept: boolean): ProposalRow {
         .run(body.name, body.description, body.instructions);
     } else if (row.kind === 'memory') {
       const body = JSON.parse(row.body_json) as MemoryProposalBody;
-      rememberMemory({ scope: body.scope, projectKey: body.projectKey, key: body.key, value: body.value, source: 'learning-loop', runId: row.source_run_id ?? undefined });
+      rememberMemory({ scope: body.scope, projectKey: body.projectKey, key: body.key, value: body.value, importance: body.importance, source: 'learning-loop', runId: row.source_run_id ?? undefined });
     } else {
       throw new Error(`Unknown proposal kind: ${row.kind}`);
     }
