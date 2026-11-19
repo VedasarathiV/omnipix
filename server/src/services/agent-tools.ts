@@ -424,7 +424,7 @@ const WORKSPACE_TOOLS: AgentTool[] = [
         onOutput: ctx.onOutput,
       });
       if (ctx.signal?.aborted) throw new Error('stopped');
-      const head = `exit=${result.exitCode ?? 'null'}${result.timedOut ? ' TIMED OUT' : ''}${result.truncated ? ' (output truncated)' : ''}`;
+      const head = `exit=${result.exitCode ?? 'null'}${result.timedOut ? ' TIMED OUT' : ''}${result.truncated ? ' (output truncated)' : ''} [${result.sandbox}]`;
       const body = `${result.stdout}\n${result.stderr}`.trim();
       return body ? `${head}\n${body}` : head;
     },
