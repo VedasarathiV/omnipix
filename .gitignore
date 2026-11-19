@@ -25,3 +25,8 @@ update-hermes.sh
 
 # Monetization planning — private, never committed
 monetization/
+
+# Studio desktop wrapper build outputs
+studio/app/dist-electron/
+studio/app/dist-ui/
+studio/dist/
