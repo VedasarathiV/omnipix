@@ -1,0 +1,95 @@
+@import "tailwindcss";
+@import "@fontsource-variable/inter";
+@import "@fontsource/jetbrains-mono";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --font-sans: "Inter Variable", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --color-base-0: var(--bg-0);
+  --color-base-1: var(--bg-1);
+  --color-base-2: var(--bg-2);
+  --color-line: var(--border);
+  --color-ink: var(--fg);
+  --color-ink-dim: var(--fg-dim);
+  --color-ink-faint: var(--fg-faint);
+  --color-accent: var(--accent);
+  --color-accent-ink: var(--accent-ink);
+  --color-ok: var(--ok);
+  --color-warn: var(--warn);
+  --color-bad: var(--bad);
+  --color-info: var(--info);
+}
+
+:root {
+  --bg-0: #f4f4f6;
+  --bg-1: #ffffff;
+  --bg-2: #ececf1;
+  --border: #d9d9e0;
+  --fg: #17171b;
+  --fg-dim: #55555e;
+  --fg-faint: #8e8e99;
+  --accent: #2f6bff;
+  --accent-ink: #ffffff;
+  --ok: #16a34a;
+  --warn: #d97706;
+  --bad: #dc2626;
+  --info: #2f6bff;
+}
+
+.dark {
+  --bg-0: #0b0b0d;
+  --bg-1: #111114;
+  --bg-2: #17171b;
+  --border: #26262c;
+  --fg: #ececf1;
+  --fg-dim: #a1a1ab;
+  --fg-faint: #63636d;
+  --accent: #5b8cff;
+  --accent-ink: #0b0b0d;
+  --ok: #34d399;
+  --warn: #fbbf24;
+  --bad: #f87171;
+  --info: #5b8cff;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background: var(--bg-0);
+  color: var(--fg);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+* {
+  transition-property: background-color, border-color, color, fill, stroke, opacity;
+  transition-duration: 150ms;
+  transition-timing-function: ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition-duration: 0ms;
+  }
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 8px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
