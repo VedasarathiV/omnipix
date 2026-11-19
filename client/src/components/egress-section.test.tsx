@@ -45,12 +45,12 @@ beforeEach(() => {
   document.body.appendChild(container)
   root = createRoot(container)
   mocked.mockReset()
-  mocked.mockImplementation(async (path: string, options?: { method?: string; body?: string }) => {
+  mocked.mockImplementation(async (path: string, options?: RequestInit) => {
     if (path === '/api/settings/proxy' && (!options || options.method === undefined || options.method === 'GET')) {
       return PROXY as never
     }
     if (path === '/api/settings/proxy' && options?.method === 'PUT') {
-      const patch = JSON.parse(options.body ?? '{}')
+      const patch = JSON.parse(String(options.body ?? '{}'))
       return { ...PROXY, ...patch, bypassPlatforms: patch.bypassPlatforms ?? PROXY.bypassPlatforms } as never
     }
     throw new Error(`unexpected ${path}`)
