@@ -444,7 +444,8 @@ it('announces a finished run aloud when auto-speak is on', async () => {
   vi.stubGlobal('Audio', class {
     onended: (() => void) | null = null
     onerror: (() => void) | null = null
-    constructor(public src: string) {}
+    src: string
+    constructor(src: string) { this.src = src }
     async play() { queueMicrotask(() => this.onended?.()) }
     pause() {}
   } as unknown as typeof Audio)
