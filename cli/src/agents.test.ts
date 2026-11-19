@@ -494,6 +494,35 @@ describe('skills', () => {
     }
   });
 
+  it('imports every SKILL.md under a directory, reporting failures', async () => {
+    const { mkdtempSync, mkdirSync, writeFileSync, rmSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const { join } = await import('node:path');
+    const dir = mkdtempSync(join(tmpdir(), 'omnipix-skills-'));
+    mkdirSync(join(dir, 'nested'));
+    writeFileSync(join(dir, 'SKILL.md'), '---\nname: alpha\ndescription: A.\n---\nDo A.');
+    writeFileSync(join(dir, 'nested', 'SKILL.md'), 'not a skill file');
+    writeFileSync(join(dir, 'notes.md'), 'ignored');
+    try {
+      stubFetch((path, init) => {
+        if (path === '/api/skills/import' && init.method === 'POST') {
+          const body = JSON.parse(String(init.body));
+          if (body.content.includes('not a skill file')) {
+            return Response.json({ error: { message: 'bad frontmatter' } }, { status: 400 });
+          }
+          return Response.json({ skill: { name: 'alpha', enabled: 1, builtin: 0 } }, { status: 201 });
+        }
+        throw new Error(`Unexpected request: ${path} ${init.method}`);
+      });
+      expect(await main(['skills', 'import-dir', dir])).toBe(1);
+      expect(output).toContain('imported alpha');
+      expect(output).toContain('FAILED');
+      expect(output).toContain('1 imported, 1 failed (2 files)');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('lists, accepts, and discards proposals', async () => {
     stubFetch((path, init) => {
       if (path === '/api/agents/proposals') {

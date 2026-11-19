@@ -37,7 +37,7 @@ export const AGENT_TOOL_NAMES = [
   'read_file', 'grep_search', 'write_file', 'edit_file', 'shell_exec', 'run_check',
   'blackboard_read', 'blackboard_write', 'remember', 'recall_memory',
   'git_status', 'git_diff', 'git_log', 'git_branch', 'git_commit', 'git_clone',
-  'delegate', 'recall_docs',
+  'delegate', 'recall_docs', 'find_skill',
 ];
 
 export interface AgentRunOptions {
@@ -173,12 +173,22 @@ export function selectSkills(goal: string, skills: SkillRow[], explicit?: string
   }
   const words = new Set(goal.toLowerCase().split(/[^a-z0-9]+/).filter(w => w.length > 3));
   if (!words.size) return [];
+  // Weighted fields: a name hit means the goal names the discipline, a
+  // description hit means topical overlap, an instructions hit is weak
+  // evidence (long bodies match everything). Threshold 2 keeps precision
+  // as the library grows into the hundreds.
   const scored = skills
     .filter(s => s.enabled)
     .map(skill => {
-      const hay = `${skill.name} ${skill.description} ${skill.instructions}`.toLowerCase();
+      const name = skill.name.toLowerCase();
+      const desc = skill.description.toLowerCase();
+      const instr = skill.instructions.toLowerCase();
       let score = 0;
-      for (const word of words) if (hay.includes(word)) score++;
+      for (const word of words) {
+        if (name.includes(word)) score += 3;
+        else if (desc.includes(word)) score += 2;
+        else if (instr.includes(word)) score += 1;
+      }
       return { skill, score };
     })
     .filter(e => e.score >= 2)
@@ -186,6 +196,16 @@ export function selectSkills(goal: string, skills: SkillRow[], explicit?: string
     .slice(0, 2)
     .map(e => e.skill);
   return expand(scored);
+}
+
+/** Max instructions chars injected per skill; long registry skills truncate with a marker. */
+export const SKILL_INJECT_CHARS = 6000;
+
+export function skillPromptBlock(skill: SkillRow): string {
+  const body = skill.instructions.length > SKILL_INJECT_CHARS
+    ? `${skill.instructions.slice(0, SKILL_INJECT_CHARS)}\n…(truncated to ${SKILL_INJECT_CHARS} chars; use find_skill for the full text)`
+    : skill.instructions;
+  return `## ${skill.name}\n${body}`;
 }
 
 function recordStep(runId: number, seq: number, kind: AgentStep['kind'], name: string | null, content: Record<string, unknown>): AgentStep {
@@ -559,7 +579,7 @@ async function runLoop(runId: number, opts: AgentRunOptions): Promise<AgentRun> 
   const recalled = recallForRun(opts.projectKey?.trim() ?? '');
   const system = [
     SYSTEM_PROMPT,
-    skills.length ? `Active skills:\n${skills.map(s => `## ${s.name}\n${s.instructions}`).join('\n\n')}` : '',
+    skills.length ? `Active skills:\n${skills.map(skillPromptBlock).join('\n\n')}` : '',
     memoryPromptSection(recalled),
   ].filter(Boolean).join('\n\n');
   let messages: ChatMessage[] = [

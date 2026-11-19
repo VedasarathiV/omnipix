@@ -8,7 +8,7 @@ import { initDb, getDb } from '../../db/index.js';
 import { encrypt } from '../../lib/crypto.js';
 import { clearRouterPressure } from '../../services/penalty-inspector.js';
 import { __quiesceAgentRuns } from '../../services/agent-runtime.js';
-import { __quiesceGroups, checkOutputJson, substituteInputs, toolsForRole, validateGuardrail, validateManagerDecision, validateTaskGraph } from '../../services/agent-orchestrator.js';
+import { __quiesceGroups, checkOutputJson, skillsForRole, substituteInputs, toolsForRole, validateGuardrail, validateManagerDecision, validateTaskGraph } from '../../services/agent-orchestrator.js';
 import { listRunbooks, resolveRunbook } from '../../services/runbooks.js';
 import { groupWorkspace } from '../../lib/workspace.js';
 import { __clearRiskOverrides, __setRiskOverride } from '../../lib/agent-policy.js';
@@ -119,6 +119,10 @@ describe('agent groups', () => {
     expect(toolsForRole('tester', undefined)).not.toContain('write_file');
     expect(toolsForRole('reviewer', ['calculator'])).toEqual(['calculator']);
     expect(toolsForRole('mystery', undefined)).not.toContain('shell_exec');
+    expect(skillsForRole('planner')).toEqual(['planner']);
+    expect(skillsForRole('Planner')).toEqual(['planner']);
+    expect(skillsForRole('code-reviewer')).toEqual(['code-reviewer']);
+    expect(skillsForRole('mystery')).toEqual([]);
   });
 
   it('requires dashboard auth', async () => {

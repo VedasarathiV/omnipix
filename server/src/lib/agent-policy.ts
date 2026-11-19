@@ -52,6 +52,7 @@ const READ_TOOLS = new Set([
   // park individually, so gating the delegation too would double-escalate.
   'delegate',
   'recall_docs',
+  'find_skill',
 ]);
 
 const WRITE_TOOLS = new Set(['write_file', 'edit_file', 'remember', 'git_branch', 'git_commit']);

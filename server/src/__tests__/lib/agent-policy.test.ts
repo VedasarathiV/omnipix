@@ -34,7 +34,7 @@ describe('agent policy', () => {
   });
 
   it('tiers tools: read auto, write/shell pending, unknown denied', () => {
-    for (const tool of ['calculator', 'current_time', 'web_search', 'fetch_url', 'memory_write', 'memory_read', 'read_file', 'grep_search', 'blackboard_read', 'blackboard_write', 'recall_memory', 'recall_docs', 'git_status', 'git_diff', 'git_log', 'delegate', 'plan']) {
+    for (const tool of ['calculator', 'current_time', 'web_search', 'fetch_url', 'memory_write', 'memory_read', 'read_file', 'grep_search', 'blackboard_read', 'blackboard_write', 'recall_memory', 'recall_docs', 'find_skill', 'git_status', 'git_diff', 'git_log', 'delegate', 'plan']) {
       expect(toolRisk(tool)).toBe('read');
       expect(evaluateToolCall(tool)).toBe('auto');
     }

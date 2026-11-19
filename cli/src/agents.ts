@@ -2,7 +2,8 @@
 // follow agent runs, and manage the skills registry. Like `keys`, these
 // commands need OMNIPIX_DASHBOARD_TOKEN / --token — the unified API key is
 // not dashboard authentication.
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync, statSync } from 'node:fs';
+import path from 'node:path';
 
 export interface AgentCommandOptions {
   url: string;
@@ -74,6 +75,7 @@ export function skillsHelp(): string {
     '  omnipix skills delete <name>',
     '  omnipix skills export <name>      (prints SKILL.md to stdout)',
     '  omnipix skills import <file>',
+    '  omnipix skills import-dir <directory>   (imports every SKILL.md underneath)',
     '  omnipix skills proposals',
     '  omnipix skills accept <id>',
     '  omnipix skills discard <id>',
@@ -527,8 +529,8 @@ export async function runSkills(
   write: (line: string) => void = line => process.stdout.write(`${line}\n`),
 ): Promise<number> {
   const [action, nameArg, ...extra] = options.args;
-  if (!action || !['list', 'create', 'enable', 'disable', 'delete', 'export', 'import', 'proposals', 'accept', 'discard'].includes(action)) {
-    throw new Error(`Expected skills list, create, enable, disable, delete, export, import, proposals, accept, or discard.\n\n${skillsHelp()}`);
+  if (!action || !['list', 'create', 'enable', 'disable', 'delete', 'export', 'import', 'import-dir', 'proposals', 'accept', 'discard'].includes(action)) {
+    throw new Error(`Expected skills list, create, enable, disable, delete, export, import, import-dir, proposals, accept, or discard.\n\n${skillsHelp()}`);
   }
   if (options.dryRun) throw new Error('--dry-run is not supported by skills; no request was made');
   const { request } = setup(options);
@@ -554,6 +556,42 @@ export async function runSkills(
     const { skill } = await request<{ skill: SkillRow }>('/api/skills/import', 'POST', { content });
     write(`imported ${skill.name}`);
     return 0;
+  }
+
+  if (action === 'import-dir') {
+    if (!nameArg || extra.length) throw new Error(`skills import-dir needs a directory path.\n\n${skillsHelp()}`);
+    let entries: string[];
+    try {
+      entries = readdirSync(nameArg);
+    } catch {
+      throw new Error(`Cannot read directory: ${nameArg}`);
+    }
+    const files: string[] = [];
+    const walk = (dir: string): void => {
+      for (const entry of readdirSync(dir)) {
+        const full = path.join(dir, entry);
+        if (statSync(full).isDirectory()) { walk(full); continue; }
+        if (entry === 'SKILL.md') files.push(full);
+      }
+    };
+    walk(nameArg);
+    if (!entries.length) throw new Error(`Directory is empty: ${nameArg}`);
+    let ok = 0;
+    const failed: string[] = [];
+    for (const file of files.sort()) {
+      try {
+        const content = readFileSync(file, 'utf8');
+        if (!content.trim()) throw new Error('empty file');
+        const { skill } = await request<{ skill: SkillRow }>('/api/skills/import', 'POST', { content });
+        ok++;
+        write(`imported ${skill.name}`);
+      } catch (err) {
+        failed.push(`${file}: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+    for (const line of failed) write(`FAILED ${line}`);
+    write(`${ok} imported, ${failed.length} failed (${files.length} files)`);
+    return failed.length ? 1 : 0;
   }
 
   if (action === 'list') {

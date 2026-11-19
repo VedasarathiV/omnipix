@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { getDb, initDb } from '../../db/index.js';
-import { listSkills, reconcileOrphanedRuns, selectSkills, type SkillRow } from '../../services/agent-runtime.js';
+import { listSkills, reconcileOrphanedRuns, selectSkills, skillPromptBlock, type SkillRow } from '../../services/agent-runtime.js';
 
 const SKILLS: SkillRow[] = [
   { name: 'planner', description: 'Break a goal into steps', instructions: 'list steps with tools', enabled: 1, builtin: 1 },
@@ -26,6 +26,22 @@ describe('selectSkills', () => {
 
   it('ignores short words', () => {
     expect(selectSkills('a an to of in', SKILLS)).toEqual([]);
+  });
+
+  it('weights name over description over instructions', () => {
+    // 'planner' in the goal names the discipline: picked on one word.
+    expect(selectSkills('planner needed', SKILLS).map(s => s.name)).toEqual(['planner']);
+    // One instruction-only word is weak evidence: not picked.
+    expect(selectSkills('zzzz tools yyyy', SKILLS)).toEqual([]);
+  });
+
+  it('truncates long instructions on inject with a marker', () => {
+    const long = { name: 'big', description: 'd', instructions: 'x'.repeat(7000), enabled: 1, builtin: 0 };
+    const block = skillPromptBlock(long);
+    expect(block).toContain('## big');
+    expect(block).toContain('find_skill');
+    expect(block.length).toBeLessThan(7000);
+    expect(skillPromptBlock({ ...long, instructions: 'short' })).toBe('## big\nshort');
   });
 });
 

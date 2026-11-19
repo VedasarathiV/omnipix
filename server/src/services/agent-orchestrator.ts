@@ -14,6 +14,7 @@ import {
   estimateCostUsd,
   executeAgentRun,
   getAgentRun,
+  listSkills,
   stopAgentRun,
 } from './agent-runtime.js';
 import { createSession } from './agent-sessions.js';
@@ -59,6 +60,19 @@ const READ_ONLY_FALLBACK = ['read_file', 'grep_search', 'calculator', 'current_t
 export function toolsForRole(role: string, explicit?: string[]): string[] {
   if (explicit?.length) return [...new Set(explicit)];
   return [...(ROLE_PRESETS[role] ?? READ_ONLY_FALLBACK)];
+}
+
+/**
+ * Skill names for a task role: exact match against enabled skills, ignoring
+ * case and an `agency-` prefix on either side (roles predate the roster).
+ * Empty when nothing matches — the run then auto-selects from its goal.
+ */
+export function skillsForRole(role: string): string[] {
+  const norm = (s: string): string => s.trim().toLowerCase().replace(/^agency-/, '');
+  const want = norm(role);
+  if (!want) return [];
+  const hit = listSkills().find(s => s.enabled && norm(s.name) === want);
+  return hit ? [hit.name] : [];
 }
 
 /** A named input wired from another task's handoff. `from` is a 0-based task index (like dependsOn). */
@@ -835,10 +849,14 @@ function spawnTaskRun(groupId: number, task: TaskRow, sessionId: number | null, 
   // Blackboard tools ride on every task run: they are group infrastructure,
   // not a capability choice, and confined to this group's scratch.
   const tools = [...new Set([...toolsForRole(task.role, task.tools), 'blackboard_read', 'blackboard_write'])];
+  // A role matching a skill name loads that skill explicitly, so the roster
+  // follows the plan without anyone naming skills per task.
+  const roleSkill = skillsForRole(task.role);
   const runId = createAgentRun({
     goal,
     model: model ?? 'auto',
     tools,
+    skills: roleSkill.length ? roleSkill : undefined,
     maxSteps: 12,
     sessionId: sessionId ?? undefined,
   });
@@ -847,6 +865,7 @@ function spawnTaskRun(groupId: number, task: TaskRow, sessionId: number | null, 
     goal,
     model: model ?? 'auto',
     tools,
+    skills: roleSkill.length ? roleSkill : undefined,
     maxSteps: 12,
   });
   // Fire-and-forget for the driver tick, but never unhandled: a synchronous

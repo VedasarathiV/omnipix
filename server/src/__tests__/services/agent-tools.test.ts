@@ -45,7 +45,7 @@ describe('fetch_url guards', () => {
 describe('tool registry', () => {
   it('exposes the read, workspace, blackboard, memory, git, delegate, and docs tools with function definitions', () => {
     expect(AGENT_TOOLS.map(t => t.name).sort()).toEqual(
-      ['blackboard_read', 'blackboard_write', 'calculator', 'current_time', 'delegate', 'edit_file', 'fetch_url', 'git_branch', 'git_clone', 'git_commit', 'git_diff', 'git_log', 'git_status', 'grep_search', 'memory_read', 'memory_write', 'read_file', 'recall_docs', 'recall_memory', 'remember', 'run_check', 'shell_exec', 'web_search', 'write_file'],
+      ['blackboard_read', 'blackboard_write', 'calculator', 'current_time', 'delegate', 'edit_file', 'fetch_url', 'find_skill', 'git_branch', 'git_clone', 'git_commit', 'git_diff', 'git_log', 'git_status', 'grep_search', 'memory_read', 'memory_write', 'read_file', 'recall_docs', 'recall_memory', 'remember', 'run_check', 'shell_exec', 'web_search', 'write_file'],
     );
     for (const tool of AGENT_TOOLS) {
       expect(tool.definition.type).toBe('function');
@@ -87,6 +87,26 @@ describe('recall_docs', () => {
     const tool = agentToolByName('recall_docs')!;
     expect(await tool.execute({ query: 'bearer' }, { runId: 1 })).toContain('no project');
     expect(await tool.execute({ query: 'bearer', project: 'acme' }, { runId: 1 })).toContain('bearer tokens');
+  });
+});
+
+describe('find_skill', () => {
+  beforeEach(() => {
+    process.env.ENCRYPTION_KEY = '0'.repeat(64);
+    initDb(':memory:');
+    getDb().prepare(
+      "INSERT INTO agent_runs (goal, model, tools_json, skills_json, status, project_key) VALUES ('g', 'auto', '[]', '[]', 'running', '')",
+    ).run();
+  });
+
+  it('searches the library by keyword with full text on demand', async () => {
+    const tool = agentToolByName('find_skill')!;
+    const names = await tool.execute({ query: 'penetration' }, { runId: 1 });
+    expect(names).toContain('penetration-tester');
+    expect(names).not.toContain('## ');
+    const full = await tool.execute({ query: 'penetration', full: true }, { runId: 1 });
+    expect(full.length).toBeGreaterThan(names.length);
+    expect(await tool.execute({ query: 'zzz-no-such-skill' }, { runId: 1 })).toContain('no skills match');
   });
 });
 

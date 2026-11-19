@@ -590,6 +590,46 @@ const MEMORY_TOOLS: AgentTool[] = [
       return hits.map(m => `[${m.scope}] ${m.key}: ${m.value}`).join('\n');
     },
   },
+  {
+    name: 'find_skill',
+    definition: toolDefinition(
+      'find_skill',
+      'Search the skill library by keyword and read full instructions. Two skills auto-load per run; use this to discover and read any other.',
+      {
+        query: { type: 'string', description: 'Keywords, e.g. "kubernetes" or "sales discovery". Omit to list names.' },
+        full: { type: 'boolean', description: 'Include full instructions (capped). Default: names + descriptions only.' },
+      },
+      [],
+    ),
+    execute: async (args) => {
+      const { listSkills } = await import('./agent-runtime.js');
+      const all = listSkills().filter(s => s.enabled);
+      const words = typeof args.query === 'string'
+        ? args.query.toLowerCase().split(/[^a-z0-9]+/).filter(w => w.length > 2)
+        : [];
+      const scored = all
+        .map(skill => {
+          const name = skill.name.toLowerCase();
+          const desc = skill.description.toLowerCase();
+          let score = 0;
+          for (const word of words) {
+            if (name.includes(word)) score += 3;
+            else if (desc.includes(word)) score += 2;
+          }
+          return { skill, score };
+        })
+        .filter(e => !words.length || e.score > 0)
+        .sort((a, b) => b.score - a.score)
+        .slice(0, words.length ? 5 : 40);
+      if (!scored.length) return `no skills match "${args.query}"`;
+      const full = args.full === true;
+      return scored.map(({ skill }) => {
+        const head = `${skill.name}: ${skill.description}`;
+        if (!full) return head;
+        return `${head}\n${skill.instructions.slice(0, 3000)}${skill.instructions.length > 3000 ? '\n…(truncated)' : ''}`;
+      }).join('\n\n');
+    },
+  },
 ];
 
 for (const tool of MEMORY_TOOLS) AGENT_TOOLS.push(tool);

@@ -77,8 +77,8 @@ export function parseSkillFile(content: string): ParsedSkill {
   if (!instructions) {
     throw new Error('skill file needs instructions after the frontmatter');
   }
-  if (description.length > 500) throw new Error('skill description must be at most 500 characters');
-  if (instructions.length > 64000) throw new Error('skill instructions must be at most 64000 characters');
+  if (description.length > 1024) throw new Error('skill description must be at most 1024 characters');
+  if (instructions.length > 131072) throw new Error('skill instructions must be at most 128KB');
   const enabledRaw = fields.get('enabled');
   if (enabledRaw !== undefined && enabledRaw !== 'true' && enabledRaw !== 'false') {
     throw new Error('skill enabled must be true or false');
