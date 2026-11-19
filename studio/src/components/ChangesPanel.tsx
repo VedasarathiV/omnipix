@@ -15,7 +15,7 @@ const STATUS_STYLE: Record<string, string> = {
 };
 
 export function ChangesPanel() {
-  const { activeRunId, acceptedFiles, acceptFile, acceptAll, pushToast } = useStudio();
+  const { activeRunId, acceptedFiles, acceptFile, acceptAll, pushToast, setAgentEditor } = useStudio();
   const queryClient = useQueryClient();
   const [open, setOpen] = useState<string | null>(null);
   const [against, setAgainst] = useState<number | null>(null);
@@ -33,6 +33,15 @@ export function ChangesPanel() {
         icon={<FileDiff className="size-5" strokeWidth={1.5} />}
         title="No run selected"
         body="Start an agent run from the input bar — its file changes land here for review."
+        action={
+          <button
+            type="button"
+            onClick={() => setAgentEditor('new')}
+            className="mt-1 rounded-lg bg-accent px-3 py-1.5 text-xs font-semibold text-base-0 outline-none hover:opacity-90 focus-visible:ring-2 focus-visible:ring-accent"
+          >
+            New run
+          </button>
+        }
       />
     );
   }

@@ -366,6 +366,21 @@ export interface WorkspaceEntry {
   size?: number;
 }
 
+export interface FileContent {
+  path: string;
+  content: string;
+  truncated: boolean;
+  binary: boolean;
+}
+
+export function useRunFileContent(runId: number | null, path: string | null) {
+  return useQuery<FileContent>({
+    queryKey: ['run-file', runId, path],
+    queryFn: () => apiFetch(`/api/agents/runs/${runId}/files/content?path=${encodeURIComponent(path ?? '')}`),
+    enabled: runId !== null && path !== null,
+  });
+}
+
 export function useRunFiles(runId: number | null) {
   return useQuery<{ files: WorkspaceEntry[] }>({
     queryKey: ['run-files', runId],

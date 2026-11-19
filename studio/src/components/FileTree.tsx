@@ -37,13 +37,24 @@ function buildTree(paths: string[]): Node {
 }
 
 export function FileTree() {
-  const { activeRunId } = useStudio();
+  const { activeRunId, setAgentEditor } = useStudio();
   const [query, setQuery] = useState('');
   const { data: filesData } = useRunFiles(activeRunId);
   const { data: diff } = useRunDiff(activeRunId, null);
 
   if (activeRunId === null) {
-    return <p className="px-3 py-6 text-center text-xs text-ink-faint">Start an agent run to browse its workspace.</p>;
+    return (
+      <div className="px-3 py-6 text-center">
+        <p className="text-xs text-ink-faint">Start an agent run to browse its workspace.</p>
+        <button
+          type="button"
+          onClick={() => setAgentEditor('new')}
+          className="mt-2 rounded-lg bg-accent px-3 py-1.5 text-xs font-semibold text-base-0 outline-none hover:opacity-90 focus-visible:ring-2 focus-visible:ring-accent"
+        >
+          New run
+        </button>
+      </div>
+    );
   }
   const entries = filesData?.files ?? [];
   const statusByPath = new Map((diff?.files ?? []).map(f => [f.path, f.status]));
@@ -88,7 +99,7 @@ function TreeNode({ node, depth, query, statusByPath }: {
   statusByPath: Map<string, string>;
 }) {
   const [open, setOpen] = useState(depth < 1);
-  const { pushToast, setRightTab, setRightOpen } = useStudio();
+  const { setRightTab, setRightOpen, setSelectedFile } = useStudio();
   if (!matches(node, query)) return null;
   const expanded = open || query.length > 0;
   const status = statusByPath.get(node.path);
@@ -97,7 +108,7 @@ function TreeNode({ node, depth, query, statusByPath }: {
     return (
       <button
         type="button"
-        onClick={() => { setRightTab('files'); setRightOpen(true); pushToast('info', node.path); }}
+        onClick={() => { setSelectedFile(node.path); setRightTab('files'); setRightOpen(true); }}
         style={{ paddingLeft: `${depth * 12 + 8}px` }}
         className="flex w-full items-center gap-1.5 rounded-md py-1 pr-2 text-left text-xs outline-none hover:bg-base-2 focus-visible:ring-2 focus-visible:ring-accent"
       >

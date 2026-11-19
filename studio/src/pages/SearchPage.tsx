@@ -10,11 +10,18 @@ interface RunHit {
   status: string;
 }
 
+interface FileHit {
+  path: string;
+  line: number;
+  text: string;
+}
+
 export function SearchPage() {
   const [query, setQuery] = useState('');
   const [runHits, setRunHits] = useState<RunHit[] | null>(null);
+  const [fileHits, setFileHits] = useState<FileHit[] | null>(null);
   const { data: conversations = [] } = useConversations();
-  const { setConversationId, setActiveRunId, setRail, pushToast } = useStudio();
+  const { setConversationId, setActiveRunId, setRail, pushToast, activeRunId, setSelectedFile, setRightTab, setRightOpen } = useStudio();
 
   const q = query.toLowerCase().trim();
   const chatHits = q
@@ -24,6 +31,7 @@ export function SearchPage() {
   async function searchRuns() {
     if (!q) {
       setRunHits(null);
+      setFileHits(null);
       return;
     }
     try {
@@ -31,6 +39,16 @@ export function SearchPage() {
       setRunHits(res.runs);
     } catch (err) {
       pushToast('error', err instanceof Error ? err.message : 'Search failed');
+    }
+    if (activeRunId !== null) {
+      try {
+        const res = await apiFetch<{ hits: FileHit[] }>(`/api/agents/runs/${activeRunId}/search?q=${encodeURIComponent(q)}`);
+        setFileHits(res.hits);
+      } catch {
+        setFileHits([]);
+      }
+    } else {
+      setFileHits(null);
     }
   }
 
@@ -75,6 +93,23 @@ export function SearchPage() {
             <span className="min-w-0">
               <span className="block truncate text-[13px] font-medium">Run #{hit.id}: {hit.goal}</span>
               <span className="block font-mono text-[11px] text-ink-dim">{hit.status}</span>
+            </span>
+          </button>
+        ))}
+        {fileHits !== null && fileHits.length > 0 && (
+          <p className="px-1 pt-2 text-[11px] font-medium text-ink-faint">Workspace files</p>
+        )}
+        {(fileHits ?? []).map((hit, i) => (
+          <button
+            key={`${hit.path}:${hit.line}:${i}`}
+            type="button"
+            onClick={() => { setSelectedFile(hit.path); setRightTab('files'); setRightOpen(true); setRail('chat'); }}
+            className="flex w-full items-start gap-2.5 rounded-xl border border-line bg-base-1 px-3.5 py-2.5 text-left outline-none hover:border-accent/50 focus-visible:ring-2 focus-visible:ring-accent"
+          >
+            <FileText className="mt-0.5 size-4 shrink-0 text-ink-dim" strokeWidth={1.5} />
+            <span className="min-w-0">
+              <span className="block truncate font-mono text-[13px] font-medium">{hit.path}:{hit.line}</span>
+              <span className="block truncate font-mono text-[11px] text-ink-dim">{hit.text.trim()}</span>
             </span>
           </button>
         ))}

@@ -1,7 +1,7 @@
 import { FileDiff, Files, PanelRightClose, Play, ScrollText, SquareTerminal } from 'lucide-react';
 import type { RightTab } from '../types';
 import { ChangesPanel } from './ChangesPanel';
-import { FileTree } from './FileTree';
+import { FileViewer } from './FileViewer';
 import { LogsPanel, PreviewPanel, TerminalPanel } from './TerminalPreview';
 import { useStudio } from '../state/store';
 import { useRunDiff } from '../lib/queries';
@@ -53,7 +53,7 @@ export function RightPanel() {
       </div>
       <div className="min-h-0 flex-1">
         {rightTab === 'changes' && <ChangesPanel />}
-        {rightTab === 'files' && <FileTree />}
+        {rightTab === 'files' && <FileViewer />}
         {rightTab === 'terminal' && <TerminalPanel />}
         {rightTab === 'preview' && <PreviewPanel />}
         {rightTab === 'logs' && <LogsPanel />}

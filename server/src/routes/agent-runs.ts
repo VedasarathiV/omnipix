@@ -21,7 +21,7 @@ import {
 } from '../services/agent-runtime.js';
 import { createSession, getSession, touchSession } from '../services/agent-sessions.js';
 import { createCheckpoint, getCheckpoint, listCheckpoints, restoreCheckpoint } from '../services/checkpoints.js';
-import { diffWorkspace, listWorkspaceFiles, readWorkspaceFile, revertWorkspaceFile, workspaceGitBranch, workspaceGitCommit, workspaceGitStatus } from '../services/run-workspace.js';
+import { diffWorkspace, execInWorkspace, listWorkspaceFiles, readWorkspaceFile, revertWorkspaceFile, searchWorkspace, workspaceGitBranch, workspaceGitCommit, workspaceGitStatus, writeWorkspaceFile } from '../services/run-workspace.js';
 import { listProposals, resolveProposal, searchRuns } from '../services/learning-loop.js';
 import { cloneRepoAtRef, diffStat, fetchRefInto, runWorkspace } from '../lib/workspace.js';
 
@@ -430,6 +430,72 @@ agentRunsRouter.post('/runs/:id/git/branch', (req: Request, res: Response) => {
     res.status(201).json(workspaceGitBranch(id, name));
   } catch (err) {
     res.status(400).json({ error: { message: err instanceof Error ? err.message : String(err) } });
+  }
+});
+
+const writeFileSchema = z.object({
+  path: z.string().trim().min(1).max(1024),
+  content: z.string().max(200 * 1024),
+});
+
+agentRunsRouter.put('/runs/:id/files/content', (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) {
+    res.status(400).json({ error: { message: 'Invalid run ID' } });
+    return;
+  }
+  const parsed = writeFileSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    res.status(400).json({ error: { message: parsed.error.issues.map(e => e.message).join(', ') } });
+    return;
+  }
+  try {
+    res.json(writeWorkspaceFile(id, parsed.data.path, parsed.data.content));
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const status = message === 'Run not found' ? 404 : 400;
+    res.status(status).json({ error: { message } });
+  }
+});
+
+agentRunsRouter.get('/runs/:id/search', (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+  const q = typeof req.query.q === 'string' ? req.query.q : '';
+  if (!Number.isInteger(id) || id <= 0) {
+    res.status(400).json({ error: { message: 'Invalid run ID' } });
+    return;
+  }
+  try {
+    res.json({ hits: searchWorkspace(id, q) });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const status = message === 'Run not found' ? 404 : 400;
+    res.status(status).json({ error: { message } });
+  }
+});
+
+const execSchema = z.object({
+  command: z.string().trim().min(1).max(4000),
+  timeoutMs: z.number().int().min(1000).max(300000).optional(),
+});
+
+agentRunsRouter.post('/runs/:id/exec', async (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) {
+    res.status(400).json({ error: { message: 'Invalid run ID' } });
+    return;
+  }
+  const parsed = execSchema.safeParse(req.body ?? {});
+  if (!parsed.success) {
+    res.status(400).json({ error: { message: parsed.error.issues.map(e => e.message).join(', ') } });
+    return;
+  }
+  try {
+    res.json(await execInWorkspace(id, parsed.data.command, parsed.data.timeoutMs));
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    const status = message === 'Run not found' ? 404 : 400;
+    res.status(status).json({ error: { message } });
   }
 });
 

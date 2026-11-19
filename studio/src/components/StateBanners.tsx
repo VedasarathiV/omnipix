@@ -3,11 +3,13 @@ import { useQueryClient } from '@tanstack/react-query';
 import { AlertTriangle, KeyRound, RotateCcw, WifiOff } from 'lucide-react';
 import { useStudio } from '../state/store';
 import { apiFetch } from '../lib/api';
-import { useRun } from '../lib/queries';
+import { useKeys, useRun } from '../lib/queries';
 
-/** No-keys banner (§1 keep). Driven by store.hasKeys (wired to /api/keys live). */
+/** No-keys banner. Live: shows when no enabled provider key exists. */
 export function KeyBanner() {
-  const { hasKeys, setRail } = useStudio();
+  const { setRail } = useStudio();
+  const { data: keys = [] } = useKeys();
+  const hasKeys = keys.some(k => k.enabled);
   if (hasKeys) return null;
   return (
     <div role="alert" className="flex items-center gap-2 border-b border-warn/40 bg-warn/10 px-4 py-2">

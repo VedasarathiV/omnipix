@@ -48,7 +48,7 @@ export function TopBar() {
   }
 
   return (
-    <header className="flex h-12 shrink-0 items-center gap-2 border-b border-line bg-base-1 px-3">
+    <header className="flex h-12 shrink-0 items-center gap-2 overflow-x-auto border-b border-line bg-base-1 px-3">
       <div className="relative">
         <button
           type="button"
@@ -106,7 +106,7 @@ export function TopBar() {
 
       <div className="flex-1" />
 
-      <div className="flex items-center gap-1 rounded-lg bg-base-2 p-0.5" role="tablist" aria-label="Agent mode">
+      <div className="hidden items-center gap-1 rounded-lg bg-base-2 p-0.5 md:flex" role="tablist" aria-label="Agent mode">
         {MODES.map(m => (
           <button
             key={m.id}

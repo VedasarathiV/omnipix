@@ -4,6 +4,7 @@ import {
   BookOpen,
   Bot,
   KeyRound,
+  Layers,
   Mic,
   Search,
   Settings,
@@ -18,11 +19,12 @@ const ITEMS: Array<{ id: RailId; label: string; icon: typeof Bot; shortcut: stri
   { id: 'agents', label: 'Agents', icon: Bot, shortcut: '⌘2' },
   { id: 'skills', label: 'Skills', icon: Blocks, shortcut: '⌘3' },
   { id: 'keys', label: 'Provider keys', icon: KeyRound, shortcut: '⌘4' },
-  { id: 'evals', label: 'Evals', icon: Trophy, shortcut: '⌘5' },
-  { id: 'search', label: 'Search', icon: Search, shortcut: '⌘6' },
-  { id: 'docs', label: 'Docs', icon: BookOpen, shortcut: '⌘7' },
-  { id: 'notifications', label: 'Notifications', icon: Bell, shortcut: '⌘8' },
-  { id: 'voice', label: 'Voice', icon: Mic, shortcut: '⌘9' },
+  { id: 'models', label: 'Models', icon: Layers, shortcut: '⌘5' },
+  { id: 'evals', label: 'Evals', icon: Trophy, shortcut: '⌘6' },
+  { id: 'search', label: 'Search', icon: Search, shortcut: '⌘7' },
+  { id: 'docs', label: 'Docs', icon: BookOpen, shortcut: '⌘8' },
+  { id: 'notifications', label: 'Notifications', icon: Bell, shortcut: '⌘9' },
+  { id: 'voice', label: 'Voice', icon: Mic, shortcut: '⌘0' },
 ];
 
 export function IconRail() {

@@ -9,7 +9,7 @@ import { useStudio } from '../state/store';
 import { useApprovals, useConversation, useRun } from '../lib/queries';
 
 export function ChatView() {
-  const { conversationId, activeRunId, streamingReply, hasKeys } = useStudio();
+  const { conversationId, activeRunId, streamingReply, setDictation } = useStudio();
   const { data: conversation } = useConversation(conversationId);
   const { data: run } = useRun(activeRunId, true);
   const { data: approvalsData } = useApprovals();
@@ -39,7 +39,7 @@ export function ChatView() {
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <OfflineBanner />
-      {!hasKeys && <KeyBanner />}
+      <KeyBanner />
       <RunErrorBanner />
       <div className="flex items-center gap-2 border-b border-line px-4 py-2">
         <span className="truncate text-[13px] font-semibold">{header}</span>
@@ -58,9 +58,14 @@ export function ChatView() {
             action={
               <span className="mt-2 flex flex-wrap justify-center gap-1.5">
                 {['Fix failing tests', 'Explain this repo', 'Add dark mode'].map(s => (
-                  <span key={s} className="rounded-lg border border-line px-2.5 py-1.5 text-xs text-ink-dim">
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => setDictation({ text: s, seq: Date.now() })}
+                    className="rounded-lg border border-line px-2.5 py-1.5 text-xs outline-none hover:bg-base-1 focus-visible:ring-2 focus-visible:ring-accent"
+                  >
                     {s}
-                  </span>
+                  </button>
                 ))}
               </span>
             }

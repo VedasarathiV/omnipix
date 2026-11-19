@@ -160,4 +160,26 @@ describe('run workspace views', () => {
     const clean = await call('GET', `/api/agents/runs/${id}/git/status`);
     expect(clean.body.files).toHaveLength(0);
   });
+
+  it('writes, searches, and executes in the workspace', async () => {
+    const id = seedRun();
+    const written = await call('PUT', `/api/agents/runs/${id}/files/content`, { path: 'src/b.ts', content: 'needle here\n' });
+    expect(written.status).toBe(200);
+    expect(written.body).toMatchObject({ path: 'src/b.ts' });
+    expect((await call('PUT', `/api/agents/runs/${id}/files/content`, { path: '../x', content: 'y' })).status).toBe(400);
+
+    const found = await call('GET', `/api/agents/runs/${id}/search?q=needle`);
+    expect(found.status).toBe(200);
+    expect(found.body.hits).toContainEqual({ path: 'src/b.ts', line: 1, text: 'needle here' });
+    expect((await call('GET', `/api/agents/runs/${id}/search?q=`)).status).toBe(400);
+
+    const ran = await call('POST', `/api/agents/runs/${id}/exec`, { command: 'echo hello-world' });
+    expect(ran.status).toBe(200);
+    expect(ran.body).toMatchObject({ exitCode: 0, timedOut: false });
+    expect(ran.body.stdout).toContain('hello-world');
+
+    const denied = await call('POST', `/api/agents/runs/${id}/exec`, { command: 'rm -rf /' });
+    expect(denied.status).toBe(400);
+    expect(denied.body.error.message).toMatch(/denied by policy/);
+  });
 });

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Copy, Monitor, Smartphone, Tablet } from 'lucide-react';
 import { useStudio } from '../state/store';
+import { apiFetch } from '../lib/api';
 import { useLogs, useRun, type AgentStep } from '../lib/queries';
 
 interface ShellSession {
@@ -29,17 +30,59 @@ function sessionsFromSteps(steps: AgentStep[]): ShellSession[] {
   return sessions;
 }
 
+export interface ExecSession extends ShellSession {
+  exitCode: number | null;
+  durationMs: number;
+}
+
 export function TerminalPanel() {
   const { activeRunId, pushToast } = useStudio();
   const { data: run } = useRun(activeRunId, true);
   const [selected, setSelected] = useState<string | null>(null);
+  const [local, setLocal] = useState<ExecSession[]>([]);
+  const [command, setCommand] = useState('');
+  const [running, setRunning] = useState(false);
   if (activeRunId === null) {
     return <p className="px-3 py-6 text-center text-xs text-ink-faint">Shell output from the active run appears here.</p>;
   }
-  const sessions = sessionsFromSteps(run?.steps ?? []);
+
+  async function exec() {
+    const cmd = command.trim();
+    if (!cmd || running || activeRunId === null) return;
+    setRunning(true);
+    try {
+      const res = await apiFetch<{ stdout: string; stderr: string; exitCode: number | null; timedOut: boolean; durationMs: number }>(
+        `/api/agents/runs/${activeRunId}/exec`,
+        { method: 'POST', body: JSON.stringify({ command: cmd }) },
+      );
+      const errText = res.stderr ? `\n${res.stderr}` : '';
+      const session: ExecSession = {
+        id: `exec-${Date.now()}`,
+        title: cmd.slice(0, 40),
+        command: cmd,
+        output: `${res.stdout}${errText}`.trim() || `(exit ${res.exitCode ?? '?'})`,
+        exitCode: res.exitCode,
+        durationMs: res.durationMs,
+      };
+      setLocal(list => [...list, session]);
+      setSelected(session.id);
+      setCommand('');
+    } catch (err) {
+      pushToast('error', err instanceof Error ? err.message : 'Exec failed');
+    } finally {
+      setRunning(false);
+    }
+  }
+
+  const sessions = [...sessionsFromSteps(run?.steps ?? []), ...local];
   const active = sessions.find(s => s.id === selected) ?? sessions[sessions.length - 1];
   if (!sessions.length) {
-    return <p className="px-3 py-6 text-center text-xs text-ink-faint">This run has not executed any shell commands yet.</p>;
+    return (
+      <div className="flex h-full flex-col">
+        <p className="flex-1 px-3 py-6 text-center text-xs text-ink-faint">This run has not executed any shell commands yet.</p>
+        <ExecInput command={command} setCommand={setCommand} running={running} onRun={() => void exec()} />
+      </div>
+    );
   }
   return (
     <div className="flex h-full flex-col">
@@ -70,8 +113,46 @@ export function TerminalPanel() {
       <div className="min-h-0 flex-1 overflow-y-auto bg-base-0 p-3 font-mono text-[11px] leading-5" aria-live="polite">
         <p className="font-semibold text-ink">$ {active.command}</p>
         <p className="break-all whitespace-pre-wrap text-ink-dim">{active.output}</p>
+        {'exitCode' in active && (
+          <p className="mt-1 text-ink-faint">
+            exit {(active as ExecSession).exitCode ?? '?'} · {((active as ExecSession).durationMs / 1000).toFixed(1)}s
+          </p>
+        )}
       </div>
+      <ExecInput command={command} setCommand={setCommand} running={running} onRun={() => void exec()} />
     </div>
+  );
+}
+
+function ExecInput({ command, setCommand, running, onRun }: {
+  command: string;
+  setCommand: (c: string) => void;
+  running: boolean;
+  onRun: () => void;
+}) {
+  return (
+    <form
+      onSubmit={e => { e.preventDefault(); onRun(); }}
+      className="flex shrink-0 items-center gap-1.5 border-t border-line bg-base-1 px-2 py-1.5"
+    >
+      <span className="shrink-0 font-mono text-[11px] text-ok">$</span>
+      <input
+        value={command}
+        onChange={e => setCommand(e.target.value)}
+        placeholder="Run in workspace… (npm test, ls, …)"
+        aria-label="Run command in workspace"
+        spellCheck={false}
+        autoComplete="off"
+        className="min-w-0 flex-1 bg-transparent font-mono text-[11px] outline-none placeholder:text-ink-faint"
+      />
+      <button
+        type="submit"
+        disabled={!command.trim() || running}
+        className="shrink-0 rounded-md bg-accent px-2 py-1 text-[11px] font-semibold text-base-0 outline-none hover:opacity-90 focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-40"
+      >
+        {running ? '…' : 'Run'}
+      </button>
+    </form>
   );
 }
 

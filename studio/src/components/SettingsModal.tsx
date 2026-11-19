@@ -321,7 +321,7 @@ function AppearanceSection() {
 const SHORTCUTS: Array<[string, string]> = [
   ['⌘K', 'Command palette'], ['⌘N', 'New chat'], ['⌘Enter', 'Run / send'], ['Esc', 'Stop run'],
   ['⌘M', 'Change model'], ['⌘.', 'Cycle Ask / Plan / Agent'], ['⌘,', 'Settings'],
-  ['⌘1–9', 'Switch rail section'], ['↑', 'Previous prompt'], ['/', 'Slash commands'], ['@', 'Mention file'],
+  ['⌘1–0', 'Switch rail section'], ['↑', 'Previous prompt'], ['/', 'Slash commands'], ['@', 'Mention file'],
 ];
 
 function ShortcutsSection() {

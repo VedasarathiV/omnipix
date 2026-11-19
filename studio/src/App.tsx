@@ -20,6 +20,7 @@ import { MobileBar } from './components/MobileBar';
 import type { MobilePane } from './components/MobileBar';
 import { AgentsPage } from './pages/AgentsPage';
 import { SkillsPage } from './pages/SkillsPage';
+import { ModelsPage } from './pages/ModelsPage';
 import { ProvidersPage } from './pages/ProvidersPage';
 import { EvalsPage } from './pages/EvalsPage';
 import { SearchPage } from './pages/SearchPage';
@@ -43,6 +44,7 @@ function MainPane() {
       {rail === 'agents' && <AgentsPage />}
       {rail === 'skills' && <SkillsPage />}
       {rail === 'keys' && <ProvidersPage />}
+      {rail === 'models' && <ModelsPage />}
       {rail === 'evals' && <EvalsPage />}
       {rail === 'search' && <SearchPage />}
       {rail === 'docs' && <DocsPage />}

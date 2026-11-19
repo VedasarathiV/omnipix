@@ -34,8 +34,6 @@ interface StudioState {
   toasts: Toast[];
   pushToast: (kind: Toast['kind'], text: string) => void;
   dismissToast: (id: number) => void;
-  hasKeys: boolean;
-  setHasKeys: (has: boolean) => void;
   agentEditor: string | null;
   setAgentEditor: (id: string | null) => void;
   conversationId: number | null;
@@ -46,24 +44,28 @@ interface StudioState {
   setStreamingReply: (text: string | null) => void;
   dictation: { text: string; seq: number } | null;
   setDictation: (d: { text: string; seq: number } | null) => void;
+  selectedFile: string | null;
+  setSelectedFile: (path: string | null) => void;
 }
 
 const StudioContext = createContext<StudioState | null>(null);
 
 let toastSeq = 1;
 
-const RAILS: RailId[] = ['chat', 'agents', 'skills', 'keys', 'evals', 'search', 'docs', 'settings', 'notifications', 'voice'];
+const RAILS: RailId[] = ['chat', 'agents', 'skills', 'keys', 'models', 'evals', 'search', 'docs', 'settings', 'notifications', 'voice'];
 
-function hashParts(): { rail: RailId; runId: number | null; conversationId: number | null } {
+function hashParts(): { rail: RailId; runId: number | null; conversationId: number | null; file: string | null } {
   const hash = window.location.hash.replace(/^#\/?/, '');
   const [path, query] = hash.split('?');
   const params = new URLSearchParams(query ?? '');
   const runId = Number(params.get('run'));
   const conversationId = Number(params.get('chat'));
+  const file = params.get('file');
   return {
     rail: (RAILS as string[]).includes(path) ? (path as RailId) : 'chat',
     runId: Number.isInteger(runId) && runId > 0 ? runId : null,
     conversationId: Number.isInteger(conversationId) && conversationId > 0 ? conversationId : null,
+    file: file && !file.includes('..') ? file : null,
   };
 }
 
@@ -82,17 +84,17 @@ export function StudioProvider({ children }: { children: ReactNode }) {
   const [rightOpen, setRightOpen] = useState(true);
   const [rightTab, setRightTab] = useState<RightTab>('changes');
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [sidebarTab, setSidebarTab] = useState<'chats' | 'files'>('files');
+  const [sidebarTab, setSidebarTab] = useState<'chats' | 'files'>('chats');
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [acceptedFiles, setAcceptedFiles] = useState<Set<string>>(new Set());
   const [toasts, setToasts] = useState<Toast[]>([]);
-  const [hasKeys, setHasKeys] = useState(true);
   const [agentEditor, setAgentEditor] = useState<string | null>(null);
   const [conversationId, setConversationId] = useState<number | null>(() => hashParts().conversationId);
   const [activeRunId, setActiveRunId] = useState<number | null>(() => hashParts().runId);
   const [streamingReply, setStreamingReply] = useState<string | null>(null);
   const [dictation, setDictation] = useState<{ text: string; seq: number } | null>(null);
+  const [selectedFile, setSelectedFile] = useState<string | null>(() => hashParts().file);
 
   const pushToast = useCallback((kind: Toast['kind'], text: string) => {
     const id = toastSeq++;
@@ -126,13 +128,14 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     paletteOpen, setPaletteOpen, settingsOpen, setSettingsOpen,
     acceptedFiles, acceptFile, acceptAll,
     toasts, pushToast, dismissToast,
-    hasKeys, setHasKeys, agentEditor, setAgentEditor,
+    agentEditor, setAgentEditor,
     conversationId, setConversationId, activeRunId, setActiveRunId,
     streamingReply, setStreamingReply, dictation, setDictation,
+    selectedFile, setSelectedFile,
   }), [
     rail, mode, model, rightOpen, rightTab, sidebarOpen, sidebarTab,
     paletteOpen, settingsOpen, acceptedFiles, toasts,
-    hasKeys, agentEditor, conversationId, activeRunId, streamingReply, dictation,
+    agentEditor, conversationId, activeRunId, streamingReply, dictation, selectedFile,
     acceptFile, acceptAll, pushToast, dismissToast,
   ]);
 

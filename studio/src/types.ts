@@ -144,6 +144,7 @@ export type RailId =
   | 'agents'
   | 'skills'
   | 'keys'
+  | 'models'
   | 'evals'
   | 'search'
   | 'docs'

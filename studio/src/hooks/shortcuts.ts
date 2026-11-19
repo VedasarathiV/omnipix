@@ -4,7 +4,7 @@ import { useStudio } from '../state/store';
 import { apiFetch } from '../lib/api';
 import type { RailId } from '../types';
 
-const RAIL_ORDER: RailId[] = ['chat', 'agents', 'skills', 'keys', 'evals', 'search', 'docs', 'notifications', 'voice'];
+const RAIL_ORDER: RailId[] = ['chat', 'agents', 'skills', 'keys', 'models', 'evals', 'search', 'docs', 'notifications', 'voice'];
 
 /** Global keyboard map. Inputs keep their own keys; Escape stops the live run. */
 export function useShortcuts() {
@@ -41,6 +41,11 @@ export function useShortcuts() {
       if (mod && e.key >= '1' && e.key <= '9') {
         e.preventDefault();
         setRail(RAIL_ORDER[Number(e.key) - 1]);
+        return;
+      }
+      if (mod && e.key === '0') {
+        e.preventDefault();
+        setRail('voice');
         return;
       }
       if (mod && e.key === '.') {

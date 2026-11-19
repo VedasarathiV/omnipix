@@ -14,8 +14,8 @@ export function ModelPicker({ compact }: { compact?: boolean }) {
       onChange={e => setModel(e.target.value)}
       className={
         compact
-          ? 'max-w-32 rounded-md bg-transparent px-1 py-1 text-xs text-ink-dim outline-none focus-visible:ring-2 focus-visible:ring-accent'
-          : 'max-w-48 rounded-lg border border-line bg-base-1 px-2 py-1.5 text-xs outline-none focus-visible:ring-2 focus-visible:ring-accent'
+          ? 'max-w-44 truncate rounded-md bg-transparent px-1 py-1 text-xs text-ink-dim outline-none focus-visible:ring-2 focus-visible:ring-accent'
+          : 'max-w-56 truncate rounded-lg border border-line bg-base-1 px-2 py-1.5 text-xs outline-none focus-visible:ring-2 focus-visible:ring-accent'
       }
     >
       <option value="auto">Auto (fallback chain)</option>

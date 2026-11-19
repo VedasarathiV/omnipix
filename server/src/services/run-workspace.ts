@@ -1,8 +1,8 @@
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
 import { getDb } from '../db/index.js';
-import { resolveInRoot, runWorkspace, workspaceRoot } from '../lib/workspace.js';
+import { assertCommandAllowed, execShell, resolveInRoot, runWorkspace, workspaceRoot } from '../lib/workspace.js';
 import { getCheckpoint, listCheckpoints } from './checkpoints.js';
 
 /**
@@ -396,6 +396,90 @@ export function workspaceGitBranch(runId: number, name: string): { branch: strin
   if (!status.isRepo) throw new Error('Workspace is not a git repository');
   git(['checkout', '-b', trimmed], root);
   return { branch: trimmed };
+}
+
+const MAX_WRITE_BYTES = 200 * 1024;
+
+export function writeWorkspaceFile(runId: number, rel: string, content: string): { path: string; bytes: number } {
+  const root = workspaceDir(runId);
+  const abs = resolveInRoot(root, rel);
+  const buf = Buffer.from(content, 'utf8');
+  if (buf.length > MAX_WRITE_BYTES) throw new Error('File too large (200KB max)');
+  fs.mkdirSync(path.dirname(abs), { recursive: true });
+  fs.writeFileSync(abs, buf);
+  return { path: rel, bytes: buf.length };
+}
+
+export interface SearchHit {
+  path: string;
+  line: number;
+  text: string;
+}
+
+const SEARCH_TIMEOUT_MS = 15_000;
+const SEARCH_MAX_HITS = 100;
+
+/** Ripgrep-style workspace search over text files (fixed strings only). */
+export function searchWorkspace(runId: number, query: string): SearchHit[] {
+  const root = workspaceDir(runId);
+  const needle = query.trim();
+  if (!needle || needle.length > 200) throw new Error('Send q (1-200 chars)');
+  // Short flags only: BSD grep (macOS) lacks GNU's long options.
+  const args = ['-rnFI', '-m', '5', needle, '.'];
+  for (const dir of SKIP_DIRS) args.push(`--exclude-dir=${dir}`);
+  const proc = spawnSync('grep', args, { cwd: root, encoding: 'utf8', timeout: SEARCH_TIMEOUT_MS, maxBuffer: 1024 * 1024 });
+  if (proc.error) throw new Error('Search failed to start');
+  if (proc.status !== 0 && proc.status !== 1) throw new Error('Search failed');
+  const hits: SearchHit[] = [];
+  for (const line of (proc.stdout as string).split('\n')) {
+    if (hits.length >= SEARCH_MAX_HITS) break;
+    if (!line) continue;
+    // ./path/to/file:line:text — path may contain colons, so split from the left twice.
+    const rest = line.startsWith('./') ? line.slice(2) : line;
+    const firstColon = rest.indexOf(':');
+    if (firstColon < 0) continue;
+    const secondColon = rest.indexOf(':', firstColon + 1);
+    if (secondColon < 0) continue;
+    const lineNo = Number(rest.slice(firstColon + 1, secondColon));
+    if (!Number.isInteger(lineNo)) continue;
+    hits.push({ path: rest.slice(0, firstColon), line: lineNo, text: rest.slice(secondColon + 1).slice(0, 300) });
+  }
+  return hits;
+}
+
+export interface ExecResult {
+  command: string;
+  stdout: string;
+  stderr: string;
+  exitCode: number | null;
+  timedOut: boolean;
+  truncated: boolean;
+  durationMs: number;
+}
+
+/**
+ * Run one command in the workspace as the operator (the dashboard user clicked
+ * Run — this is direct execution, not an agent tool call, so no approval row).
+ * Same sandbox as agent shells: cwd lock, denylist, scrubbed env, timeout cap.
+ */
+export async function execInWorkspace(runId: number, command: string, timeoutMs?: number): Promise<ExecResult> {
+  const root = workspaceDir(runId);
+  const trimmed = command.trim();
+  if (!trimmed) throw new Error('Command is required');
+  if (trimmed.length > 4000) throw new Error('Command too long');
+  assertCommandAllowed(trimmed);
+  const capped = timeoutMs === undefined ? 120_000 : Math.min(300_000, Math.max(1000, Math.floor(timeoutMs)));
+  const startedAt = Date.now();
+  const result = await execShell(trimmed, { cwd: root, timeoutMs: capped });
+  return {
+    command: trimmed,
+    stdout: result.stdout.slice(0, 50_000),
+    stderr: result.stderr.slice(0, 20_000),
+    exitCode: result.exitCode,
+    timedOut: result.timedOut,
+    truncated: result.truncated,
+    durationMs: Date.now() - startedAt,
+  };
 }
 
 /**
