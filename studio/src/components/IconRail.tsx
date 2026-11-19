@@ -29,7 +29,7 @@ export function IconRail() {
   const { rail, setRail, setSettingsOpen } = useStudio();
   return (
     <nav aria-label="Primary" className="flex w-12 shrink-0 flex-col items-center gap-1 border-r border-line bg-base-1 py-2">
-      <div className="mb-2 flex size-7 items-center justify-center rounded-lg bg-ok font-mono text-xs font-bold text-base-0" aria-label="OmniPix">
+      <div className="mb-2 flex size-10 items-center justify-center rounded-xl bg-ok font-mono text-base font-bold text-base-0 shadow-lg" aria-label="OmniPix">
         O
       </div>
       {ITEMS.slice(0, 7).map(item => (

@@ -1,0 +1,14 @@
+{
+  "name": "omnipix-studio-app",
+  "private": true,
+  "version": "0.1.0",
+  "main": "main.js",
+  "scripts": {
+    "stage": "node stage.mjs",
+    "dist": "npm run stage && electron-builder --mac --arm64 --publish never"
+  },
+  "devDependencies": {
+    "electron": "38.8.6",
+    "electron-builder": "25.1.8"
+  }
+}

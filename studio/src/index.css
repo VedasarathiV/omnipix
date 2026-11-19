@@ -78,6 +78,69 @@ body {
   * {
     transition-duration: 0ms;
   }
+  .splash-ring,
+  .splash-text,
+  .splash-bar > span {
+    animation: none !important;
+  }
+}
+
+@keyframes splash-pop {
+  0% {
+    transform: scale(0.6);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.08);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes splash-ring {
+  0% {
+    box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.55);
+  }
+  100% {
+    box-shadow: 0 0 0 22px rgba(52, 211, 153, 0);
+  }
+}
+
+@keyframes splash-rise {
+  from {
+    transform: translateY(8px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+@keyframes splash-load {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(200%);
+  }
+}
+
+.splash-ring {
+  animation:
+    splash-pop 450ms ease-out both,
+    splash-ring 1s ease-out 200ms both;
+}
+
+.splash-text {
+  animation: splash-rise 400ms ease-out 250ms both;
+}
+
+.splash-bar > span {
+  animation: splash-load 900ms ease-in-out infinite;
 }
 
 ::-webkit-scrollbar {

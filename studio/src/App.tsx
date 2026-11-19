@@ -10,6 +10,7 @@ import { RightPanel } from './components/RightPanel';
 import { CommandPalette } from './components/CommandPalette';
 import { SettingsModal } from './components/SettingsModal';
 import { AgentEditor } from './components/AgentEditor';
+import { Splash } from './components/Splash';
 import { Toasts } from './components/Toasts';
 import { FloatingMic } from './components/FloatingMic';
 import { Onboarding } from './components/Onboarding';
@@ -79,6 +80,7 @@ export function App() {
       <SettingsModal />
       <AgentEditor />
       <Onboarding />
+      <Splash />
       <Toasts />
     </StudioProvider>
   );
