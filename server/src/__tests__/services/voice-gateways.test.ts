@@ -22,7 +22,7 @@ function seed(platform: string, model: string, modality = 'audio') {
 }
 const params = { file: wav(), filename: 'speech.wav', mimeType: 'audio/wav', responseFormat: 'json', language: 'en' };
 beforeEach(() => {
-  process.env.ENCRYPTION_KEY = '0'.repeat(64); initDb(':memory:'); clearAllCooldowns(Number.MAX_SAFE_INTEGER);
+  process.env.ENCRYPTION_KEY = '0'.repeat(64); initDb(':memory:'); getDb().prepare('DELETE FROM media_models').run(); clearAllCooldowns(Number.MAX_SAFE_INTEGER);
   for (const platform of ['typecast', 'cartesia', 'silvr']) {
     const e = encrypt(`${platform}-synthetic-key`);
     getDb().prepare("INSERT INTO api_keys (platform,label,encrypted_key,iv,auth_tag,status,enabled) VALUES (?,'test',?,?,?,'unknown',1)").run(platform, e.encrypted, e.iv, e.authTag);

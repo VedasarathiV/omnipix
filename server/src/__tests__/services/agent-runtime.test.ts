@@ -1,6 +1,10 @@
 import { beforeEach, describe, expect, it } from 'vitest';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { getDb, initDb } from '../../db/index.js';
-import { listSkills, reconcileOrphanedRuns, selectSkills, skillPromptBlock, type SkillRow } from '../../services/agent-runtime.js';
+import { runWorkspace } from '../../lib/workspace.js';
+import { listSkills, reconcileOrphanedRuns, repoConventions, selectSkills, skillPromptBlock, type SkillRow } from '../../services/agent-runtime.js';
 
 const SKILLS: SkillRow[] = [
   { name: 'planner', description: 'Break a goal into steps', instructions: 'list steps with tools', enabled: 1, builtin: 1 },
@@ -33,6 +37,26 @@ describe('selectSkills', () => {
     expect(selectSkills('planner needed', SKILLS).map(s => s.name)).toEqual(['planner']);
     // One instruction-only word is weak evidence: not picked.
     expect(selectSkills('zzzz tools yyyy', SKILLS)).toEqual([]);
+  });
+
+  it('loads repo conventions from CLAUDE.md and AGENTS.md, capped', () => {
+    process.env.ENCRYPTION_KEY = '0'.repeat(64);
+    initDb(':memory:');
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'omnipix-conventions-'));
+    process.env.OMNIPIX_WORKSPACE_ROOT = tmp;
+    try {
+      const ws = runWorkspace(1);
+      expect(repoConventions(1)).toBe('');
+      fs.writeFileSync(path.join(ws, 'CLAUDE.md'), 'Use tabs.');
+      fs.writeFileSync(path.join(ws, 'AGENTS.md'), 'x'.repeat(9000));
+      const out = repoConventions(1);
+      expect(out).toContain('Use tabs.');
+      expect(out).toContain('Repository conventions');
+      expect(out.length).toBeLessThanOrEqual(8100);
+    } finally {
+      delete process.env.OMNIPIX_WORKSPACE_ROOT;
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
   });
 
   it('truncates long instructions on inject with a marker', () => {

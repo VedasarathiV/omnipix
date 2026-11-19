@@ -56,6 +56,37 @@ export function ApprovalsPanel() {
     },
   })
 
+  const { data: rules = [] } = useQuery<Array<{ tool: string; decision: string }>>({
+    queryKey: ['approval-rules'],
+    queryFn: () => apiFetch<{ rules: Array<{ tool: string; decision: string }> }>('/api/agents/approval-rules').then(r => r.rules),
+  })
+
+  const pinAndDecide = useMutation({
+    mutationFn: async ({ id, tool, approved }: { id: number; tool: string; approved: boolean }) => {
+      await apiFetch('/api/agents/approval-rules', {
+        method: 'POST',
+        body: JSON.stringify({ tool, decision: approved ? 'allow' : 'deny' }),
+      })
+      return apiFetch(`/api/agents/approvals/${id}/decide`, {
+        method: 'POST',
+        body: JSON.stringify({ approved }),
+      })
+    },
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['approvals'] })
+      void queryClient.invalidateQueries({ queryKey: ['agent-runs'] })
+      void queryClient.invalidateQueries({ queryKey: ['approval-rules'] })
+    },
+  })
+
+  const clearRule = useMutation({
+    mutationFn: (tool: string) =>
+      apiFetch(`/api/agents/approval-rules/${encodeURIComponent(tool)}`, { method: 'DELETE' }),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: ['approval-rules'] })
+    },
+  })
+
   const visible = showDecided ? rows : rows.filter(r => r.status === 'pending')
 
   return (
@@ -115,10 +146,10 @@ export function ApprovalsPanel() {
                     <DiffViewer diffText={row.diff_text ?? ''} />
                   </div>
                   {row.status === 'pending' && (
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
                       <Button
                         size="sm"
-                        disabled={decide.isPending}
+                        disabled={decide.isPending || pinAndDecide.isPending}
                         onClick={() => decide.mutate({ id: row.id, approved: true })}
                       >
                         <Check /> {t('agents.approvals.approve')}
@@ -126,10 +157,28 @@ export function ApprovalsPanel() {
                       <Button
                         size="sm"
                         variant="outline"
-                        disabled={decide.isPending}
+                        disabled={decide.isPending || pinAndDecide.isPending}
                         onClick={() => decide.mutate({ id: row.id, approved: false })}
                       >
                         <X /> {t('agents.approvals.deny')}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        disabled={decide.isPending || pinAndDecide.isPending}
+                        onClick={() => pinAndDecide.mutate({ id: row.id, tool: row.tool, approved: true })}
+                        title={t('agents.approvals.alwaysHint')}
+                      >
+                        {t('agents.approvals.alwaysApprove')}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        disabled={decide.isPending || pinAndDecide.isPending}
+                        onClick={() => pinAndDecide.mutate({ id: row.id, tool: row.tool, approved: false })}
+                        title={t('agents.approvals.alwaysHint')}
+                      >
+                        {t('agents.approvals.alwaysDeny')}
                       </Button>
                     </div>
                   )}
@@ -141,6 +190,32 @@ export function ApprovalsPanel() {
             </div>
           )
         })}
+        <div className="mt-4 border-t border-border pt-4">
+          <h3 className="text-sm font-medium">{t('agents.approvals.rulesTitle')}</h3>
+          {rules.length === 0 ? (
+            <p className="mt-1 text-xs text-muted-foreground">{t('agents.approvals.rulesEmpty')}</p>
+          ) : (
+            <ul className="mt-2 space-y-1">
+              {rules.map(rule => (
+                <li key={rule.tool} className="flex items-center justify-between gap-2 text-xs">
+                  <span>
+                    <code className="font-mono">{rule.tool}</code>
+                    {' → '}
+                    <span className="font-medium">{rule.decision}</span>
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={clearRule.isPending}
+                    onClick={() => clearRule.mutate(rule.tool)}
+                  >
+                    {t('agents.approvals.removeRule')}
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </CardContent>
     </Card>
   )

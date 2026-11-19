@@ -116,6 +116,36 @@ describe('agent runs', () => {
     expect(stored.content.result).not.toContain('untrusted-data');
   });
 
+  it('injects workspace CLAUDE.md into the run system prompt', async () => {
+    const fs = await import('node:fs');
+    const os = await import('node:os');
+    const path = await import('node:path');
+    const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'omnipix-conventions-'));
+    process.env.OMNIPIX_WORKSPACE_ROOT = tmpRoot;
+    try {
+      // Fresh :memory: DB per test, so this run is id 1; seed its workspace
+      // before launch — no race with the fire-and-forget loop.
+      const ws = path.join(tmpRoot, 'run-1');
+      fs.mkdirSync(ws, { recursive: true });
+      fs.writeFileSync(path.join(ws, 'CLAUDE.md'), 'House rule: tabs everywhere.');
+      const bodies: string[] = [];
+      globalThis.fetch = vi.fn(async (url: string, init?: RequestInit) => {
+        if (init?.body) bodies.push(String(init.body));
+        return completion('llama-3.1-8b-instant', { role: 'assistant', content: 'Noted.' });
+      }) as unknown as typeof fetch;
+      const created = await call('POST', '/api/agents/runs', {
+        goal: 'Say hi', model: 'llama-3.1-8b-instant', tools: ['calculator'],
+      });
+      const run = await waitForTerminal(created.body.id);
+      expect(run.status).toBe('done');
+      expect(bodies[0]).toContain('House rule: tabs everywhere.');
+      expect(bodies[0]).toContain('Repository conventions');
+    } finally {
+      delete process.env.OMNIPIX_WORKSPACE_ROOT;
+      fs.rmSync(tmpRoot, { recursive: true, force: true });
+    }
+  });
+
   it('stops at the token budget and reports paid-equivalent cost', async () => {
     let calls = 0;
     globalThis.fetch = vi.fn(async () => {
@@ -175,6 +205,19 @@ describe('agent runs', () => {
     // Trace keeps old steps plus the restore marker and the new answer.
     const kinds = run.steps.map((s: any) => s.kind);
     expect(kinds).toEqual(expect.arrayContaining(['tool_call', 'tool_result', 'restore', 'answer']));
+  });
+
+  it('manages persistent approval rules', async () => {
+    expect((await call('GET', '/api/agents/approval-rules')).body).toEqual({ rules: [] });
+    const created = await call('POST', '/api/agents/approval-rules', { tool: 'shell_exec', decision: 'allow' });
+    expect(created.status).toBe(201);
+    expect(created.body.rule).toMatchObject({ tool: 'shell_exec', decision: 'allow' });
+    expect((await call('POST', '/api/agents/approval-rules', { tool: 'x', decision: 'maybe' })).status).toBe(400);
+    const listed = await call('GET', '/api/agents/approval-rules');
+    expect(listed.body.rules).toHaveLength(1);
+    expect((await call('DELETE', '/api/agents/approval-rules/nope')).status).toBe(404);
+    expect((await call('DELETE', '/api/agents/approval-rules/shell_exec')).body).toEqual({ cleared: 'shell_exec' });
+    expect((await call('GET', '/api/agents/approval-rules')).body).toEqual({ rules: [] });
   });
 
   it('refuses to resume live, parked, finished, or missing runs', async () => {

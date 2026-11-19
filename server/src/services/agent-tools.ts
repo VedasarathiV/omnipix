@@ -234,8 +234,56 @@ export const AGENT_TOOLS: AgentTool[] = [
         const row = db.prepare('SELECT value FROM agent_memory WHERE run_id = ? AND key = ?').get(ctx.runId, args.key) as { value: string } | undefined;
         return row ? row.value : `no memory for key: ${args.key}`;
       }
-      const rows = db.prepare('SELECT key FROM agent_memory WHERE run_id = ? ORDER BY key').all(ctx.runId) as { key: string }[];
+      const rows = db.prepare("SELECT key FROM agent_memory WHERE run_id = ? AND key != '__todos' ORDER BY key").all(ctx.runId) as { key: string }[];
       return rows.length ? rows.map(r => r.key).join(', ') : 'no memories stored';
+    },
+  },
+  {
+    name: 'todo_write',
+    definition: toolDefinition(
+      'todo_write',
+      'Track the run task list: pass the FULL list every time with updated statuses. Use for any goal with 2+ steps; mark exactly one in_progress.',
+      {
+        todos: {
+          type: 'array',
+          description: 'Full task list: [{content, status, activeForm?}].',
+          items: {
+            type: 'object',
+            properties: {
+              content: { type: 'string' },
+              status: { type: 'string' },
+              activeForm: { type: 'string' },
+            },
+          },
+        },
+      },
+      ['todos'],
+    ),
+    execute: async (args, ctx) => {
+      const raw = args.todos;
+      if (!Array.isArray(raw) || !raw.length || raw.length > 20) {
+        throw new Error('todos must be a non-empty array of at most 20 items');
+      }
+      const todos = raw.map((t, i) => {
+        const item = (t ?? {}) as Record<string, unknown>;
+        const content = typeof item.content === 'string' ? item.content.trim() : '';
+        const status = item.status;
+        if (!content || content.length > 300) throw new Error(`todo ${i + 1}: content must be 1..300 chars`);
+        if (status !== 'pending' && status !== 'in_progress' && status !== 'completed') {
+          throw new Error(`todo ${i + 1}: status must be pending, in_progress, or completed`);
+        }
+        return {
+          content,
+          status,
+          activeForm: typeof item.activeForm === 'string' ? item.activeForm.slice(0, 300) : undefined,
+        };
+      });
+      if (todos.filter(t => t.status === 'in_progress').length > 1) {
+        throw new Error('at most one todo may be in_progress');
+      }
+      getDb().prepare('INSERT INTO agent_memory (run_id, key, value) VALUES (?, \'__todos\', ?) ON CONFLICT(run_id, key) DO UPDATE SET value = excluded.value')
+        .run(ctx.runId, JSON.stringify(todos));
+      return todos.map(t => `${t.status === 'completed' ? '[x]' : t.status === 'in_progress' ? '[>]' : '[ ]'} ${t.content}`).join('\n');
     },
   },
 ];

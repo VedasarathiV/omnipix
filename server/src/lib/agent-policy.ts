@@ -53,6 +53,7 @@ const READ_TOOLS = new Set([
   'delegate',
   'recall_docs',
   'find_skill',
+  'todo_write',
 ]);
 
 const WRITE_TOOLS = new Set(['write_file', 'edit_file', 'remember', 'git_branch', 'git_commit']);
@@ -87,7 +88,42 @@ export function toolRisk(name: string): ToolRisk {
   return 'deny';
 }
 
+export interface ApprovalRule {
+  tool: string;
+  decision: 'allow' | 'deny';
+  created_at: string;
+}
+
+export function listApprovalRules(): ApprovalRule[] {
+  return getDb().prepare('SELECT tool, decision, created_at FROM approval_rules ORDER BY tool').all() as ApprovalRule[];
+}
+
+export function setApprovalRule(tool: string, decision: 'allow' | 'deny'): ApprovalRule {
+  const db = getDb();
+  db.prepare(`INSERT INTO approval_rules (tool, decision) VALUES (?, ?)
+              ON CONFLICT(tool) DO UPDATE SET decision = excluded.decision`).run(tool, decision);
+  return db.prepare('SELECT tool, decision, created_at FROM approval_rules WHERE tool = ?').get(tool) as ApprovalRule;
+}
+
+export function clearApprovalRule(tool: string): boolean {
+  return getDb().prepare('DELETE FROM approval_rules WHERE tool = ?').run(tool).changes > 0;
+}
+
+function ruleFor(tool: string): 'allow' | 'deny' | null {
+  try {
+    const row = getDb().prepare('SELECT decision FROM approval_rules WHERE tool = ?').get(tool) as { decision: 'allow' | 'deny' } | undefined;
+    return row?.decision ?? null;
+  } catch {
+    // Table predates old test schemas; no rules then.
+    return null;
+  }
+}
+
 export function evaluateToolCall(name: string): PolicyDecision {
+  // Persistent operator rules win over tiers: pinned trust compounds.
+  const rule = ruleFor(name);
+  if (rule === 'allow') return 'auto';
+  if (rule === 'deny') return 'deny';
   const risk = toolRisk(name);
   if (risk === 'read') return 'auto';
   if (risk === 'deny') return 'deny';

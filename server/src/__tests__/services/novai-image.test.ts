@@ -18,6 +18,7 @@ beforeAll(async () => {
 });
 beforeEach(() => {
   process.env.ENCRYPTION_KEY = '0'.repeat(64); initDb(':memory:');
+  getDb().prepare('DELETE FROM media_models').run();
   const enc = encrypt('test-novai-key');
   getDb().prepare("INSERT INTO api_keys (platform,label,encrypted_key,iv,auth_tag,status,enabled) VALUES ('novai','test',?,?,?,'healthy',1)").run(enc.encrypted, enc.iv, enc.authTag);
   getDb().prepare("INSERT INTO media_models (platform,model_id,display_name,modality,priority,enabled,quota_label) VALUES ('novai',?,'CogView','image',1,1,'shared daily free allowance')").run(model);

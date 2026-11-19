@@ -13,7 +13,7 @@ const mp3 = Buffer.concat([Buffer.from('ID3'), Buffer.alloc(64)]);
 const mp4 = Buffer.alloc(64); mp4.write('ftyp', 4);
 const input = { file: wav, filename: 'speech.wav', mimeType: 'audio/wav', responseFormat: 'json' };
 const outputUrl = 'https://maas-watermark-prod-new.cn-wlcb.ufileos.com/video.mp4?signature=test';
-beforeEach(() => { process.env.ENCRYPTION_KEY = '0'.repeat(64); initDb(':memory:'); clearAllCooldowns(Number.MAX_SAFE_INTEGER); });
+beforeEach(() => { process.env.ENCRYPTION_KEY = '0'.repeat(64); initDb(':memory:'); getDb().prepare('DELETE FROM media_models').run(); clearAllCooldowns(Number.MAX_SAFE_INTEGER); });
 afterEach(() => { vi.restoreAllMocks(); vi.useRealTimers(); getDb().close(); });
 function seed(platform: string, model: string, modality: string, key = true) {
   if (key) {

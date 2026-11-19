@@ -274,13 +274,17 @@ describe('applyCatalog', () => {
     expect(getDb().prepare("SELECT model_id, modality, enabled FROM media_models WHERE platform = 'speechify'").get()).toEqual({ model_id: 'test-simba', modality: 'audio', enabled: 1 });
   });
 
-  it('imports Free.ai speech only from the catalog, never as a chat model or bundled seed', () => {
-    expect(getDb().prepare("SELECT id FROM media_models WHERE platform='freeai'").get()).toBeUndefined();
+  it('imports Free.ai speech from the catalog, never as a chat model, upserting the bundled seed', () => {
+    // Sync must upsert the catalog row without duplicating or leaking to chat.
+    const beforeKokoro = getDb().prepare("SELECT id FROM media_models WHERE platform='freeai' AND model_id='kokoro'").get();
+    const before = (getDb().prepare("SELECT COUNT(*) AS n FROM media_models WHERE platform='freeai'").get() as { n: number }).n;
     const catalog = catalogOf([...existingAsCatalogModels(), baseModel({ platform: 'freeai', modelId: 'kokoro', modality: 'audio' })]);
     applyCatalog(getDb(), catalog);
     applyCatalog(getDb(), catalog);
     expect(getDb().prepare("SELECT id FROM models WHERE platform='freeai'").get()).toBeUndefined();
-    expect(getDb().prepare("SELECT model_id, modality, enabled FROM media_models WHERE platform='freeai'").all()).toEqual([{ model_id: 'kokoro', modality: 'audio', enabled: 1 }]);
+    const rows = getDb().prepare("SELECT model_id, modality, enabled FROM media_models WHERE platform='freeai' ORDER BY model_id").all();
+    expect(rows.filter((r: any) => r.model_id === 'kokoro')).toEqual([{ model_id: 'kokoro', modality: 'audio', enabled: 1 }]);
+    expect(rows.length).toBe(before + (beforeKokoro ? 0 : 1));
   });
 
   it('adds Speka chat and embedding rows only when the signed catalog supplies them', () => {
@@ -514,10 +518,13 @@ describe('applyCatalog: transcriptionModels', () => {
 
   it('routes entries into media_models with modality, meta_json, and priority order', () => {
     const counts = applyCatalog(getDb(), sttCatalog(sttRoster()));
-    expect(counts.inserted).toBeGreaterThanOrEqual(5); // 4 STT + the image row
+    // 3 STT inserts + the image row; groq turbo upserts the bundled seed.
+    expect(counts.inserted).toBeGreaterThanOrEqual(4);
 
     const rows = sttRows();
-    expect(rows.map(r => `${r.platform}:${r.model_id}`)).toEqual([
+    // Roster rows first in priority order; bundled fallback seeds (if not
+    // pruned by an earlier test in this shared DB) sort after by priority.
+    expect(rows.slice(0, 4).map(r => `${r.platform}:${r.model_id}`)).toEqual([
       'groq:whisper-large-v3-turbo',
       'groq:whisper-large-v3',
       'cloudflare:@cf/openai/whisper-large-v3-turbo',

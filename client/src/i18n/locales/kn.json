@@ -1409,7 +1409,13 @@
       "step": "step",
       "args": "Arguments",
       "diff": "Proposed diff",
-      "noDiff": "No file changes attached to this request."
+      "noDiff": "No file changes attached to this request.",
+      "alwaysApprove": "Always allow",
+      "alwaysDeny": "Always deny",
+      "alwaysHint": "Remember this decision for this tool and keep going",
+      "rulesTitle": "Remembered tool rules",
+      "rulesEmpty": "No remembered rules. Approvals ask every time.",
+      "removeRule": "Remove"
     },
     "runs": {
       "newTitle": "New run",

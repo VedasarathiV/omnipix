@@ -45,7 +45,7 @@ describe('fetch_url guards', () => {
 describe('tool registry', () => {
   it('exposes the read, workspace, blackboard, memory, git, delegate, and docs tools with function definitions', () => {
     expect(AGENT_TOOLS.map(t => t.name).sort()).toEqual(
-      ['blackboard_read', 'blackboard_write', 'calculator', 'current_time', 'delegate', 'edit_file', 'fetch_url', 'find_skill', 'git_branch', 'git_clone', 'git_commit', 'git_diff', 'git_log', 'git_status', 'grep_search', 'memory_read', 'memory_write', 'read_file', 'recall_docs', 'recall_memory', 'remember', 'run_check', 'shell_exec', 'web_search', 'write_file'],
+      ['blackboard_read', 'blackboard_write', 'calculator', 'current_time', 'delegate', 'edit_file', 'fetch_url', 'find_skill', 'git_branch', 'git_clone', 'git_commit', 'git_diff', 'git_log', 'git_status', 'grep_search', 'memory_read', 'memory_write', 'read_file', 'recall_docs', 'recall_memory', 'remember', 'run_check', 'shell_exec', 'todo_write', 'web_search', 'write_file'],
     );
     for (const tool of AGENT_TOOLS) {
       expect(tool.definition.type).toBe('function');
@@ -87,6 +87,40 @@ describe('recall_docs', () => {
     const tool = agentToolByName('recall_docs')!;
     expect(await tool.execute({ query: 'bearer' }, { runId: 1 })).toContain('no project');
     expect(await tool.execute({ query: 'bearer', project: 'acme' }, { runId: 1 })).toContain('bearer tokens');
+  });
+});
+
+describe('todo_write', () => {
+  beforeEach(() => {
+    process.env.ENCRYPTION_KEY = '0'.repeat(64);
+    initDb(':memory:');
+    getDb().prepare(
+      "INSERT INTO agent_runs (goal, model, tools_json, skills_json, status, project_key) VALUES ('g', 'auto', '[]', '[]', 'running', '')",
+    ).run();
+  });
+
+  it('stores and renders the task list', async () => {
+    const tool = agentToolByName('todo_write')!;
+    const out = await tool.execute({ todos: [
+      { content: 'Explore', status: 'completed' },
+      { content: 'Implement', status: 'in_progress', activeForm: 'Implementing' },
+      { content: 'Verify', status: 'pending' },
+    ] }, { runId: 1 });
+    expect(out).toContain('[x] Explore');
+    expect(out).toContain('[>] Implement');
+    expect(out).toContain('[ ] Verify');
+    const row = getDb().prepare("SELECT value FROM agent_memory WHERE run_id = 1 AND key = '__todos'").get() as { value: string };
+    expect(JSON.parse(row.value)).toHaveLength(3);
+  });
+
+  it('validates shape and single in-progress', async () => {
+    const tool = agentToolByName('todo_write')!;
+    await expect(tool.execute({ todos: [] }, { runId: 1 })).rejects.toThrow('non-empty');
+    await expect(tool.execute({ todos: [{ content: 'x', status: 'done' }] }, { runId: 1 })).rejects.toThrow('status must be');
+    await expect(tool.execute({ todos: [
+      { content: 'a', status: 'in_progress' },
+      { content: 'b', status: 'in_progress' },
+    ] }, { runId: 1 })).rejects.toThrow('at most one');
   });
 });
 

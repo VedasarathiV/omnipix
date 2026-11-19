@@ -47,6 +47,8 @@ const PURE_MODULES = [
   'retry-hint.ts',
   // Search platform list; the provider list, keys route and search service import it.
   'search-platforms.ts',
+  // Injection-boundary marker shared by the runtime and orchestrator; pure string checks.
+  'spotlight.ts',
   // SSE keep-alive helper (#1642); env is injected, the response is a callback.
   'stream-keepalive.ts',
   'structured-output.ts',

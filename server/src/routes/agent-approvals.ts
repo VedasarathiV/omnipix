@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import type { Request, Response } from 'express';
 import { z } from 'zod';
-import { decideApproval, getApproval, listApprovals } from '../lib/agent-policy.js';
+import { clearApprovalRule, decideApproval, getApproval, listApprovalRules, listApprovals, setApprovalRule } from '../lib/agent-policy.js';
 import { getAgentRun } from '../services/agent-runtime.js';
 
 export const agentApprovalsRouter = Router();
@@ -32,6 +32,37 @@ agentApprovalsRouter.get('/approvals/:id', (req: Request, res: Response) => {
 
 const decideSchema = z.object({
   approved: z.boolean(),
+});
+
+const ruleSchema = z.object({
+  tool: z.string().trim().min(1).max(128),
+  decision: z.enum(['allow', 'deny']),
+});
+
+agentApprovalsRouter.get('/approval-rules', (_req: Request, res: Response) => {
+  res.json({ rules: listApprovalRules() });
+});
+
+agentApprovalsRouter.post('/approval-rules', (req: Request, res: Response) => {
+  const parsed = ruleSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: { message: parsed.error.issues.map(e => e.message).join(', ') } });
+    return;
+  }
+  res.status(201).json({ rule: setApprovalRule(parsed.data.tool, parsed.data.decision) });
+});
+
+agentApprovalsRouter.delete('/approval-rules/:tool', (req: Request, res: Response) => {
+  const tool = Array.isArray(req.params.tool) ? req.params.tool.join('/') : req.params.tool;
+  if (!tool.trim()) {
+    res.status(400).json({ error: { message: 'Invalid tool name' } });
+    return;
+  }
+  if (!clearApprovalRule(tool)) {
+    res.status(404).json({ error: { message: `No rule for tool '${tool}'` } });
+    return;
+  }
+  res.json({ cleared: tool });
 });
 
 agentApprovalsRouter.post('/approvals/:id/decide', (req: Request, res: Response) => {

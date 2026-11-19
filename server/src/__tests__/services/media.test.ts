@@ -50,6 +50,7 @@ describe('media service', () => {
   beforeEach(() => {
     process.env.ENCRYPTION_KEY = '0'.repeat(64);
     initDb(':memory:');
+    getDb().prepare('DELETE FROM media_models').run();
   });
 
   afterEach(() => {

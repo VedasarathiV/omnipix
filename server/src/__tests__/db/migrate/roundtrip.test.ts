@@ -79,6 +79,7 @@ const LEARNING_LOOP_FILENAME = '20261119_000019_learning_loop.ts';
 const TASK_OUTPUTS_FILENAME = '20261119_000020_task_outputs.ts';
 const SKILL_BUNDLES_FILENAME = '20261119_000021_skill_bundles.ts';
 const VOICE_MODELS_FILENAME = '20261119_000022_voice_models.ts';
+const APPROVAL_RULES_FILENAME = '20261119_000023_approval_rules.ts';
 
 interface SchemaRow {
   type: string;
@@ -205,6 +206,7 @@ describe('migration round trip', () => {
         TASK_OUTPUTS_FILENAME,
         SKILL_BUNDLES_FILENAME,
         VOICE_MODELS_FILENAME,
+        APPROVAL_RULES_FILENAME,
       ]);
     } finally {
       db.close();

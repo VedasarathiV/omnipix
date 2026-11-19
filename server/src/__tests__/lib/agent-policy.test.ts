@@ -3,13 +3,16 @@ import { initDb, getDb } from '../../db/index.js';
 import {
   __clearRiskOverrides,
   __setRiskOverride,
+  clearApprovalRule,
   decideApproval,
   evaluateToolCall,
   expireApproval,
   getApproval,
+  listApprovalRules,
   listApprovals,
   parkForApproval,
   reconcileOrphanedApprovals,
+  setApprovalRule,
   summarizeToolCall,
   toolRisk,
   waitForDecision,
@@ -33,8 +36,20 @@ describe('agent policy', () => {
     __clearRiskOverrides();
   });
 
+  it('lets persistent rules override tiers, and clears them', () => {
+    expect(evaluateToolCall('shell_exec')).toBe('pending');
+    setApprovalRule('shell_exec', 'allow');
+    expect(evaluateToolCall('shell_exec')).toBe('auto');
+    setApprovalRule('shell_exec', 'deny');
+    expect(evaluateToolCall('shell_exec')).toBe('deny');
+    expect(listApprovalRules()).toMatchObject([{ tool: 'shell_exec', decision: 'deny' }]);
+    expect(clearApprovalRule('shell_exec')).toBe(true);
+    expect(clearApprovalRule('shell_exec')).toBe(false);
+    expect(evaluateToolCall('shell_exec')).toBe('pending');
+  });
+
   it('tiers tools: read auto, write/shell pending, unknown denied', () => {
-    for (const tool of ['calculator', 'current_time', 'web_search', 'fetch_url', 'memory_write', 'memory_read', 'read_file', 'grep_search', 'blackboard_read', 'blackboard_write', 'recall_memory', 'recall_docs', 'find_skill', 'git_status', 'git_diff', 'git_log', 'delegate', 'plan']) {
+    for (const tool of ['calculator', 'current_time', 'web_search', 'fetch_url', 'memory_write', 'memory_read', 'read_file', 'grep_search', 'blackboard_read', 'blackboard_write', 'recall_memory', 'recall_docs', 'find_skill', 'todo_write', 'git_status', 'git_diff', 'git_log', 'delegate', 'plan']) {
       expect(toolRisk(tool)).toBe('read');
       expect(evaluateToolCall(tool)).toBe('auto');
     }

@@ -17,7 +17,7 @@ function seed(model = models[0]) {
   db.prepare("INSERT INTO api_keys (platform,label,encrypted_key,iv,auth_tag,status,enabled) VALUES ('groq','speech',?,?,?,'healthy',1)").run(key.encrypted, key.iv, key.authTag);
   db.prepare("INSERT INTO media_models (platform,model_id,display_name,modality,priority,enabled) VALUES ('groq',?,?,'audio',1,1)").run(model, model);
 }
-beforeEach(() => { process.env.ENCRYPTION_KEY = '0'.repeat(64); initDb(':memory:'); });
+beforeEach(() => { process.env.ENCRYPTION_KEY = '0'.repeat(64); initDb(':memory:'); getDb().prepare('DELETE FROM media_models').run(); });
 afterEach(() => { vi.restoreAllMocks(); getDb().close(); });
 
 describe('Groq Orpheus speech', () => {

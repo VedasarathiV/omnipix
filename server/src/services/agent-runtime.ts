@@ -8,7 +8,8 @@ import { maybeCheckpoint } from './checkpoints.js';
 import { memoryPromptSection, recallForRun } from './memories.js';
 import { evaluateToolCall, expireApproval, parkForApproval, waitForDecision } from '../lib/agent-policy.js';
 import { runPostToolHooks, runPreToolHooks } from './agent-hooks.js';
-import { runWorkspace } from '../lib/workspace.js';
+import { resolveInRoot, runWorkspace } from '../lib/workspace.js';
+import fs from 'node:fs';
 import { detectChecks, runCheck, verifyFailurePrompt, type CheckResult } from './agent-verify.js';
 import { learnFromRun } from './learning-loop.js';
 import { createCheckpoint } from './checkpoints.js';
@@ -37,7 +38,7 @@ export const AGENT_TOOL_NAMES = [
   'read_file', 'grep_search', 'write_file', 'edit_file', 'shell_exec', 'run_check',
   'blackboard_read', 'blackboard_write', 'remember', 'recall_memory',
   'git_status', 'git_diff', 'git_log', 'git_branch', 'git_commit', 'git_clone',
-  'delegate', 'recall_docs', 'find_skill',
+  'delegate', 'recall_docs', 'find_skill', 'todo_write',
 ];
 
 export interface AgentRunOptions {
@@ -198,6 +199,31 @@ export function selectSkills(goal: string, skills: SkillRow[], explicit?: string
   return expand(scored);
 }
 
+/** Max repo-convention chars injected (CLAUDE.md + AGENTS.md combined). */
+export const REPO_CONVENTIONS_CHARS = 8000;
+
+/**
+ * Repository conventions for a run: the workspace's CLAUDE.md and AGENTS.md,
+ * the files repos use to instruct agents. Read at start (missing files are
+ * fine), capped, and labeled with provenance so the model weighs them as
+ * project instructions — below the operator goal, above tool output.
+ */
+export function repoConventions(runId: number): string {
+  const files: string[] = [];
+  for (const name of ['CLAUDE.md', 'AGENTS.md']) {
+    try {
+      const abs = resolveInRoot(runWorkspace(runId), name);
+      const content = fs.readFileSync(abs, 'utf8').trim();
+      if (content) files.push(`--- ${name} ---\n${content}`);
+    } catch {
+      // Absent or unreadable: no conventions from this file.
+    }
+  }
+  if (!files.length) return '';
+  const joined = files.join('\n\n').slice(0, REPO_CONVENTIONS_CHARS);
+  return `Repository conventions (project instructions, below the operator goal in precedence):\n${joined}`;
+}
+
 /** Max instructions chars injected per skill; long registry skills truncate with a marker. */
 export const SKILL_INJECT_CHARS = 6000;
 
@@ -284,7 +310,8 @@ const SYSTEM_PROMPT = [
   'You are OmniPix Agent, a careful operator that achieves the user goal with tools.',
   'Rules: prefer the fewest tool calls that answer well; never invent tool results;',
   'when done, reply with ONLY the final answer (no tool call); if a tool errors,',
-  'say what failed instead of guessing.',
+  'say what failed instead of guessing. For goals with 2+ steps, track them',
+  'with todo_write and keep exactly one in progress.',
   SPOTLIGHT_RULE,
 ].join(' ');
 
@@ -580,6 +607,7 @@ async function runLoop(runId: number, opts: AgentRunOptions): Promise<AgentRun> 
   const system = [
     SYSTEM_PROMPT,
     skills.length ? `Active skills:\n${skills.map(skillPromptBlock).join('\n\n')}` : '',
+    repoConventions(runId),
     memoryPromptSection(recalled),
   ].filter(Boolean).join('\n\n');
   let messages: ChatMessage[] = [

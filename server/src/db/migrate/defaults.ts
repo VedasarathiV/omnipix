@@ -75,6 +75,7 @@ import * as learningLoop from '../migrations/20261119_000019_learning_loop.js';
 import * as taskOutputs from '../migrations/20261119_000020_task_outputs.js';
 import * as skillBundles from '../migrations/20261119_000021_skill_bundles.js';
 import * as voiceModels from '../migrations/20261119_000022_voice_models.js';
+import * as approvalRules from '../migrations/20261119_000023_approval_rules.js';
 
 export interface MigrationModule {
   up(db: Db): void;
@@ -161,6 +162,7 @@ export const LEARNING_LOOP_FILENAME = '20261119_000019_learning_loop.ts';
 export const TASK_OUTPUTS_FILENAME = '20261119_000020_task_outputs.ts';
 export const SKILL_BUNDLES_FILENAME = '20261119_000021_skill_bundles.ts';
 export const VOICE_MODELS_FILENAME = '20261119_000022_voice_models.ts';
+export const APPROVAL_RULES_FILENAME = '20261119_000023_approval_rules.ts';
 
 export const DEFAULT_MIGRATIONS: readonly DefaultMigration[] = [
   { filename: LEGACY_BASELINE_FILENAME, module: legacyBaseline },
@@ -239,4 +241,5 @@ export const DEFAULT_MIGRATIONS: readonly DefaultMigration[] = [
   { filename: TASK_OUTPUTS_FILENAME, module: taskOutputs },
   { filename: SKILL_BUNDLES_FILENAME, module: skillBundles },
   { filename: VOICE_MODELS_FILENAME, module: voiceModels },
+  { filename: APPROVAL_RULES_FILENAME, module: approvalRules },
 ];

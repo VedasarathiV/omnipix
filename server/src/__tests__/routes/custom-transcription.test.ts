@@ -93,6 +93,7 @@ describe('custom speech-to-text endpoint, end to end', () => {
   beforeEach(() => {
     process.env.ENCRYPTION_KEY = '0'.repeat(64);
     initDb(':memory:');
+    getDb().prepare('DELETE FROM media_models').run();
     // Cooldowns live in a module-level map that outlives the per-test :memory:
     // DB; key ids restart at 1 in every test, so stale entries must be purged.
     for (let id = 1; id <= 10; id++) clearCooldownsForKey(id);
