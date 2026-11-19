@@ -6,6 +6,7 @@ import { copyText } from '@/lib/clipboard'
 import { toast } from '@/lib/toast'
 import { useI18n } from '@/i18n'
 import { startDictationRecording, type DictationRecorder } from '@/lib/dictation-recorder'
+import { hasTranscription, type TranscriptionModelRow } from '@/lib/transcription'
 
 type Phase = 'idle' | 'recording' | 'transcribing'
 
@@ -50,6 +51,10 @@ export function GlobalDictation() {
     queryFn: () => apiFetch('/api/settings/api-key'),
   })
   const apiKey = keyData?.apiKey
+  const { data: mediaData } = useQuery<{ models: TranscriptionModelRow[] }>({
+    queryKey: ['media'],
+    queryFn: () => apiFetch('/api/media'),
+  })
 
   const stopAndTranscribe = useCallback(async () => {
     const recorder = recorderRef.current
@@ -88,6 +93,12 @@ export function GlobalDictation() {
   }, [apiKey, t])
 
   const startRecording = useCallback(async () => {
+    // Never record into a dead end: with no usable transcription model the
+    // take could only fail at upload, so say what's missing up front.
+    if (!hasTranscription(mediaData?.models ?? [])) {
+      toast.error(t('dictation.noModels'))
+      return
+    }
     try {
       recorderRef.current = await startDictationRecording()
       setElapsed(0)
@@ -96,7 +107,7 @@ export function GlobalDictation() {
       recorderRef.current = null
       toast.error(t('playground.dictationFailed', { reason: err instanceof Error ? err.message : String(err) }))
     }
-  }, [t])
+  }, [mediaData, t])
 
   const toggleRef = useRef(() => {})
   useEffect(() => {

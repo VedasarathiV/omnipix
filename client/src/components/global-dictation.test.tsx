@@ -40,7 +40,12 @@ beforeAll(() => {
 })
 beforeEach(() => {
   FakeRecorder.instances = []
-  vi.mocked(apiFetch).mockResolvedValue({ apiKey: 'unified-test-key' })
+  vi.mocked(apiFetch).mockImplementation(async (path: string) => {
+    if (path === '/api/media') {
+      return { models: [{ id: 1, platform: 'groq', modelId: 'whisper-large-v3-turbo', displayName: 'Whisper', modality: 'transcription', enabled: 1, keyCount: 1 }] }
+    }
+    return { apiKey: 'unified-test-key' }
+  })
   vi.mocked(copyText).mockResolvedValue(true)
   container = document.createElement('div')
   document.body.appendChild(container)
@@ -66,6 +71,7 @@ it('renders the mic toggle with its shortcut hint', () => {
 it('reports unsupported recording instead of crashing', async () => {
   vi.stubGlobal('MediaRecorder', undefined)
   Object.defineProperty(navigator, 'mediaDevices', { value: undefined, configurable: true })
+  await flush()
   const toggle = container.querySelector('[aria-label="Dictate (transcribe speech)"]') as HTMLButtonElement
   await act(async () => { toggle.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
   await flush()
@@ -81,6 +87,7 @@ it('records, transcribes through the gateway, and copies the text', async () => 
   const fetchSpy = vi.fn(async () => new Response(JSON.stringify({ text: 'hello world' }), { status: 200 }))
   vi.stubGlobal('fetch', fetchSpy)
 
+  await flush()
   const toggle = container.querySelector('[aria-label="Dictate (transcribe speech)"]') as HTMLButtonElement
   await act(async () => { toggle.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
   await flush()
@@ -127,4 +134,33 @@ it('answers the desktop hotkey event instead of the browser chord', async () => 
   await act(async () => { toggleCb!() })
   await flush()
   expect(FakeRecorder.instances).toHaveLength(1)
+})
+
+it('refuses to record when no transcription model is usable', async () => {
+  vi.mocked(apiFetch).mockImplementation(async (path: string) => {
+    if (path === '/api/media') return { models: [] }
+    return { apiKey: 'unified-test-key' }
+  })
+  // Remount so the media query runs against the emptied registry.
+  act(() => root.unmount())
+  container.remove()
+  container = document.createElement('div')
+  document.body.appendChild(container)
+  root = createRoot(container)
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } })
+  act(() => root.render(
+    <QueryClientProvider client={client}><I18nProvider initialLocale="en"><GlobalDictation /></I18nProvider></QueryClientProvider>,
+  ))
+  vi.stubGlobal('MediaRecorder', FakeRecorder as unknown as typeof MediaRecorder)
+  Object.defineProperty(navigator, 'mediaDevices', {
+    value: { getUserMedia: vi.fn() },
+    configurable: true,
+  })
+  await flush()
+  const toggle = container.querySelector('[aria-label="Dictate (transcribe speech)"]') as HTMLButtonElement
+  await act(async () => { toggle.dispatchEvent(new MouseEvent('click', { bubbles: true })) })
+  await flush()
+  expect(FakeRecorder.instances).toHaveLength(0)
+  expect(navigator.mediaDevices.getUserMedia).not.toHaveBeenCalled()
+  expect(vi.mocked(toast.error)).toHaveBeenCalledWith(expect.stringContaining('Keys page'))
 })

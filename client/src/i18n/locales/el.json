@@ -1741,7 +1741,8 @@
     "toggle": "Dictate (transcribe speech)",
     "stop": "Stop and transcribe",
     "transcribing": "Transcribing…",
-    "copied": "Transcript copied — paste anywhere"
+    "copied": "Transcript copied — paste anywhere",
+    "noModels": "Dictation needs a transcription model with a key. Add a provider key on the Keys page first."
   },
   "speech": {
     "speak": "Read aloud",

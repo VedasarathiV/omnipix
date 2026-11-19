@@ -28,6 +28,7 @@ async function get(app: Express, path: string) {
 }
 
 function seedModels() {
+  getDb().prepare('DELETE FROM media_models').run();
   const insert = getDb().prepare(`
     INSERT INTO media_models (platform, model_id, display_name, modality, priority, enabled, quota_label)
     VALUES (?, ?, ?, ?, ?, ?, ?)

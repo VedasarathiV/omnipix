@@ -25,6 +25,9 @@ function jsonResponse(body: unknown, status = 200) {
  *  'transcription') exactly as the published `transcriptionModels` fragment
  *  would land it via catalog-sync. */
 function seedTranscriptionModels(): void {
+  // Fixture owns the registry: migrations now seed fallback voice models,
+  // so clear first for a deterministic chain.
+  getDb().prepare('DELETE FROM media_models').run();
   const insert = getDb().prepare(`
     INSERT INTO media_models (platform, model_id, display_name, modality, priority, enabled, quota_label, meta_json)
     VALUES (?, ?, ?, 'transcription', ?, 1, '', ?)

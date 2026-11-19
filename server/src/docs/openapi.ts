@@ -489,7 +489,7 @@ export const openapiSpec = {
           '502': { $ref: '#/components/responses/UpstreamError' },
           '503': {
             description:
-              "No transcription models synced yet (code 'no_transcription_models'): the registry arrives via catalog sync.",
+              "No transcription models available (code 'no_transcription_models'): enable one under Models → Audio.",
             content: {
               'application/json': { schema: { $ref: '#/components/schemas/Error' } },
             },

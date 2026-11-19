@@ -94,10 +94,13 @@ describe('Keys API', () => {
   });
 
   it.each(['typecast', 'cartesia', 'silvr'])('adds a %s key without seeding fresh catalog models', async platform => {
+    // Migrations seed fallback voice rows; key creation must not add more.
+    const beforeModels = (getDb().prepare('SELECT COUNT(*) AS n FROM models WHERE platform=?').get(platform) as { n: number }).n;
+    const beforeMedia = (getDb().prepare('SELECT COUNT(*) AS n FROM media_models WHERE platform=?').get(platform) as { n: number }).n;
     const { status, body } = await request(app, 'POST', '/api/keys', { platform, key: 'synthetic-voice-key' });
     expect(status).toBe(201); expect(body.platform).toBe(platform);
-    expect(getDb().prepare('SELECT COUNT(*) AS n FROM models WHERE platform=?').get(platform)).toEqual({ n: 0 });
-    expect(getDb().prepare('SELECT COUNT(*) AS n FROM media_models WHERE platform=?').get(platform)).toEqual({ n: 0 });
+    expect(getDb().prepare('SELECT COUNT(*) AS n FROM models WHERE platform=?').get(platform)).toEqual({ n: beforeModels });
+    expect(getDb().prepare('SELECT COUNT(*) AS n FROM media_models WHERE platform=?').get(platform)).toEqual({ n: beforeMedia });
   });
 
   it('GET /api/keys returns the created key', async () => {
@@ -243,13 +246,21 @@ describe('Keys API', () => {
   });
 
   it.each(['varosity', 'freeinference', 'novai', 'nabh', 'freeai', 'inferbase', 'simplellm', 'aclide', 'speka', 'electronhub', 'experiential', 'router9', 'septor', 'clod', 'speechify', 'blaze', 'lucidity', 'airforce', 'dreamprompting', 'waterfall', 'logfare'])('accepts a %s key without seeding gated model rows', async platform => {
+    // Migrations may seed fallback rows (e.g. freeai voice); key creation
+    // must not add any beyond that.
+    const beforeChat = (getDb().prepare('SELECT COUNT(*) AS n FROM models WHERE platform = ?').get(platform) as { n: number }).n;
+    const beforeAvail = (getDb().prepare(
+      `SELECT (SELECT COUNT(*) FROM models WHERE platform = ? AND enabled = 1)
+       + (SELECT COUNT(*) FROM embedding_models WHERE platform = ? AND enabled = 1)
+       + (SELECT COUNT(*) FROM media_models WHERE platform = ? AND enabled = 1) AS n`,
+    ).get(platform, platform, platform) as { n: number }).n;
     const { status, body } = await request(app, 'POST', '/api/keys', {
       platform, key: 'not-a-real-test-key-12345', label: 'Gateway test',
     });
     expect(status).toBe(201);
     expect(body.platform).toBe(platform);
-    expect(body.modelsAvailable).toBe(0);
-    expect(getDb().prepare('SELECT COUNT(*) AS n FROM models WHERE platform = ?').get(platform)).toEqual({ n: 0 });
+    expect(body.modelsAvailable).toBe(beforeAvail);
+    expect(getDb().prepare('SELECT COUNT(*) AS n FROM models WHERE platform = ?').get(platform)).toEqual({ n: beforeChat });
   });
 
   it('POST /api/keys rejects missing key', async () => {

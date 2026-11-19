@@ -1482,13 +1482,11 @@ export interface TranscriptionResult {
 function resolveTranscriptionChain(model: string | undefined, responseFormat: string): SttCandidate[] {
   let chain = listMediaModels('transcription').map(toSttCandidate);
   if (chain.length === 0) {
-    // Never-synced install (or the catalog retired every STT model): the
-    // registry only ever arrives via catalog-sync, so tell the caller to wait
-    // for / trigger a sync rather than pretending the model id is wrong.
+    // All transcription models disabled or removed: say what to do instead
+    // of lecturing about sync internals.
     throw new MediaError(
-      'No transcription models are configured yet. The registry arrives via catalog sync; ' +
-      'wait for the next sync (or trigger one from the dashboard) and retry, ' +
-      'or register your own OpenAI-compatible endpoint from the Keys page.',
+      'No transcription models are available. Enable one under Models → Audio, ' +
+      'or add a provider key that offers transcription (Groq works on its free tier).',
       503,
       'no_transcription_models',
     );

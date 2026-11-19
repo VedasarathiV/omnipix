@@ -42,6 +42,7 @@ async function put(app: Express, path: string, body: unknown) {
 }
 
 function seedTranscriptionRows() {
+  getDb().prepare('DELETE FROM media_models').run();
   const insert = getDb().prepare(`
     INSERT INTO media_models (platform, model_id, display_name, modality, priority, enabled, quota_label)
     VALUES (?, ?, ?, 'transcription', ?, 1, ?)
