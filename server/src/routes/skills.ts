@@ -143,13 +143,31 @@ skillsRouter.post('/import', (req: Request, res: Response) => {
       return;
     }
   }
+  // Dedupe: an imported `agency-<name>` that duplicates a builtin `<name>` is
+  // stored disabled, so the router sees one canonical skill per role. The
+  // content stays installed and can be re-enabled from the dashboard.
+  let dedupedAgainst: string | null = null;
+  let enabled = skill.enabled ? 1 : 0;
+  if (skill.name.startsWith('agency-')) {
+    const builtinName = skill.name.slice('agency-'.length);
+    const builtin = getDb().prepare('SELECT name FROM skills WHERE name = ? AND builtin = 1').get(builtinName) as
+      | { name: string }
+      | undefined;
+    if (builtin && skill.enabled) {
+      enabled = 0;
+      dedupedAgainst = builtin.name;
+    }
+  }
   try {
     getDb().prepare('INSERT INTO skills (name, description, instructions, enabled, builtin, bundle_json) VALUES (?, ?, ?, ?, 0, ?)')
-      .run(skill.name, skill.description, skill.instructions, skill.enabled ? 1 : 0,
+      .run(skill.name, skill.description, skill.instructions, enabled,
         skill.bundle ? JSON.stringify(skill.bundle) : null);
   } catch {
     res.status(409).json({ error: { message: `Skill already exists: ${skill.name}` } });
     return;
   }
-  res.status(201).json({ skill: listSkills().find(s => s.name === skill.name) });
+  res.status(201).json({
+    skill: listSkills().find(s => s.name === skill.name),
+    ...(dedupedAgainst ? { dedupedAgainst } : {}),
+  });
 });

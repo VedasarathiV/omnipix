@@ -117,6 +117,21 @@ describe('skills', () => {
     expect((await call('POST', '/api/skills/import', { content: renamed })).status).toBe(409);
   });
 
+  it('stores an agency duplicate of a builtin as disabled', async () => {
+    const exported = await call('GET', '/api/skills/planner/export');
+    const dupe = (exported.body.content as string).replace('name: planner', 'name: agency-planner');
+    const imported = await call('POST', '/api/skills/import', { content: dupe });
+    expect(imported.status).toBe(201);
+    expect(imported.body.skill).toMatchObject({ name: 'agency-planner', builtin: 0, enabled: 0 });
+    expect(imported.body.dedupedAgainst).toBe('planner');
+    // Non-duplicates still import enabled.
+    const fresh = (exported.body.content as string).replace('name: planner', 'name: agency-brand-new-thing');
+    const imported2 = await call('POST', '/api/skills/import', { content: fresh });
+    expect(imported2.status).toBe(201);
+    expect(imported2.body.skill).toMatchObject({ name: 'agency-brand-new-thing', enabled: 1 });
+    expect(imported2.body.dedupedAgainst).toBeUndefined();
+  });
+
   it('rejects malformed skill files', async () => {
     expect((await call('POST', '/api/skills/import', { content: 'no frontmatter here' })).status).toBe(400);
     expect((await call('POST', '/api/skills/import', { content: '---\nname: Bad!\n---\nbody' })).status).toBe(400);

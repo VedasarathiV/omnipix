@@ -46,11 +46,12 @@ const MEDIA_MODALITIES = new Set(['image', 'audio']);
 // CATALOG_BASE_URL to enable the feed (see the module comment above).
 const DEFAULT_BASE_URL = '';
 
-// The Ed25519 public key the production catalog is signed with. The private
-// half was generated on the catalog host and has never left it. Self-hosters
-// running their own catalog server can override both via env.
+// The Ed25519 public key the OmniPix catalog feed is signed with. The private
+// half lives with the feed operator (see server/src/scripts/catalog-feed.md)
+// and has never been committed. Point CATALOG_BASE_URL at your own feed and
+// CATALOG_PUBKEY at its key to run a fully independent catalog.
 const PINNED_CATALOG_PUBKEY = `-----BEGIN PUBLIC KEY-----
-MCowBQYDK2VwAyEAq9yv4+3EeyMHKsfVYBhkcz1lYgIXSUeHNnN6tNgYX3k=
+MCowBQYDK2VwAyEAxZw8YTm1D7eSdaEJXw1hiN+p2B4uo2uf9tSQmuLgAVE=
 -----END PUBLIC KEY-----
 `;
 
@@ -127,7 +128,7 @@ export interface LicenseStatus {
   checkedAtMs: number;
 }
 
-interface CatalogQuirk {
+export interface CatalogQuirk {
   slug: string;
   title: string;
   body: string;
@@ -135,7 +136,7 @@ interface CatalogQuirk {
   targets: { platform: string | null; modelGlob: string | null }[];
 }
 
-interface CatalogModel {
+export interface CatalogModel {
   platform: string;
   modelId: string;
   displayName: string;
@@ -160,7 +161,7 @@ interface CatalogModel {
   requestStyle?: string | null;
 }
 
-interface CatalogEmbedding {
+export interface CatalogEmbedding {
   family: string;
   platform: string;
   modelId: string;
@@ -172,7 +173,7 @@ interface CatalogEmbedding {
   quotaLabel: string;
 }
 
-interface CatalogTranscriptionModel {
+export interface CatalogTranscriptionModel {
   platform: string;
   modelId: string;
   displayName: string;
@@ -190,7 +191,7 @@ interface CatalogTranscriptionModel {
   quotaLabel?: string;
 }
 
-interface CatalogVideoModel {
+export interface CatalogVideoModel {
   platform: string;
   modelId: string;
   displayName: string;
@@ -204,7 +205,7 @@ interface CatalogVideoModel {
   providerModelId?: string;
 }
 
-interface CatalogSearchEngine {
+export interface CatalogSearchEngine {
   platform: string;
   /** Engine id, stored as media_models.model_id (e.g. 'tavily-search'). */
   engineId: string;
@@ -221,7 +222,7 @@ interface CatalogSearchEngine {
   premiumSince?: string;
 }
 
-interface CatalogDecisionModel {
+export interface CatalogDecisionModel {
   platform: string;
   /** Provider model id, stored as media_models.model_id
    *  (e.g. '@cf/cloudflare/clef-flash', 'inception/mercury-decide:free'). */
@@ -237,7 +238,7 @@ interface CatalogDecisionModel {
   premiumSince?: string;
 }
 
-interface Catalog {
+export interface Catalog {
   version: string;
   generatedAt: string;
   tier: 'live' | 'monthly';
