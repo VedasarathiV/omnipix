@@ -1463,7 +1463,9 @@
       "searchEmpty": "No runs match.",
       "voiceDone": "Run finished.",
       "voiceFailed": "Run failed: {error}",
-      "voiceApproval": "Approval needed. The run is waiting for your decision."
+      "voiceApproval": "Approval needed. The run is waiting for your decision.",
+      "maxTokens": "Token budget (optional)",
+      "maxTokensPlaceholder": "No cap"
     },
     "skills": {
       "title": "Skills",

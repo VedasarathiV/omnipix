@@ -53,6 +53,20 @@ describe('agent', () => {
     expect(output).toContain('[done] 2 steps');
   });
 
+  it('passes the token budget through on run', async () => {
+    let seenBody = '';
+    stubFetch((path, init) => {
+      if (path === '/api/agents/runs' && init.method === 'POST') {
+        seenBody = String(init.body);
+        return Response.json(RUNNING, { status: 202 });
+      }
+      if (path === '/api/agents/runs/3') return Response.json(DONE);
+      throw new Error(`Unexpected request: ${path}`);
+    });
+    expect(await main(['agent', 'run', '--goal', 'Say hi', '--max-tokens', '5000'])).toBe(0);
+    expect(JSON.parse(seenBody)).toMatchObject({ maxTokens: 5000 });
+  });
+
   it('exits 1 when the run errors', async () => {
     stubFetch((path, init) => {
       if (path === '/api/agents/runs' && init.method === 'POST') return Response.json(RUNNING, { status: 202 });
@@ -93,6 +107,7 @@ describe('agent', () => {
     await expect(main(['agent', 'approve'])).rejects.toThrow('positive approval id');
     await expect(main(['agent', 'session'])).rejects.toThrow('positive session id');
     await expect(main(['agent', 'run', '--goal', 'x', '--session', 'nope'])).rejects.toThrow('--session must be a positive integer');
+    await expect(main(['agent', 'run', '--goal', 'x', '--max-tokens', '50'])).rejects.toThrow('--max-tokens must be an integer from 100 to 10000000');
     await expect(main(['agent', 'group-create', '--goal', 'x'])).rejects.toThrow('--auto, --tasks JSON, or --preset NAME');
     await expect(main(['agent', 'group-create', '--goal', 'x', '--tasks', 'nope'])).rejects.toThrow('JSON array');
     await expect(main(['agent', 'group-create', '--goal', 'x', '--mode', 'mesh'])).rejects.toThrow('--mode must be');

@@ -48,6 +48,7 @@ export interface AgentGroup {
   mode: string
   budget_tokens: number | null
   tokens_used: number
+  cost_usd?: number
   manager_decisions: number
   error: string | null
   created_at: string
@@ -349,6 +350,7 @@ export function GroupsPanel() {
               <CardDescription className="font-mono text-[11px]">
                 {t('agents.groups.tokens', { used: selected.tokens_used })}
                 {selected.budget_tokens != null && ` ${t('agents.groups.budgetOf', { budget: selected.budget_tokens })}`}
+                {(selected.cost_usd ?? 0) > 0 && ` · $${selected.cost_usd!.toFixed(4)}`}
                 {selected.workspace && ` · ${selected.workspace}`}
                 {selected.git_branch && ` @ ${selected.git_branch}`}
                 {selected.mode === 'hierarchical' && ` · ${t('agents.groups.managerDecisions', { count: selected.manager_decisions ?? 0 })}`}

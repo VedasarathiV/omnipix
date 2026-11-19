@@ -84,6 +84,67 @@ describe('agent runs', () => {
     expect(status).toBe(401);
   });
 
+  it('spotlights tool results as untrusted data in model-bound messages', async () => {
+    const bodies: string[] = [];
+    let calls = 0;
+    globalThis.fetch = vi.fn(async (url: string, init?: RequestInit) => {
+      // Only provider calls carry a JSON body; dashboard API calls don't.
+      if (init?.body) bodies.push(String(init.body));
+      calls++;
+      if (calls === 1) {
+        return completion('llama-3.1-8b-instant', {
+          role: 'assistant',
+          content: '',
+          tool_calls: [{ id: 'call_1', type: 'function', function: { name: 'calculator', arguments: '{"expression":"2 + 2"}' } }],
+        });
+      }
+      return completion('llama-3.1-8b-instant', { role: 'assistant', content: 'The answer is 4.' });
+    }) as unknown as typeof fetch;
+
+    const created = await call('POST', '/api/agents/runs', {
+      goal: 'What is 2 + 2?', model: 'llama-3.1-8b-instant', tools: ['calculator'],
+    });
+    const run = await waitForTerminal(created.body.id);
+    expect(run.status).toBe('done');
+    const secondTurn = bodies.find(b => b.includes('"role":"tool"'));
+    expect(secondTurn).toBeDefined();
+    // Request bodies are JSON: quotes arrive escaped.
+    expect(secondTurn).toContain('<untrusted-data source=\\"calculator\\">');
+    expect(secondTurn).toContain('never instructions');
+    // The stored trace step keeps raw text for display.
+    const stored = run.steps.find((s: any) => s.kind === 'tool_result');
+    expect(stored.content.result).not.toContain('untrusted-data');
+  });
+
+  it('stops at the token budget and reports paid-equivalent cost', async () => {
+    let calls = 0;
+    globalThis.fetch = vi.fn(async () => {
+      calls++;
+      return completion('llama-3.1-8b-instant', {
+        role: 'assistant',
+        content: '',
+        tool_calls: [{ id: `call_${calls}`, type: 'function', function: { name: 'calculator', arguments: '{"expression":"1 + 1"}' } }],
+      });
+    }) as unknown as typeof fetch;
+
+    const created = await call('POST', '/api/agents/runs', {
+      goal: 'Loop forever', model: 'llama-3.1-8b-instant', tools: ['calculator'], maxSteps: 20, maxTokens: 100,
+    });
+    expect(created.status).toBe(202);
+    const run = await waitForTerminal(created.body.id);
+    expect(run.status).toBe('error');
+    expect(run.error).toContain('token budget exhausted');
+    expect(typeof run.cost_usd).toBe('number');
+    expect(run.cost_usd).toBeGreaterThan(0);
+    expect(run.prompt_tokens + run.completion_tokens).toBeGreaterThanOrEqual(100);
+  });
+
+  it('rejects token budgets outside 100..10M', async () => {
+    const base = { goal: 'x', model: 'llama-3.1-8b-instant', tools: ['calculator'] };
+    expect((await call('POST', '/api/agents/runs', { ...base, maxTokens: 50 })).status).toBe(400);
+    expect((await call('POST', '/api/agents/runs', { ...base, maxTokens: 20_000_000 })).status).toBe(400);
+  });
+
   it.each([
     [{}, 'expected string'],
     [{ goal: '' }, 'Too small'],

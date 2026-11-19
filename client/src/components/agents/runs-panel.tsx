@@ -40,6 +40,7 @@ export interface AgentRun {
   steps_used: number
   prompt_tokens: number
   completion_tokens: number
+  cost_usd?: number
   created_at: string
   steps: AgentStep[]
 }
@@ -134,6 +135,7 @@ export function AgentRunsPanel() {
   const [tools, setTools] = useState<string[]>([...TOOL_NAMES])
   const [skills, setSkills] = useState<string[]>([])
   const [maxSteps, setMaxSteps] = useState(12)
+  const [maxTokens, setMaxTokens] = useState('')
   const [compactions, setCompactions] = useState(1)
   const [planMode, setPlanMode] = useState(false)
   const [sessionId, setSessionId] = useState<string>('new')
@@ -251,7 +253,9 @@ export function AgentRunsPanel() {
       apiFetch<AgentRun>('/api/agents/runs', {
         method: 'POST',
         body: JSON.stringify({
-          goal: goal.trim(), model, tools, skills, maxSteps, planMode, compactions,
+          goal: goal.trim(), model, tools, skills, maxSteps,
+          ...(maxTokens.trim() ? { maxTokens: Number(maxTokens) } : {}),
+          planMode, compactions,
           ...(activeSessionId === undefined ? {} : { sessionId: activeSessionId }),
         }),
       }),
@@ -547,6 +551,18 @@ export function AgentRunsPanel() {
               />
             </div>
             <div className="grid gap-1.5">
+              <Label htmlFor="agent-max-tokens">{t('agents.runs.maxTokens')}</Label>
+              <Input
+                id="agent-max-tokens"
+                type="number"
+                min={100}
+                value={maxTokens}
+                onChange={e => setMaxTokens(e.target.value)}
+                placeholder={t('agents.runs.maxTokensPlaceholder')}
+                className="w-28"
+              />
+            </div>
+            <div className="grid gap-1.5">
               <Label htmlFor="agent-compactions">{t('agents.runs.compactions')}</Label>
               <Input
                 id="agent-compactions"
@@ -653,6 +669,7 @@ export function AgentRunsPanel() {
               <CardTitle className="text-sm font-medium">{selected.goal}</CardTitle>
               <CardDescription className="font-mono text-[11px]">
                 {selected.model} · {selected.prompt_tokens + selected.completion_tokens} tokens
+                {(selected.cost_usd ?? 0) > 0 && <> · ${selected.cost_usd!.toFixed(4)}</>}
                 {selected.parent_run_id != null && (
                   <> · {t('agents.runs.childOf', { id: selected.parent_run_id })}</>
                 )}

@@ -12,6 +12,8 @@ import { runWorkspace } from '../lib/workspace.js';
 import { detectChecks, runCheck, verifyFailurePrompt, type CheckResult } from './agent-verify.js';
 import { learnFromRun } from './learning-loop.js';
 import { createCheckpoint } from './checkpoints.js';
+import { SPOTLIGHT_RULE, spotlight } from '../lib/spotlight.js';
+import { FALLBACK_INPUT_PER_M, FALLBACK_OUTPUT_PER_M } from '../db/model-pricing.js';
 
 // The agent runtime: a tool loop over the gateway's own router. Every model
 // call routes like any other request (auto-routing, failover, cooldowns),
@@ -44,6 +46,8 @@ export interface AgentRunOptions {
   tools?: string[];
   skills?: string[];
   maxSteps?: number;
+  /** Hard token budget (prompt + completion); the run stops when reached. */
+  maxTokens?: number;
   projectKey?: string;
   signal?: AbortSignal;
   /** Draft a tool-free plan and park for approval before acting. */
@@ -82,6 +86,8 @@ export interface AgentRun {
   steps_used: number;
   prompt_tokens: number;
   completion_tokens: number;
+  /** Paid-equivalent $ estimate from the models pricing table (0 when free/unknown). Computed at read. */
+  cost_usd: number;
   plan_mode: number;
   parent_run_id: number | null;
   auto_approve: number;
@@ -257,6 +263,7 @@ const SYSTEM_PROMPT = [
   'Rules: prefer the fewest tool calls that answer well; never invent tool results;',
   'when done, reply with ONLY the final answer (no tool call); if a tool errors,',
   'say what failed instead of guessing.',
+  SPOTLIGHT_RULE,
 ].join(' ');
 
 const PLAN_SYSTEM_PROMPT = [
@@ -534,6 +541,9 @@ async function runLoop(runId: number, opts: AgentRunOptions): Promise<AgentRun> 
   const maxCompactions = Math.min(AGENT_MAX_COMPACTIONS, Math.max(0, opts.compactions ?? AGENT_DEFAULT_COMPACTIONS));
   let compactionsUsed = 0;
   let turnsLeft = maxSteps;
+  const maxTokens = opts.maxTokens != null && Number.isFinite(opts.maxTokens) && opts.maxTokens > 0
+    ? Math.floor(opts.maxTokens)
+    : null;
 
   const finishExhausted = (message: string): AgentRun => {
     step('error', null, { message });
@@ -613,6 +623,9 @@ async function runLoop(runId: number, opts: AgentRunOptions): Promise<AgentRun> 
 
   for (;;) {
     if (signal.aborted) return finishStopped();
+    if (maxTokens != null && promptTokens + completionTokens >= maxTokens) {
+      return finishExhausted(`token budget exhausted after ${promptTokens + completionTokens} tokens (cap ${maxTokens})`);
+    }
     if (turnsLeft <= 0) {
       if (compactionsUsed >= maxCompactions) break;
       // Never silently drop context: a failed compaction ends the run
@@ -755,7 +768,9 @@ async function runLoop(runId: number, opts: AgentRunOptions): Promise<AgentRun> 
         }
       }
       step('tool_result', call.function.name, { result: result.slice(0, 8000) });
-      messages.push({ role: 'tool', tool_call_id: call.id, content: result.slice(0, 8000) } as ChatMessage);
+      // Spotlighted: the stored step keeps raw text for display, but the
+      // model-bound copy is marked untrusted data (injection boundary).
+      messages.push({ role: 'tool', tool_call_id: call.id, content: spotlight(call.function.name, result.slice(0, 8000)) } as ChatMessage);
     }
   }
 
@@ -772,15 +787,40 @@ export function createAgentRun(opts: AgentRunOptions & { sessionId?: number; par
   return row.id;
 }
 
+/**
+ * Paid-equivalent $ estimate for token usage on one model id: the cheapest
+ * priced catalog row wins (free-tier routing prefers cheap models, so the
+ * minimum is the honest estimate), else the global fallback rates. Rounded to microdollars so small runs don't read $0; pure read, no writes.
+ */
+export function estimateCostUsd(modelId: string, promptTokens: number, completionTokens: number): number {
+  const db = getDb();
+  let inputPerM: number | null = null;
+  let outputPerM: number | null = null;
+  try {
+    const rows = db.prepare(
+      'SELECT paid_input_per_m AS i, paid_output_per_m AS o FROM models WHERE model_id = ? AND paid_input_per_m IS NOT NULL',
+    ).all(modelId) as { i: number | null; o: number | null }[];
+    for (const row of rows) {
+      if (row.i != null && (inputPerM == null || row.i < inputPerM)) inputPerM = row.i;
+      if (row.o != null && (outputPerM == null || row.o < outputPerM)) outputPerM = row.o;
+    }
+  } catch {
+    // Pricing columns predate some test schemas; fall back to defaults.
+  }
+  const cost = (promptTokens * (inputPerM ?? FALLBACK_INPUT_PER_M) + completionTokens * (outputPerM ?? FALLBACK_OUTPUT_PER_M)) / 1_000_000;
+  return Math.round(cost * 1000000) / 1000000;
+}
+
 export function getAgentRun(id: number): AgentRun | null {
   const db = getDb();
-  const run = db.prepare('SELECT * FROM agent_runs WHERE id = ?').get(id) as Omit<AgentRun, 'tools' | 'skills' | 'steps' | 'tools_json' | 'skills_json'> & { tools_json: string; skills_json: string } | undefined;
+  const run = db.prepare('SELECT * FROM agent_runs WHERE id = ?').get(id) as Omit<AgentRun, 'tools' | 'skills' | 'steps' | 'cost_usd' | 'tools_json' | 'skills_json'> & { tools_json: string; skills_json: string } | undefined;
   if (!run) return null;
   const steps = db.prepare('SELECT id, seq, kind, name, content_json, created_at FROM agent_steps WHERE run_id = ? ORDER BY seq').all(id) as Array<Omit<AgentStep, 'content'> & { content_json: string }>;
   return {
     ...run,
     tools: JSON.parse(run.tools_json),
     skills: JSON.parse(run.skills_json),
+    cost_usd: estimateCostUsd(run.model, run.prompt_tokens, run.completion_tokens),
     steps: steps.map(s => ({ ...s, label: s.name, content: JSON.parse(s.content_json) })),
   };
 }
@@ -791,10 +831,11 @@ export function listAgentRuns(limit = 20, sessionId?: number): Array<Omit<AgentR
   const rows = (sessionId === undefined
     ? db.prepare('SELECT * FROM agent_runs ORDER BY id DESC LIMIT ?').all(capped)
     : db.prepare('SELECT * FROM agent_runs WHERE session_id = ? ORDER BY id DESC LIMIT ?').all(sessionId, capped)
-  ) as Array<Omit<AgentRun, 'tools' | 'skills' | 'steps'> & { tools_json: string; skills_json: string }>;
+  ) as Array<Omit<AgentRun, 'tools' | 'skills' | 'steps' | 'cost_usd'> & { tools_json: string; skills_json: string }>;
   return rows.map(run => ({
     ...run,
     tools: JSON.parse(run.tools_json),
     skills: JSON.parse(run.skills_json),
+    cost_usd: estimateCostUsd(run.model, run.prompt_tokens, run.completion_tokens),
   }));
 }

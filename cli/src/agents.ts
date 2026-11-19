@@ -13,6 +13,7 @@ export interface AgentCommandOptions {
   tools?: string;
   skills?: string;
   maxSteps?: number;
+  maxTokens?: number;
   compactions?: number;
   sessionId?: number;
   auto?: boolean;
@@ -36,7 +37,7 @@ export interface AgentCommandOptions {
 export function agentHelp(): string {
   return [
     'Agent runs (dashboard authentication):',
-    '  omnipix agent run --goal "..." [--model ID] [--tools a,b] [--skills a,b] [--max-steps N] [--compactions N] [--session ID] [--plan]',
+    '  omnipix agent run --goal "..." [--model ID] [--tools a,b] [--skills a,b] [--max-steps N] [--max-tokens N] [--compactions N] [--session ID] [--plan]',
     '  omnipix agent list',
     '  omnipix agent show <id>',
     '  omnipix agent search <words...>',
@@ -271,6 +272,7 @@ export async function runAgent(
       tools: csv(options.tools),
       skills: csv(options.skills),
       maxSteps: options.maxSteps,
+      maxTokens: options.maxTokens,
       sessionId: options.sessionId,
       planMode: options.plan ?? false,
       compactions: options.compactions,

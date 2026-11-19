@@ -29,6 +29,7 @@ const createRunSchema = z.object({
   tools: z.array(z.string().trim().min(1).max(128)).max(AGENT_MAX_TOOLS).optional(),
   skills: z.array(z.string().trim().min(1).max(64)).max(10).optional(),
   maxSteps: z.number().int().min(1).max(AGENT_MAX_STEPS).optional(),
+  maxTokens: z.number().int().min(100).max(10_000_000).optional(),
   sessionId: z.number().int().positive().optional(),
   projectKey: z.string().trim().min(1).max(128).optional(),
   planMode: z.boolean().optional(),
@@ -80,7 +81,7 @@ agentRunsRouter.post('/runs', (req: Request, res: Response) => {
     res.status(400).json({ error: { message: parsed.error.issues.map(e => e.message).join(', ') } });
     return;
   }
-  const { goal, model, tools, maxSteps, sessionId, projectKey, planMode, compactions } = parsed.data;
+  const { goal, model, tools, maxSteps, maxTokens, sessionId, projectKey, planMode, compactions } = parsed.data;
   const skills = [...new Set([...(parsed.data.skills ?? []), ...slashSkills])];
   if (sessionId !== undefined && !getSession(sessionId)) {
     res.status(400).json({ error: { message: `Unknown session: ${sessionId}.` } });
@@ -112,7 +113,7 @@ agentRunsRouter.post('/runs', (req: Request, res: Response) => {
   touchSession(resolvedSessionId);
   // Fire and forget: the loop persists every step, so polling and SSE both
   // work; a synchronous throw here can only come from setup, already validated.
-  void executeAgentRun(id, { goal, model, tools, skills, maxSteps, projectKey, planMode, compactions }).catch((err: unknown) => {
+  void executeAgentRun(id, { goal, model, tools, skills, maxSteps, maxTokens, projectKey, planMode, compactions }).catch((err: unknown) => {
     getDb().prepare("UPDATE agent_runs SET status = 'error', error = ?, finished_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE id = ? AND status IN ('running', 'awaiting_approval')")
       .run(err instanceof Error ? err.message : String(err), id);
   });

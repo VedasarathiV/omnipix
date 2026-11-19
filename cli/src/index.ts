@@ -28,6 +28,7 @@ interface CliOptions extends KeyCommandOptions {
   tools?: string;
   skills?: string;
   maxSteps?: number;
+  maxTokens?: number;
   compactions?: number;
   name?: string;
   description?: string;
@@ -136,7 +137,7 @@ export function parseArgs(argv: string[]): { command?: string; options: CliOptio
       || flag === '--model' || flag === '--timeout'
       || flag === '--token' || flag === '--key' || flag === '--id'
       || flag === '--goal' || flag === '--tools' || flag === '--skills'
-      || flag === '--max-steps' || flag === '--compactions' || flag === '--name' || flag === '--description'
+      || flag === '--max-steps' || flag === '--max-tokens' || flag === '--compactions' || flag === '--name' || flag === '--description'
       || flag === '--instructions' || flag === '--bundle' || flag === '--suite' || flag === '--models'
       || flag === '--inbound' || flag === '--outbound' || flag === '--patterns'
       || flag === '--threshold' || flag === '--session'
@@ -173,6 +174,13 @@ export function parseArgs(argv: string[]): { command?: string; options: CliOptio
           throw new Error(`--max-steps must be an integer from 1 to 25, got '${value}'`);
         }
         options.maxSteps = steps;
+      }
+      else if (flag === '--max-tokens') {
+        const tokens = Number(value);
+        if (!Number.isInteger(tokens) || tokens < 100 || tokens > 10_000_000) {
+          throw new Error(`--max-tokens must be an integer from 100 to 10000000, got '${value}'`);
+        }
+        options.maxTokens = tokens;
       }
       else if (flag === '--compactions') {
         const compactions = Number(value);
@@ -613,7 +621,7 @@ const COMMAND_FLAGS: Record<string, readonly string[]> = {
   launch: ['--url', '--api-key', '--model', '--profile', '--timeout'],
   'launch-codex': ['--url', '--api-key', '--model', '--timeout'],
   'setup-cursor': [],
-  agent: ['--url', '--token', '--timeout', '--goal', '--model', '--tools', '--skills', '--max-steps', '--compactions', '--session', '--auto', '--plan', '--tasks', '--budget', '--mode', '--preset', '--inputs'],
+  agent: ['--url', '--token', '--timeout', '--goal', '--model', '--tools', '--skills', '--max-steps', '--max-tokens', '--compactions', '--session', '--auto', '--plan', '--tasks', '--budget', '--mode', '--preset', '--inputs'],
   skills: ['--url', '--token', '--timeout', '--name', '--description', '--instructions', '--bundle'],
   hooks: ['--url', '--token', '--timeout', '--name', '--event', '--tool', '--command'],
   scan: ['--url', '--token', '--timeout', '--schedule'],
