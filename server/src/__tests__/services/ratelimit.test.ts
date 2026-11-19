@@ -141,7 +141,7 @@ describe('Rate Limiter', () => {
       // 1st 429 → transient (no signal yet). Subsequent 429s stay transient
       // until the threshold is crossed.
       expect(
-        getCooldownDurationForLimit('mistral', `nolimit-${id}`, id, { rpd: null, tpd: null }),
+        getCooldownDurationForLimit('mistral', `nolimit-${id}`, id, { rpd: null, tpd: null }, null, { quotaSignal: true }),
       ).toBe(90 * 1000);
     });
 
@@ -159,17 +159,17 @@ describe('Rate Limiter', () => {
       const platform = 'ollama';
       const model = `nolimit-esc-${id}`;
       // 1st 429 — no history → transient
-      expect(getCooldownDurationForLimit(platform, model, id, { rpd: null, tpd: null })).toBe(90 * 1000);
+      expect(getCooldownDurationForLimit(platform, model, id, { rpd: null, tpd: null }, null, { quotaSignal: true })).toBe(90 * 1000);
       // 2nd 429 — heuristic threshold (2) crossed → 2min (ladder idx=0)
-      expect(getCooldownDurationForLimit(platform, model, id, { rpd: null, tpd: null })).toBe(2 * 60 * 1000);
+      expect(getCooldownDurationForLimit(platform, model, id, { rpd: null, tpd: null }, null, { quotaSignal: true })).toBe(2 * 60 * 1000);
       // 3rd 429 → 10min (idx=1)
-      expect(getCooldownDurationForLimit(platform, model, id, { rpd: null, tpd: null })).toBe(10 * 60 * 1000);
+      expect(getCooldownDurationForLimit(platform, model, id, { rpd: null, tpd: null }, null, { quotaSignal: true })).toBe(10 * 60 * 1000);
       // 4th 429 — ladder says HOUR, cap holds it at 10min
-      expect(getCooldownDurationForLimit(platform, model, id, { rpd: null, tpd: null })).toBe(10 * 60 * 1000);
+      expect(getCooldownDurationForLimit(platform, model, id, { rpd: null, tpd: null }, null, { quotaSignal: true })).toBe(10 * 60 * 1000);
       // 5th 429 — ladder says DAY, cap holds it at 10min
-      expect(getCooldownDurationForLimit(platform, model, id, { rpd: null, tpd: null })).toBe(10 * 60 * 1000);
+      expect(getCooldownDurationForLimit(platform, model, id, { rpd: null, tpd: null }, null, { quotaSignal: true })).toBe(10 * 60 * 1000);
       // 6th+ stays at the cap, never the 24h quarantine
-      expect(getCooldownDurationForLimit(platform, model, id, { rpd: null, tpd: null })).toBe(10 * 60 * 1000);
+      expect(getCooldownDurationForLimit(platform, model, id, { rpd: null, tpd: null }, null, { quotaSignal: true })).toBe(10 * 60 * 1000);
     });
 
     it('keeps the full 24h ladder for a model with a real, exhausted RPD', () => {
@@ -205,14 +205,14 @@ describe('Rate Limiter', () => {
       const platform = 'ollama';
       const model = `nolimit-success-${id}`;
 
-      expect(getCooldownDurationForLimit(platform, model, id, { rpd: null, tpd: null })).toBe(90 * 1000);
-      expect(getCooldownDurationForLimit(platform, model, id, { rpd: null, tpd: null })).toBe(2 * 60 * 1000);
+      expect(getCooldownDurationForLimit(platform, model, id, { rpd: null, tpd: null }, null, { quotaSignal: true })).toBe(90 * 1000);
+      expect(getCooldownDurationForLimit(platform, model, id, { rpd: null, tpd: null }, null, { quotaSignal: true })).toBe(2 * 60 * 1000);
       expect(recentHitCount(platform, model, id, Date.now())).toBe(2);
 
       recordRequest(platform, model, id);
 
       expect(recentHitCount(platform, model, id, Date.now())).toBe(0);
-      expect(getCooldownDurationForLimit(platform, model, id, { rpd: null, tpd: null })).toBe(90 * 1000);
+      expect(getCooldownDurationForLimit(platform, model, id, { rpd: null, tpd: null }, null, { quotaSignal: true })).toBe(90 * 1000);
     });
 
     it('escalates only once the daily request limit is actually reached', () => {

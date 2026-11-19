@@ -45,7 +45,7 @@ function statusPayload() {
 
 function requirePremium(_req: Request, res: Response): boolean {
   if (isPremiumEnabled()) return true;
-  res.status(404).json({ error: 'Premium is not enabled in this build.' });
+  res.status(404).json({ error: { message: 'Premium is not enabled in this build.' } });
   return false;
 }
 
@@ -64,13 +64,13 @@ premiumRouter.post('/key', async (req: Request, res: Response) => {
   if (!requirePremium(req, res)) return;
   const key = typeof req.body?.key === 'string' ? req.body.key.trim() : '';
   if (key.length < 8) {
-    res.status(400).json({ error: 'Enter the license key from your purchase email.' });
+    res.status(400).json({ error: { message: 'Enter the license key from your purchase email.' } });
     return;
   }
 
   const result = await validateLicenseKey(key, 15000);
   if (!result) {
-    res.status(502).json({ error: 'Could not reach the license service. Check your connection and try again.' });
+    res.status(502).json({ error: { message: 'Could not reach the license service. Check your connection and try again.' } });
     return;
   }
 
@@ -81,7 +81,7 @@ premiumRouter.post('/key', async (req: Request, res: Response) => {
       canceled: 'That subscription was canceled. Re-subscribe on the website to reactivate.',
       refunded: 'That purchase was refunded, so the key is no longer active.',
     };
-    res.status(400).json({ error: reasons[result.reason ?? ''] ?? 'That key is not active.' });
+    res.status(400).json({ error: { message: reasons[result.reason ?? ''] ?? 'That key is not active.' } });
     return;
   }
 
@@ -97,8 +97,9 @@ premiumRouter.delete('/key', async (_req: Request, res: Response) => {
   const db = getDb();
   db.prepare('DELETE FROM settings WHERE key IN (?, ?)').run(SETTING_LICENSE_KEY, SETTING_LICENSE_STATUS);
   // Drop back to the free tier in the background; failure just means the next
-  // scheduled poll handles it.
-  void syncCatalog(true);
+  // scheduled poll handles it. The catch is for the pre-try setup lines inside
+  // syncCatalog (the fetch body already catches and reports via SyncResult).
+  void syncCatalog(true).catch(() => undefined);
   res.json(statusPayload());
 });
 
@@ -119,7 +120,7 @@ premiumRouter.post('/portal', async (_req: Request, res: Response) => {
   if (!requirePremium(_req, res)) return;
   const key = getSetting(SETTING_LICENSE_KEY);
   if (!key) {
-    res.status(400).json({ error: 'No license key configured.' });
+    res.status(400).json({ error: { message: 'No license key configured.' } });
     return;
   }
   try {
@@ -131,11 +132,11 @@ premiumRouter.post('/portal', async (_req: Request, res: Response) => {
     });
     const body = (await r.json()) as { url?: string; error?: string };
     if (!r.ok || !body.url) {
-      res.status(502).json({ error: body.error ?? 'Could not open the billing portal.' });
+      res.status(502).json({ error: { message: body.error ?? 'Could not open the billing portal.' } });
       return;
     }
     res.json({ url: body.url });
   } catch {
-    res.status(502).json({ error: 'Could not reach the billing service. Try again shortly.' });
+    res.status(502).json({ error: { message: 'Could not reach the billing service. Try again shortly.' } });
   }
 });

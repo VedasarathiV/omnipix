@@ -195,4 +195,45 @@ describe('PUT /api/settings/proxy scheme validation', () => {
       await request(app, 'PUT', '/api/settings/proxy', { enabled: true }, token);
     }
   });
+
+  it('rejects a non-string bypassPlatforms item with 400, not 500', async () => {
+    const { status, body } = await request(app, 'PUT', '/api/settings/proxy', {
+      bypassPlatforms: ['groq', 123],
+    }, token);
+    expect(status).toBe(400);
+    expect(body.error.message).toMatch(/array of strings/);
+  });
+
+  it('rejects a non-array bypassPlatforms with 400 instead of a silent no-op', async () => {
+    for (const bypassPlatforms of ['groq', 42, { groq: true }, null]) {
+      const { status, body } = await request(app, 'PUT', '/api/settings/proxy', {
+        bypassPlatforms,
+      }, token);
+      expect(status).toBe(400);
+      expect(body.error.message).toMatch(/array of strings/);
+    }
+  });
+
+  it('saves nothing when any field fails validation (no partial persist)', async () => {
+    await request(app, 'PUT', '/api/settings/proxy', { enabled: false }, token);
+    expect(getSetting('proxy_enabled')).toBe('0');
+    const { status } = await request(app, 'PUT', '/api/settings/proxy', {
+      enabled: true,
+      bypassPlatforms: ['groq', 123],
+    }, token);
+    expect(status).toBe(400);
+    expect(getSetting('proxy_enabled')).toBe('0');
+    expect(getSetting('proxy_bypass') ?? '').not.toContain('groq');
+    await request(app, 'PUT', '/api/settings/proxy', { enabled: true }, token);
+  });
+
+  it('saves a string bypassPlatforms list', async () => {
+    const { status, body } = await request(app, 'PUT', '/api/settings/proxy', {
+      bypassPlatforms: [' groq ', '', 'cerebras'],
+    }, token);
+    expect(status).toBe(200);
+    expect(body.bypassPlatforms).toEqual(['groq', 'cerebras']);
+    expect(getSetting('proxy_bypass')).toBe('groq,cerebras');
+    await request(app, 'PUT', '/api/settings/proxy', { bypassPlatforms: [] }, token);
+  });
 });

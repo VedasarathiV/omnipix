@@ -438,6 +438,17 @@ function consumeSkipBenchExemption(route: RouteResult, err: any): boolean {
 }
 
 /**
+ * Shared empty-completion streak check for non-loop callers (fusion panel
+ * slots, arena). Same map and limit as the proxy path: pass whether this
+ * empty completion carried finish_reason 'length' (the skipBench signal
+ * inbound-chat attaches). True = exempt from bench+penalty this time; a
+ * success or a normally-penalized failure resets the streak.
+ */
+export function consumeEmptyCompletionExemption(route: RouteResult, skipBench: boolean): boolean {
+  return consumeSkipBenchExemption(route, skipBench ? { skipBench: true } : undefined);
+}
+
+/**
  * Apply the full per-key failure bookkeeping shared by every surface after a
  * retryable failure:
  *   - rule out the WHOLE model for the rest of the request on a 404 (removed

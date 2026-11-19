@@ -27,7 +27,7 @@ import { isFusionModel, runFusion, fusionConfigSchema, FusionError, FUSION_MODEL
 import { isRetryableError, isPaymentRequiredError, isModelNotFoundError, isModelAccessForbiddenError, isClientAbortError, newClientAbortError, newHedgeAbortError, isUpstreamClassificationOutput } from '../lib/error-classify.js';
 import { logRequest } from '../lib/request-log.js';
 import { observeServedModel } from '../lib/served-model.js';
-import { parseCacheDirective, cacheActive, isCacheableTemperature, computeCacheKey, getCachedResponse, storeCachedResponse, getCachedStreamResponse, storeCachedStreamResponse, STREAM_CACHE_MAX_BYTES } from '../services/cache.js';
+import { parseCacheDirective, cacheActive, isCacheableTemperature, computeCacheKey, getCachedResponse, storeCachedResponse, getCachedStreamResponse, storeCachedStreamResponse, STREAM_CACHE_MAX_BYTES, findSimilarCachedResponse, computeSemanticBucket, extractPromptText } from '../services/cache.js';
 import { normalizeIdempotencyKey, hashIdempotencyKey, computeIdempotencyFingerprint, lookupIdempotencyReplay, storeIdempotencyResult } from '../services/idempotency.js';
 import { runFallbackLoop, newFallbackState, fallbackRoutingTokens, recordUpstreamSuccess, exhaustedRetryError, setFallbackHeaders, exhaustionErrorPayload, setExhaustionHeaders, type AttemptRecord, REASONING_HOLD_MAX_MS } from '../lib/fallback-loop.js';
 import { routedViaValue, safeHeaderValue } from '../lib/header-value.js';
@@ -2282,8 +2282,7 @@ proxyRouter.post('/chat/completions', async (req: Request, res: Response) => {
   // Streaming requests participate in the cache too: same canonical key (the
   // request content is identical), but hits are looked up in the streaming
   // store and replayed as SSE rather than JSON (see below).
-  const cacheKey = (cacheActive(cacheDirective) && isCacheableTemperature(temperature))
-    ? computeCacheKey({
+  const cacheKeyInput = {
         model: requestedModel, messages, temperature, top_p, max_tokens, tools, tool_choice, parallel_tool_calls,
         // Normalized stop (providerSafeStop), i.e. what is actually forwarded.
         stop,
@@ -2308,7 +2307,9 @@ proxyRouter.post('/chat/completions', async (req: Request, res: Response) => {
         // effort asks for a different answer, so it must never collide.
         reasoning_effort: samplingParams.reasoning_effort ?? undefined,
         compression: compressionResult.cacheKey,
-      })
+      };
+  const cacheKey = (cacheActive(cacheDirective) && isCacheableTemperature(temperature))
+    ? computeCacheKey(cacheKeyInput)
     : null;
   if (cacheKey) {
     if (stream) {
@@ -2336,6 +2337,16 @@ proxyRouter.post('/chat/completions', async (req: Request, res: Response) => {
         res.setHeader('X-Routed-Via', 'cache');
         res.setHeader('X-OmniPix-Cache', 'HIT');
         res.json(withExecutionId(hit.body, requestGroupId));
+        return;
+      }
+      // Opt-in semantic tier: a near-duplicate prompt in the same model+params
+      // bucket replays the earlier answer. Off (threshold 0) unless enabled.
+      const similar = findSimilarCachedResponse(cacheKeyInput, cacheKey);
+      if (similar) {
+        res.setHeader('X-Routed-Via', 'cache');
+        res.setHeader('X-OmniPix-Cache', 'HIT');
+        res.setHeader('X-OmniPix-Cache-Match', 'semantic');
+        res.json(withExecutionId(similar.body, requestGroupId));
         return;
       }
     }
@@ -3328,6 +3339,10 @@ proxyRouter.post('/chat/completions', async (req: Request, res: Response) => {
             keyId: route.keyId,
             promptTokens,
             completionTokens,
+            semantic: {
+              bucket: computeSemanticBucket(cacheKeyInput),
+              promptText: extractPromptText(cacheKeyInput.messages),
+            },
           });
         }
 

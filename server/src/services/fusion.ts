@@ -2,9 +2,10 @@ import { z } from 'zod';
 import type { ChatMessage, ChatCompletionChoice, ChatCompletionResponse, ChatToolCall, TokenUsage } from '@omnipix/shared/types.js';
 import {
   routePinnedModel, routeRequest, getOrderedFusionChain, resolveFusionCandidate,
-  pinnedModelFitsRequestSize,
-  recordRateLimitHit, recordSuccess, failureAttributionFor, type RouteResult, type FusionCandidate,
+  pinnedModelFitsRequestSize, hasOtherUsableKey,
+  recordRateLimitHit, recordModelFailure, recordSuccess, failureAttributionFor, type RouteResult, type FusionCandidate,
 } from './router.js';
+import { consumeEmptyCompletionExemption } from '../lib/fallback-loop.js';
 import {
   recordRequest, recordTokens, setCooldown, getCooldownDurationForLimit,
   getCooldownDecisionForLimit,
@@ -333,13 +334,20 @@ export async function runModelCall(
       const hasToolCalls = Array.isArray(toolCalls) && toolCalls.length > 0;
 
       if (!text && !hasToolCalls) {
-        // Empty completion — fail over like the main proxy path does.
+        // Empty completion — mirror the main proxy path: inbound-chat throws
+        // these with skipBench when finish_reason is 'length', and #751
+        // exempts the first of a streak from bench+penalty. An empty is never
+        // a quota signal, so quotaSignal stays false and it cannot feed the
+        // null-limit escalation ladder (#592).
         logRequest(route.platform, route.modelId, route.keyId, 'error', 0, 0, Date.now() - startedAt, `empty completion (${tag})`, null, tag, null, 'http');
         skipKeys.add(`${route.platform}:${route.modelId}:${route.keyId}`);
-        setCooldown(route.platform, route.modelId, route.keyId, getCooldownDurationForLimit(route.platform, route.modelId, route.keyId, { rpd: route.rpdLimit, tpd: route.tpdLimit }));
-        recordRateLimitHit(route.modelDbId);
         lastError = `empty completion from ${route.displayName}`;
         failure = mergeCallFailure(failure, 'error');
+        if (consumeEmptyCompletionExemption(route, choice?.finish_reason === 'length')) continue;
+        setCooldown(route.platform, route.modelId, route.keyId, getCooldownDurationForLimit(route.platform, route.modelId, route.keyId, { rpd: route.rpdLimit, tpd: route.tpdLimit }, null, { quotaSignal: false }));
+        // Lighter demotion like the main path (a non-429 upstream failure),
+        // and only when no sibling key can still serve the model (#454 gate).
+        if (!hasOtherUsableKey(route.modelDbId, route.keyId, skipKeys)) recordModelFailure(route.modelDbId);
         continue;
       }
 
@@ -419,7 +427,9 @@ export async function runModelCall(
  * can't cleanly switch models, so a mid-stream error returns the partial answer.
  * Usage is estimated (streaming rarely echoes a usage block).
  */
-async function runJudgeStreaming(
+// Exported for the mid-stream accounting regression test (same precedent as
+// runModelCall above).
+export async function runJudgeStreaming(
   getRoute: (skipKeys: Set<string>, skipModels: Set<number>) => RouteResult | null,
   messages: ChatMessage[],
   options: CompletionOptions,
@@ -445,9 +455,12 @@ async function runJudgeStreaming(
     const routeOpts = { ...options, contextBudget: routeOutputBudget(route, estimatedTokens) };
     let text = '';
     let started = false;
+    let finishReason: string | null = null;
     try {
       for await (const chunk of route.provider.streamChatCompletion(route.apiKey, messages, route.modelId, routeOpts)) {
-        const delta = (chunk as any)?.choices?.[0]?.delta?.content;
+        const choice = (chunk as any)?.choices?.[0];
+        const delta = choice?.delta?.content;
+        if (typeof choice?.finish_reason === 'string') finishReason = choice.finish_reason;
         if (typeof delta === 'string' && delta.length > 0) {
           if (!started) { started = true; cb.onStart?.({ platform: route.platform, model: route.modelId }); }
           text += delta;
@@ -457,9 +470,11 @@ async function runJudgeStreaming(
       if (!text) {
         logRequest(route.platform, route.modelId, route.keyId, 'error', 0, 0, Date.now() - startedAt, 'empty completion (fusion judge)', null, FUSION_TAG, null, 'http');
         skipKeys.add(`${route.platform}:${route.modelId}:${route.keyId}`);
-        setCooldown(route.platform, route.modelId, route.keyId, getCooldownDurationForLimit(route.platform, route.modelId, route.keyId, { rpd: route.rpdLimit, tpd: route.tpdLimit }));
-        recordRateLimitHit(route.modelDbId);
         lastError = `empty judge completion from ${route.displayName}`;
+        // Same #751/#592 mirror as the panel path in runModelCall above.
+        if (consumeEmptyCompletionExemption(route, finishReason === 'length')) continue;
+        setCooldown(route.platform, route.modelId, route.keyId, getCooldownDurationForLimit(route.platform, route.modelId, route.keyId, { rpd: route.rpdLimit, tpd: route.tpdLimit }, null, { quotaSignal: false }));
+        if (!hasOtherUsableKey(route.modelDbId, route.keyId, skipKeys)) recordModelFailure(route.modelDbId);
         continue;
       }
       const out = Math.ceil(text.length / 4);
@@ -471,19 +486,22 @@ async function runJudgeStreaming(
       return { ok: true, route, text, usage };
     } catch (err: any) {
       const safe = sanitizeProviderErrorMessage(err?.message);
+      lastError = safe;
+      // Already streamed bytes — can't fail over without duplicating output.
+      // Mirror the proxy's committed path: keep what the client received,
+      // log the interruption WITH the partial token counts (not 0/0), no
+      // bench or penalty — the model served until the stream broke.
+      // `started` is set only alongside a non-empty delta, so started always
+      // implies text: this branch catches every mid-stream interruption.
+      if (started && text) {
+        const out = Math.ceil(text.length / 4);
+        const usage: TokenUsage = { prompt_tokens: estimatedTokens, completion_tokens: out, total_tokens: estimatedTokens + out };
+        logRequest(route.platform, route.modelId, route.keyId, 'error', estimatedTokens, out, Date.now() - startedAt, safe, null, FUSION_TAG, null, 'http', failureAttributionFor(err));
+        return { ok: true, route, text, usage };
+      }
       // #1347: same attribution as the panel path above.
       const attribution = failureAttributionFor(err);
       logRequest(route.platform, route.modelId, route.keyId, 'error', 0, 0, Date.now() - startedAt, safe, null, FUSION_TAG, null, 'http', attribution);
-      lastError = safe;
-      // Already streamed bytes — can't fail over without duplicating output.
-      // Keep whatever the client already received.
-      if (started) {
-        if (text) {
-          const out = Math.ceil(text.length / 4);
-          return { ok: true, route, text, usage: { prompt_tokens: estimatedTokens, completion_tokens: out, total_tokens: estimatedTokens + out } };
-        }
-        break;
-      }
       if (isContextTooLargeError(err)) {
         noteContextTooLarge(route, err, skipModels);
         continue;

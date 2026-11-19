@@ -8,9 +8,11 @@
 // cost, near-zero latency, and one fewer 429 on the way to the daily reset.
 //
 // Design choices that keep it SAFE:
-//   - Exact match only. No embeddings / fuzzy matching, so a near-miss can never
-//     return a different prompt's answer. The key is a SHA-256 over the
-//     canonicalized request, so a single token of difference is a miss.
+//   - Exact match first. The key is a SHA-256 over the canonicalized request,
+//     so a single token of difference is an exact miss. An OPT-IN semantic
+//     tier (similarity threshold 0 = off) then matches near-duplicate prompts
+//     within the same model+params bucket — never across different sampling
+//     params, so a json_object request can never get a plain-text reply.
 //   - The key is the REQUEST, not the route. Any model's good answer to an
 //     identical prompt is a valid hit, which is what maximizes the hit rate for
 //     auto-routed traffic. platform/model_id/key_id are stored for attribution
@@ -107,6 +109,22 @@ export function cacheMaxTemperature(): number {
  *  Bounds memory use. */
 export function cacheMaxEntries(): number {
   return Math.floor(envNum('RESPONSE_CACHE_MAX_ENTRIES', 5000));
+}
+
+export const CACHE_SEMANTIC_THRESHOLD_SETTING = 'response_cache_semantic_threshold';
+
+/**
+ * Minimum prompt similarity (0,1) for a semantic-cache hit; 0 (the default)
+ * disables the tier entirely. Settings-table value wins when present, then
+ * the RESPONSE_CACHE_SEMANTIC_THRESHOLD env var. Anything outside (0,1) —
+ * including 1, which would only ever re-match exact duplicates — means off.
+ */
+export function semanticThreshold(): number {
+  const stored = readSetting(CACHE_SEMANTIC_THRESHOLD_SETTING);
+  const raw = (stored !== undefined && stored.trim() !== '') ? stored : process.env.RESPONSE_CACHE_SEMANTIC_THRESHOLD;
+  if (raw === undefined || raw.trim() === '') return 0;
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 && n < 1 ? n : 0;
 }
 
 // A request is cacheable only when its temperature is omitted (caller accepts
@@ -236,6 +254,99 @@ export function computeCacheKey(input: CacheKeyInput): string {
   return crypto.createHash('sha256').update(canonical).digest('hex');
 }
 
+// ── Semantic tier ──
+//
+// Embedding-free near-duplicate matching for the exact-match cache. A request
+// that misses exactly is compared against live entries in the same semantic
+// bucket — the canonical model id plus every sampling/format knob, i.e. the
+// cache key minus the messages. Same bucket + prompt similarity at/above the
+// threshold = a hit. No provider calls, no model downloads, deterministic.
+//
+// Similarity is Jaccard over word-trigram shingles of the normalized prompt
+// text (lowercased, punctuation stripped, whitespace collapsed); prompts under
+// three words fall back to word-set Jaccard. Trigrams catch rewordings
+// ("what is X" vs "what's X") while staying cheap enough to scan the LRU.
+
+const PROMPT_TEXT_MAX_CHARS = 4000;
+
+function messageText(content: ChatMessage['content']): string {
+  if (typeof content === 'string') return content;
+  if (!Array.isArray(content)) return '';
+  return content
+    .map(block => (block && typeof block === 'object' && typeof (block as { text?: unknown }).text === 'string'
+      ? String((block as { text?: unknown }).text)
+      : ''))
+    .join(' ');
+}
+
+/** Canonical model+params half of the cache key: the semantic match scope. */
+export function computeSemanticBucket(input: CacheKeyInput): string {
+  const canonical = stableStringify({
+    v: 1,
+    model: normModel(input.model),
+    temperature: input.temperature,
+    top_p: defaultableNumber(input.top_p, 1),
+    max_tokens: input.max_tokens,
+    tools: input.tools,
+    tool_choice: input.tool_choice,
+    parallel_tool_calls: input.parallel_tool_calls,
+    stop: input.stop,
+    response_format: input.response_format,
+    n: defaultableNumber(input.n, 1),
+    seed: input.seed,
+    top_k: input.top_k,
+    min_p: input.min_p,
+    presence_penalty: defaultableNumber(input.presence_penalty, 0),
+    frequency_penalty: defaultableNumber(input.frequency_penalty, 0),
+    repetition_penalty: input.repetition_penalty,
+    logit_bias: input.logit_bias,
+    logprobs: input.logprobs,
+    top_logprobs: input.top_logprobs,
+    reasoning_effort: input.reasoning_effort,
+    compression: input.compression,
+  });
+  return crypto.createHash('sha256').update(canonical).digest('hex');
+}
+
+/** Normalized prompt text for similarity scoring. Empty when no text found. */
+export function extractPromptText(messages: ChatMessage[]): string {
+  const raw = messages
+    .map(message => `${message.role}:${messageText(message.content)}`)
+    .join('\n')
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return raw.slice(0, PROMPT_TEXT_MAX_CHARS);
+}
+
+function shingles(text: string): Set<string> {
+  const words = text.split(' ').filter(Boolean);
+  const out = new Set<string>();
+  if (words.length < 3) {
+    for (const word of words) out.add(word);
+    return out;
+  }
+  for (let i = 0; i + 3 <= words.length; i++) {
+    out.add(`${words[i]} ${words[i + 1]} ${words[i + 2]}`);
+  }
+  return out;
+}
+
+/** Jaccard similarity of two normalized prompt texts, 0..1. */
+export function textSimilarity(a: string, b: string): number {
+  if (a === b) return 1;
+  if (!a || !b) return 0;
+  const setA = shingles(a);
+  const setB = shingles(b);
+  if (setA.size === 0 || setB.size === 0) return 0;
+  let intersection = 0;
+  for (const shingle of setA) {
+    if (setB.has(shingle)) intersection += 1;
+  }
+  return intersection / (setA.size + setB.size - intersection);
+}
+
 // Normalizes a sampling param that was passed explicitly but equals the API
 // default down to undefined (stableStringify drops undefined), so a client that
 // always serializes the full param set shares a cache entry with one that omits
@@ -269,6 +380,8 @@ export interface StoreInput {
   keyId: number | null;
   promptTokens: number;
   completionTokens: number;
+  /** Semantic-tier metadata; omit and the entry is exact-match-only. */
+  semantic?: { bucket: string; promptText: string };
 }
 
 interface CacheEntry {
@@ -281,6 +394,8 @@ interface CacheEntry {
   hitCount: number;
   createdAtMs: number;
   lastHitAtMs: number | null;
+  semanticBucket?: string;
+  promptText?: string;
 }
 
 // Insertion-ordered map used as an LRU: the first key is the least-recently
@@ -353,6 +468,8 @@ function enforceCombinedCap(): void {
 // survive a restart, because they ride on the entries themselves.
 let lookupHits = 0;
 let lookupMisses = 0;
+/** Semantic-tier hits since this process started (a subset of lookupHits). */
+let semanticHits = 0;
 
 // ── Deferred SQLite write-through ──
 // better-sqlite3 is synchronous, so a store/hit write would sit on the request
@@ -439,28 +556,10 @@ export function __resetMemoryForTests(): void {
   streamStore.clear();
   lookupHits = 0;
   lookupMisses = 0;
+  semanticHits = 0;
 }
 
-/**
- * Look up a cached completion. Returns null on a miss or when the entry has aged
- * past the TTL (expired entries are deleted lazily on read, in memory and on
- * disk). A hit bumps the entry's hit_count and moves it to most-recently-used.
- */
-export function getCachedResponse(cacheKey: string, now = Date.now()): CachedResponse | null {
-  const entry = store.get(cacheKey);
-  if (!entry) {
-    lookupMisses += 1;
-    return null;
-  }
-
-  if (now - entry.createdAtMs > cacheTtlMs()) {
-    store.delete(cacheKey);
-    // The row would otherwise outlive its memory entry until the next restart.
-    scheduleRowDelete(cacheKey);
-    lookupMisses += 1;
-    return null;
-  }
-
+function registerHit(cacheKey: string, entry: CacheEntry, now: number): CachedResponse {
   lookupHits += 1;
   entry.hitCount += 1;
   entry.lastHitAtMs = now;
@@ -483,6 +582,73 @@ export function getCachedResponse(cacheKey: string, now = Date.now()): CachedRes
     promptTokens: entry.promptTokens,
     completionTokens: entry.completionTokens,
   };
+}
+
+/**
+ * Look up a cached completion. Returns null on a miss or when the entry has aged
+ * past the TTL (expired entries are deleted lazily on read, in memory and on
+ * disk). A hit bumps the entry's hit_count and moves it to most-recently-used.
+ */
+export function getCachedResponse(cacheKey: string, now = Date.now()): CachedResponse | null {
+  const entry = store.get(cacheKey);
+  if (!entry) {
+    lookupMisses += 1;
+    return null;
+  }
+
+  if (now - entry.createdAtMs > cacheTtlMs()) {
+    store.delete(cacheKey);
+    // The row would otherwise outlive its memory entry until the next restart.
+    scheduleRowDelete(cacheKey);
+    lookupMisses += 1;
+    return null;
+  }
+
+  return registerHit(cacheKey, entry, now);
+}
+
+export interface SemanticHit extends CachedResponse {
+  /** The prompt similarity that cleared the threshold, 0..1. */
+  similarity: number;
+}
+
+/**
+ * Near-duplicate fallback after an exact miss. Scans live entries in the same
+ * semantic bucket (same model + sampling params) and returns the best prompt
+ * match at/above the threshold, or null. The scan is bounded by the LRU cap,
+ * and each candidate is a cheap trigram-set comparison — no provider calls.
+ * A hit counts exactly like an exact hit (same counters, same savings).
+ */
+export function findSimilarCachedResponse(
+  input: CacheKeyInput,
+  excludeKey?: string,
+  now = Date.now(),
+): SemanticHit | null {
+  const threshold = semanticThreshold();
+  if (threshold <= 0) return null;
+  const bucket = computeSemanticBucket(input);
+  const text = extractPromptText(input.messages);
+  if (!text) return null;
+
+  let bestKey: string | null = null;
+  let bestEntry: CacheEntry | null = null;
+  let bestScore = threshold;
+  for (const [key, entry] of store) {
+    if (key === excludeKey) continue;
+    if (entry.semanticBucket !== bucket || !entry.promptText) continue;
+    if (now - entry.createdAtMs > cacheTtlMs()) continue;
+    const score = textSimilarity(text, entry.promptText);
+    if (score >= bestScore) {
+      // >= so a later (more-recently-used — the map iterates LRU-first)
+      // equal-scoring entry wins over an older one.
+      bestKey = key;
+      bestEntry = entry;
+      bestScore = score;
+    }
+  }
+  if (!bestKey || !bestEntry) return null;
+  semanticHits += 1;
+  return { ...registerHit(bestKey, bestEntry, now), similarity: bestScore };
 }
 
 /**
@@ -521,6 +687,8 @@ export function storeCachedResponse(cacheKey: string, input: StoreInput, now = D
     hitCount: 0,
     createdAtMs: now,
     lastHitAtMs: null,
+    semanticBucket: input.semantic?.bucket,
+    promptText: input.semantic?.promptText || undefined,
   });
 
   // Evict least-recently-used beyond the cap, which is shared with the
@@ -537,8 +705,8 @@ export function storeCachedResponse(cacheKey: string, input: StoreInput, now = D
   schedulePersist(() => {
     getDb().prepare(
       `INSERT INTO response_cache
-         (cache_key, body_json, platform, model_id, key_id, prompt_tokens, completion_tokens, hit_count, created_at_ms, last_hit_at_ms, expires_at_ms)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+         (cache_key, body_json, platform, model_id, key_id, prompt_tokens, completion_tokens, hit_count, created_at_ms, last_hit_at_ms, expires_at_ms, semantic_bucket, prompt_text)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT(cache_key) DO UPDATE SET
          body_json = excluded.body_json,
          platform = excluded.platform,
@@ -549,7 +717,9 @@ export function storeCachedResponse(cacheKey: string, input: StoreInput, now = D
          hit_count = excluded.hit_count,
          created_at_ms = excluded.created_at_ms,
          last_hit_at_ms = excluded.last_hit_at_ms,
-         expires_at_ms = excluded.expires_at_ms`,
+         expires_at_ms = excluded.expires_at_ms,
+         semantic_bucket = excluded.semantic_bucket,
+         prompt_text = excluded.prompt_text`,
     ).run(
       cacheKey,
       bodyJson,
@@ -562,6 +732,8 @@ export function storeCachedResponse(cacheKey: string, input: StoreInput, now = D
       now,
       entry.lastHitAtMs,
       expiresAtMs,
+      input.semantic?.bucket ?? null,
+      input.semantic?.promptText || null,
     );
   });
 }
@@ -584,7 +756,7 @@ export function loadCacheFromDb(now = Date.now()): void {
     // on-disk half). Off by default, so this is inert on an untouched install.
     if (!cachePersistenceEnabled()) return;
     const rows = db.prepare(
-      `SELECT cache_key, body_json, platform, model_id, key_id, prompt_tokens, completion_tokens, hit_count, created_at_ms, last_hit_at_ms
+      `SELECT cache_key, body_json, platform, model_id, key_id, prompt_tokens, completion_tokens, hit_count, created_at_ms, last_hit_at_ms, semantic_bucket, prompt_text
          FROM response_cache
         ORDER BY created_at_ms ASC`,
     ).all() as Array<{
@@ -598,6 +770,8 @@ export function loadCacheFromDb(now = Date.now()): void {
       hit_count: number;
       created_at_ms: number;
       last_hit_at_ms: number | null;
+      semantic_bucket: string | null;
+      prompt_text: string | null;
     }>;
     const cap = cacheMaxEntries();
     // Newest wins: drop rows past the cap from the FRONT (oldest first).
@@ -615,6 +789,8 @@ export function loadCacheFromDb(now = Date.now()): void {
           hitCount: row.hit_count,
           createdAtMs: row.created_at_ms,
           lastHitAtMs: row.last_hit_at_ms,
+          semanticBucket: row.semantic_bucket ?? undefined,
+          promptText: row.prompt_text ?? undefined,
         });
       } catch {
         // corrupt body — skip; it will be overwritten on the next store
@@ -739,6 +915,8 @@ export interface CacheStats {
   lookupMisses: number;
   /** 0..1 share of this process's lookups that hit (no lookups yet → 0). */
   hitRate: number;
+  /** Semantic-tier hits since this process started (a subset of lookupHits). */
+  semanticHits: number;
 }
 
 /**
@@ -776,6 +954,7 @@ export function getCacheStats(): CacheStats {
     lookupHits,
     lookupMisses,
     hitRate: lookups > 0 ? lookupHits / lookups : 0,
+    semanticHits,
   };
 }
 
@@ -797,6 +976,7 @@ export function clearCache(): number {
   // would show a 90% hit rate next to zero entries right after a flush.
   lookupHits = 0;
   lookupMisses = 0;
+  semanticHits = 0;
   try {
     getDb().prepare('DELETE FROM response_cache').run();
   } catch {

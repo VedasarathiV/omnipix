@@ -59,7 +59,26 @@ describe('DeepSeek provider', () => {
       choices: [{ index: 0, message: { role: 'assistant', content: '', reasoning_content: 'thoughts' }, finish_reason: 'stop' }],
     }));
     const response = await getProvider('deepseek')!.chatCompletion('test-key', [{ role: 'user', content: 'Hi' }], model);
-    expect(response.choices[0].message.content).toContain('thoughts');
+    expect(response.choices[0].message.content).toBe('thoughts');
+  });
+
+  it('leaves real content and tool calls unfolded', async () => {
+    const fetch = vi.spyOn(global, 'fetch')
+      .mockResolvedValueOnce(json({
+        ...completion,
+        choices: [{ index: 0, message: { role: 'assistant', content: 'answer', reasoning_content: 'thoughts' }, finish_reason: 'stop' }],
+      }))
+      .mockResolvedValueOnce(json({
+        ...completion,
+        choices: [{ index: 0, message: { role: 'assistant', content: '', reasoning_content: 'thoughts', tool_calls: [{ id: '1', type: 'function', function: { name: 'f', arguments: '{}' } }] }, finish_reason: 'tool_calls' }],
+      }));
+    const provider = getProvider('deepseek')!;
+    const answered = await provider.chatCompletion('test-key', [{ role: 'user', content: 'Hi' }], model);
+    expect(answered.choices[0].message.content).toBe('answer');
+    const tools = await provider.chatCompletion('test-key', [{ role: 'user', content: 'Hi' }], model);
+    expect(tools.choices[0].message.content).toBe('');
+    expect(tools.choices[0].message.tool_calls).toHaveLength(1);
+    expect(fetch).toHaveBeenCalledTimes(2);
   });
 
   it('validates keys against GET /models', async () => {
@@ -77,5 +96,33 @@ describe('DeepSeek provider', () => {
   it('preserves rate limits and their retry delay', async () => {
     vi.spyOn(global, 'fetch').mockResolvedValue(json({ error: { message: 'Rate limit' } }, 429, { 'Retry-After': '30' }));
     await expect(getProvider('deepseek')!.chatCompletion('test-key', [], model)).rejects.toMatchObject({ status: 429, retryAfterMs: 30_000 });
+  });
+
+  it('allows 120s before first byte (reasoning models start slowly)', () => {
+    delete process.env.PROVIDER_TIMEOUT_DEEPSEEK;
+    const provider = new DeepSeekProvider() as unknown as { timeoutMs: number };
+    expect(provider.timeoutMs).toBe(120_000);
+  });
+
+  it('serves deepseek-v4-pro through the same bare-host wire', async () => {
+    const fetch = vi.spyOn(global, 'fetch').mockResolvedValue(json({
+      ...completion, model: 'deepseek-v4-pro',
+      choices: [{ index: 0, message: { role: 'assistant', content: 'pro' }, finish_reason: 'stop' }],
+    }));
+    const response = await getProvider('deepseek')!.chatCompletion('test-key', [{ role: 'user', content: 'Hi' }], 'deepseek-v4-pro');
+    expect(fetch.mock.calls[0][0]).toBe('https://api.deepseek.com/chat/completions');
+    expect(JSON.parse(String(fetch.mock.calls[0][1]!.body))).toMatchObject({ model: 'deepseek-v4-pro' });
+    expect(response._routed_via).toEqual({ platform: 'deepseek', model: 'deepseek-v4-pro' });
+    expect(response.choices[0].message.content).toBe('pro');
+  });
+
+  it('forwards reasoning_effort but never sends the thinking toggle', async () => {
+    const fetch = vi.spyOn(global, 'fetch').mockResolvedValue(json(completion));
+    await getProvider('deepseek')!.chatCompletion('test-key', [{ role: 'user', content: 'Hi' }], model, {
+      reasoning_effort: 'high', thinking: false,
+    } as any);
+    const body = JSON.parse(String(fetch.mock.calls[0][1]!.body));
+    expect(body.reasoning_effort).toBe('high');
+    expect(body).not.toHaveProperty('thinking');
   });
 });

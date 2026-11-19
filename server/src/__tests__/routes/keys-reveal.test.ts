@@ -57,6 +57,12 @@ describe('Reveal one key — password re-verification (#705)', () => {
     expect(body.key).toBe('gsk_the_real_secret');
   });
 
+  it('rejects a trailing-garbage id instead of parsing its prefix', async () => {
+    const { status, body } = await request('/api/keys/12abc/reveal', 'password123');
+    expect(status).toBe(400);
+    expect(body.error.message).toBe('Invalid key ID');
+  });
+
   it('refuses a session that does not re-enter the password', async () => {
     const id = await addKey();
     const { status, body } = await request(`/api/keys/${id}/reveal`);

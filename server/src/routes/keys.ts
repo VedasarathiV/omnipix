@@ -554,15 +554,15 @@ keysRouter.get('/', (_req: Request, res: Response) => {
 // there is otherwise no way back short of restarting and waiting it out.
 keysRouter.delete('/:id/cooldowns', (req: Request, res: Response) => {
   const id = Number(req.params.id);
-  if (!Number.isInteger(id)) {
-    res.status(400).json({ error: 'Invalid key id' });
+  if (!Number.isInteger(id) || id <= 0) {
+    res.status(400).json({ error: { message: 'Invalid key id' } });
     return;
   }
 
   const db = getDb();
   const exists = db.prepare('SELECT 1 FROM api_keys WHERE id = ?').get(id);
   if (!exists) {
-    res.status(404).json({ error: 'Key not found' });
+    res.status(404).json({ error: { message: 'Key not found' } });
     return;
   }
 
@@ -574,19 +574,19 @@ keysRouter.delete('/:id/cooldowns', (req: Request, res: Response) => {
 // credit, tier, or rate-limit cooldowns on the same key.
 keysRouter.delete('/:id/cooldowns/checkin', (req: Request, res: Response) => {
   const id = Number(req.params.id);
-  if (!Number.isInteger(id)) {
-    res.status(400).json({ error: 'Invalid key id' });
+  if (!Number.isInteger(id) || id <= 0) {
+    res.status(400).json({ error: { message: 'Invalid key id' } });
     return;
   }
 
   const row = getDb().prepare('SELECT platform FROM api_keys WHERE id = ?')
     .get(id) as { platform: string } | undefined;
   if (!row) {
-    res.status(404).json({ error: 'Key not found' });
+    res.status(404).json({ error: { message: 'Key not found' } });
     return;
   }
   if (row.platform !== 'apinex') {
-    res.status(400).json({ error: 'Check-in recovery is only supported for APINex keys' });
+    res.status(400).json({ error: { message: 'Check-in recovery is only supported for APINex keys' } });
     return;
   }
 
@@ -762,8 +762,8 @@ keysRouter.get('/export', (req: Request, res: Response) => {
 keysRouter.post('/:id/reveal', (req: Request, res: Response) => {
   if (!passesReauth(req, res, 'reveal a key')) return;
 
-  const id = parseInt(req.params.id as string, 10);
-  if (isNaN(id)) {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) {
     res.status(400).json({ error: { message: 'Invalid key ID' } });
     return;
   }
@@ -1806,8 +1806,8 @@ keysRouter.post('/import-selected', async (req: Request, res: Response) => {
 
 // Delete a key
 keysRouter.delete('/:id', (req: Request, res: Response) => {
-  const id = parseInt(req.params.id as string, 10);
-  if (isNaN(id)) {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) {
     res.status(400).json({ error: { message: 'Invalid key ID' } });
     return;
   }
@@ -1917,8 +1917,8 @@ keysRouter.patch('/platform/:platform', (req: Request, res: Response) => {
 
 // Update key (toggle enable/disable or edit label)
 keysRouter.patch('/:id', (req: Request, res: Response) => {
-  const id = parseInt(req.params.id as string, 10);
-  if (isNaN(id)) {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) {
     res.status(400).json({ error: { message: 'Invalid key ID' } });
     return;
   }

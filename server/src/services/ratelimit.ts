@@ -1108,8 +1108,9 @@ export interface CooldownLimitOptions {
    *  lib/error-classify.ts). Timeouts, 5xx and transport errors are retryable
    *  but carry no quota information, so they must not feed the null-limits
    *  exhaustion heuristic below (#592) — they get the short transient bench.
-   *  Defaults to true: legacy callers without error context (fusion's
-   *  empty-completion benches) keep their pre-#592 behavior. */
+   *  Defaults to false: feeding the ladder is opt-in per call, so a caller
+   *  without error context can never silently escalate. Every production
+   *  caller passes this explicitly. */
   quotaSignal?: boolean;
 }
 
@@ -1149,7 +1150,7 @@ export function getCooldownDecisionForLimit(
   if (isLocalEndpointKey(keyId)) {
     return { durationMs: LOCAL_ENDPOINT_COOLDOWN_MS, source: 'heuristic' };
   }
-  const quotaSignal = opts?.quotaSignal ?? true;
+  const quotaSignal = opts?.quotaSignal ?? false;
   const now = Date.now();
   const rpdExhausted =
     limits.rpd !== null && requestCount(platform, modelId, keyId, DAY, now) >= limits.rpd;

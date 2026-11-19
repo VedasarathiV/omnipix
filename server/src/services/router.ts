@@ -2137,7 +2137,7 @@ export function getOrderedFusionChain(estimatedTokens: number, exactOutputReserv
  * row; dedupes a model id that exists on multiple platforms by intelligence
  * rank, matching how /v1/models picks a representative row.
  */
-export function resolveFusionCandidate(modelId: string): FusionCandidate | null {
+export function resolveFusionCandidate(modelId: string, opts?: { allowGroupFallback?: boolean }): FusionCandidate | null {
   const db = getDb();
   const rows = db.prepare(`
     SELECT m.id as model_db_id, m.platform, m.model_id, m.display_name,
@@ -2166,6 +2166,11 @@ export function resolveFusionCandidate(modelId: string): FusionCandidate | null 
       supportsTools: row.supports_tools,
     };
   }
+
+  // Callers comparing EXACT models (arena) opt out of group substitution: a
+  // disabled id must 400, not silently resolve to a sibling member and
+  // compare a model the user never picked.
+  if (opts?.allowGroupFallback === false) return null;
 
   // Unify ON: a fusion picker value may be a canonical GROUP id rather than a
   // raw model_id. Resolve it to the group's best-ordered enabled member so

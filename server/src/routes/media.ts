@@ -124,6 +124,36 @@ const customMediaSchema = z.object({
   quotaLabel: z.string().optional(),
 });
 
+const probeMediaSchema = z.object({
+  baseUrl: z.string().url('baseUrl must be a valid URL'),
+  timeoutMs: z.number().int().min(500).max(30000).optional(),
+});
+
+// Test whether a custom endpoint answers, without saving anything. Tries a
+// few well-known paths (engines disagree on where /models lives) and reports
+// the first HTTP response — any status, even 404, proves a server is home.
+// Always 200: reachability is data, not an error.
+mediaRouter.post('/probe', async (req: Request, res: Response) => {
+  const parsed = probeMediaSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: { message: parsed.error.issues.map(e => e.message).join(', ') } });
+    return;
+  }
+  const base = parsed.data.baseUrl.trim().replace(/\/+$/, '');
+  const timeoutMs = parsed.data.timeoutMs ?? 5000;
+  let lastError = 'no response';
+  for (const probePath of ['/models', '/v1/models', '/']) {
+    try {
+      const r = await fetch(`${base}${probePath}`, { signal: AbortSignal.timeout(timeoutMs) });
+      res.json({ reachable: true, status: r.status, endpoint: probePath });
+      return;
+    } catch (err: unknown) {
+      lastError = err instanceof Error ? err.message : String(err);
+    }
+  }
+  res.json({ reachable: false, error: lastError });
+});
+
 mediaRouter.post('/custom', (req: Request, res: Response) => {
   const parsed = customMediaSchema.safeParse(req.body);
   if (!parsed.success) {

@@ -67,8 +67,8 @@ healthRouter.get('/', (_req: Request, res: Response) => {
 
 // Check a specific key
 healthRouter.post('/check/:keyId', async (req: Request, res: Response) => {
-  const keyId = parseInt(req.params.keyId as string, 10);
-  if (isNaN(keyId)) {
+  const keyId = Number(req.params.keyId);
+  if (!Number.isInteger(keyId) || keyId <= 0) {
     res.status(400).json({ error: { message: 'Invalid key ID' } });
     return;
   }
@@ -92,8 +92,8 @@ healthRouter.post('/check-all', async (_req: Request, res: Response) => {
 // probe recorded (or the fresh state when the provider reported nothing, so
 // the caller can tell "no quota endpoint / probe failed" from "fresh number").
 healthRouter.post('/quota/:keyId', async (req: Request, res: Response) => {
-  const keyId = parseInt(req.params.keyId as string, 10);
-  if (isNaN(keyId)) {
+  const keyId = Number(req.params.keyId);
+  if (!Number.isInteger(keyId) || keyId <= 0) {
     res.status(400).json({ error: { message: 'Invalid key ID' } });
     return;
   }

@@ -57,8 +57,17 @@ const updateSchema = z.object({
   routing_strategy: z.enum(['priority', 'balanced', 'smartest', 'fastest', 'reliable']).nullable().optional(),
 });
 
-function getId(req: Request): number {
-  return parseInt(req.params.id as string);
+/**
+ * Strict route-id parse: only a bare positive integer. A permissive parseInt
+ * would accept "12abc" and quietly operate on profile 12.
+ */
+function getId(req: Request): number | null {
+  const id = Number(req.params.id);
+  return Number.isInteger(id) && id > 0 ? id : null;
+}
+
+function invalidId(res: Response): void {
+  res.status(400).json({ error: { message: 'Invalid profile ID' } });
 }
 
 /**
@@ -112,6 +121,7 @@ profilesRouter.post('/active', (req: Request, res: Response) => {
 profilesRouter.get('/:id/models', (req: Request, res: Response) => {
   const db = getDb();
   const profileId = getId(req);
+  if (profileId === null) { invalidId(res); return; }
   const profile = db.prepare('SELECT id FROM profiles WHERE id = ?').get(profileId) as any;
   if (!profile) {
     res.status(404).json({ error: { message: 'Profile not found' } });
@@ -210,6 +220,7 @@ function copyFromDefault(db: any, profileId: number) {
 profilesRouter.put('/:id', (req: Request, res: Response) => {
   const db = getDb();
   const profileId = getId(req);
+  if (profileId === null) { invalidId(res); return; }
   const profile = db.prepare('SELECT id, name, type FROM profiles WHERE id = ?').get(profileId) as any;
   if (!profile) {
     res.status(404).json({ error: { message: 'Profile not found' } });
@@ -284,6 +295,7 @@ const reorderSchema = z.array(z.object({
 profilesRouter.put('/:id/reorder', (req: Request, res: Response) => {
   const db = getDb();
   const profileId = getId(req);
+  if (profileId === null) { invalidId(res); return; }
   const profile = db.prepare('SELECT id FROM profiles WHERE id = ?').get(profileId) as any;
   if (!profile) {
     res.status(404).json({ error: { message: 'Profile not found' } });
@@ -312,6 +324,7 @@ profilesRouter.put('/:id/reorder', (req: Request, res: Response) => {
 profilesRouter.post('/:id/reset', (req: Request, res: Response) => {
   const db = getDb();
   const profileId = getId(req);
+  if (profileId === null) { invalidId(res); return; }
   const profile = db.prepare('SELECT id FROM profiles WHERE id = ?').get(profileId) as any;
   if (!profile) {
     res.status(404).json({ error: { message: 'Profile not found' } });
@@ -351,6 +364,7 @@ profilesRouter.post('/:id/reset', (req: Request, res: Response) => {
 profilesRouter.delete('/:id', (req: Request, res: Response) => {
   const db = getDb();
   const profileId = getId(req);
+  if (profileId === null) { invalidId(res); return; }
   const profile = db.prepare('SELECT id, type FROM profiles WHERE id = ?').get(profileId) as any;
   if (!profile) {
     res.status(404).json({ error: { message: 'Profile not found' } });
@@ -428,6 +442,7 @@ function sortProfileModels(db: any, profileId: number, preset: string) {
 profilesRouter.post('/:id/sort/:preset', (req: Request, res: Response) => {
   const db = getDb();
   const profileId = getId(req);
+  if (profileId === null) { invalidId(res); return; }
   const profile = db.prepare('SELECT id FROM profiles WHERE id = ?').get(profileId) as any;
   if (!profile) {
     res.status(404).json({ error: { message: 'Profile not found' } });

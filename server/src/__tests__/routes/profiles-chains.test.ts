@@ -295,4 +295,17 @@ describe('named fallback chains', () => {
     expect(denied.status).toBe(403);
     expect(denied.body.error.message).toMatch(/built-in/i);
   });
+
+  it.each([
+    ['GET', '/api/profiles/12abc/models'],
+    ['PUT', '/api/profiles/12abc'],
+    ['PUT', '/api/profiles/12abc/reorder'],
+    ['POST', '/api/profiles/12abc/reset'],
+    ['DELETE', '/api/profiles/12abc'],
+    ['POST', '/api/profiles/12abc/sort/balanced'],
+  ])('%s %s rejects a trailing-garbage id with 400', async (method, path) => {
+    const { status, body } = await request(method, path, method === 'GET' ? undefined : {});
+    expect(status).toBe(400);
+    expect(body.error.message).toBe('Invalid profile ID');
+  });
 });

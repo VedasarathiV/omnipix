@@ -20,6 +20,15 @@ import {
   MAX_CONSECUTIVE_UPSTREAM_FAILS_SETTING,
 } from '../lib/guardrails.js';
 import {
+  CONTENT_GUARD_BLOCKED_PATTERNS_SETTING,
+  CONTENT_GUARD_INBOUND_SETTING,
+  CONTENT_GUARD_OUTBOUND_SETTING,
+  getBlockedPatternSources,
+  getInboundGuardMode,
+  getOutboundGuardMode,
+} from '../lib/content-guard.js';
+import { getContentGuardStats } from '../middleware/content-guard.js';
+import {
   compressionUpdateSchema,
   getCompressionConfig,
   setCompressionConfig,
@@ -238,7 +247,7 @@ settingsRouter.post('/url-tokens', (req: Request, res: Response) => {
 });
 
 settingsRouter.delete('/url-tokens/:id', (req: Request, res: Response) => {
-  const id = Number.parseInt(String(req.params.id), 10);
+  const id = Number(req.params.id);
   if (!Number.isInteger(id) || id <= 0) {
     res.status(400).json({ error: { message: 'Invalid URL token id', type: 'invalid_request_error' } });
     return;
@@ -473,6 +482,57 @@ settingsRouter.put('/guardrails', (req: Request, res: Response) => {
   });
 });
 
+// Gateway-side content guardrails: PII redaction + operator blocklist, off by
+// default. Partial PUT: send just the knob you want to change.
+settingsRouter.get('/content-guard', (_req: Request, res: Response) => {
+  res.json({
+    inbound: getInboundGuardMode(),
+    outbound: getOutboundGuardMode(),
+    blockedPatterns: getBlockedPatternSources(),
+    stats: getContentGuardStats(),
+  });
+});
+
+const contentGuardPutSchema = z.object({
+  inbound: z.enum(['off', 'redact', 'block']).optional(),
+  outbound: z.enum(['off', 'redact']).optional(),
+  blockedPatterns: z.array(z.string().min(1).max(200)).max(50).optional(),
+});
+
+settingsRouter.put('/content-guard', (req: Request, res: Response) => {
+  const parsed = contentGuardPutSchema.safeParse(req.body);
+  if (!parsed.success) {
+    const detail = parsed.error.issues.map(e => (e.path.length ? `${e.path.join('.')}: ${e.message}` : e.message)).slice(0, 5).join(', ');
+    res.status(400).json({ error: { message: `Invalid content-guard settings: ${detail}`, type: 'invalid_request_error' } });
+    return;
+  }
+  if (parsed.data.inbound !== undefined) {
+    setSetting(CONTENT_GUARD_INBOUND_SETTING, parsed.data.inbound);
+  }
+  if (parsed.data.outbound !== undefined) {
+    setSetting(CONTENT_GUARD_OUTBOUND_SETTING, parsed.data.outbound);
+  }
+  if (parsed.data.blockedPatterns !== undefined) {
+    for (const source of parsed.data.blockedPatterns) {
+      try {
+        // Validate now so a typo'd pattern is a 400 here, not a silently
+        // skipped entry on the hot path.
+        new RegExp(source, 'gi');
+      } catch {
+        res.status(400).json({ error: { message: `Invalid blocked pattern (not a valid regex): ${source}`, type: 'invalid_request_error' } });
+        return;
+      }
+    }
+    setSetting(CONTENT_GUARD_BLOCKED_PATTERNS_SETTING, JSON.stringify(parsed.data.blockedPatterns));
+  }
+  res.json({
+    inbound: getInboundGuardMode(),
+    outbound: getOutboundGuardMode(),
+    blockedPatterns: getBlockedPatternSources(),
+    stats: getContentGuardStats(),
+  });
+});
+
 // Get the unified API key
 settingsRouter.get('/api-key', (_req: Request, res: Response) => {
   res.json({ apiKey: getUnifiedApiKey() });
@@ -546,6 +606,18 @@ settingsRouter.put('/proxy', (req: Request, res: Response) => {
     }
   }
 
+  // Validate the bypass list up front with everything else: a 400 must never
+  // leave the fields above half-saved and live. A present-but-misshapen value
+  // (a string, an object, a mixed array) is a client bug, not a no-op.
+  if (bypassPlatforms !== undefined) {
+    if (!Array.isArray(bypassPlatforms) || !bypassPlatforms.every(s => typeof s === 'string')) {
+      res.status(400).json({
+        error: { message: 'bypassPlatforms must be an array of strings', type: 'invalid_request_error' },
+      });
+      return;
+    }
+  }
+
   // --- proxyUrl ---
   if (typeof proxyUrl === 'string') {
     const trimmed = proxyUrl.trim();
@@ -574,7 +646,7 @@ settingsRouter.put('/proxy', (req: Request, res: Response) => {
     applyProxyEnabled(enabled);
   }
 
-  // --- bypassPlatforms ---
+  // --- bypassPlatforms (shape already validated above) ---
   if (Array.isArray(bypassPlatforms)) {
     const csv = bypassPlatforms.map(s => s.trim()).filter(Boolean).join(',');
     setSetting('proxy_bypass', csv);

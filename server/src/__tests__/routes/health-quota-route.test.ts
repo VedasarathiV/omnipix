@@ -92,6 +92,11 @@ describe('POST /api/health/quota/:keyId (#1403)', () => {
     expect((await post('/quota/not-a-number')).status).toBe(400);
   });
 
+  it('trailing-garbage ids are 400, not parsed to their prefix', async () => {
+    expect((await post('/quota/12abc')).status).toBe(400);
+    expect((await post('/check/12abc')).status).toBe(400);
+  });
+
   it('a probe failure answers recorded:false, never a 500', async () => {
     const keyId = addKey('openrouter');
     vi.spyOn(resolveProvider('openrouter')!, 'fetchQuota').mockRejectedValue(new Error('socket hang up'));

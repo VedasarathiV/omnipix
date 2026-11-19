@@ -286,6 +286,29 @@ describe('Keys API', () => {
     expect(status).toBe(404);
   });
 
+  it.each(['12abc', '1.9', '-3', '0'])('DELETE /api/keys/:id rejects %s with 400 and deletes nothing', async (raw) => {
+    const { body: created } = await request(app, 'POST', '/api/keys', {
+      platform: 'groq',
+      key: 'gsk_test123456789',
+    });
+    const { status, body } = await request(app, 'DELETE', `/api/keys/${raw}`);
+    expect(status).toBe(400);
+    expect(body.error.message).toBe('Invalid key ID');
+    const { body: after } = await request(app, 'GET', '/api/keys');
+    expect(after.map((k: any) => k.id)).toContain(created.id);
+  });
+
+  it.each(['12abc', '1.9'])('PATCH /api/keys/:id rejects %s with 400 and mutates nothing', async (raw) => {
+    const { body: created } = await request(app, 'POST', '/api/keys', {
+      platform: 'groq',
+      key: 'gsk_test123456789',
+    });
+    const { status } = await request(app, 'PATCH', `/api/keys/${raw}`, { label: 'pwned' });
+    expect(status).toBe(400);
+    const row = getDb().prepare('SELECT label FROM api_keys WHERE id = ?').get(created.id) as any;
+    expect(row.label).not.toBe('pwned');
+  });
+
   it('DELETE /api/keys/:id sweeps key-bound rows on standard platforms (#1516)', async () => {
     const { body: created } = await request(app, 'POST', '/api/keys', {
       platform: 'groq',

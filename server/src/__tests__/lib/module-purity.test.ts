@@ -35,6 +35,8 @@ const PURE_MODULES = [
   // Shared by the provider, media and embeddings request paths (#1331).
   'credential.ts',
   'error-classify.ts',
+  // SSRF guard shared by the fetch_url tool and docs ingest; pure string checks.
+  'fetch-guard.ts',
   // Signal handling for the container's PID 1; the server, DB and process are injected.
   'graceful-shutdown.ts',
   'header-value.ts',

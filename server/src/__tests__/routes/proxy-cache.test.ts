@@ -346,4 +346,49 @@ describe('Response cache (proxy integration)', () => {
     stats = await request(app, 'GET', '/api/cache/stats');
     expect(stats.body.entries).toBe(0);
   });
+
+  describe('semantic tier', () => {
+    const ask = (content: string, headers: Record<string, string> = {}) =>
+      request(app, 'POST', '/v1/chat/completions', {
+        model: 'auto',
+        messages: [{ role: 'user', content }],
+      }, { ...authHeaders(), ...headers });
+
+    it('serves a near-duplicate prompt without touching the provider', async () => {
+      const configured = await request(app, 'PUT', '/api/cache/config', { enabled: true, semanticThreshold: 0.5 });
+      expect(configured.status).toBe(200);
+      expect(configured.body.semanticThreshold).toBe(0.5);
+      try {
+        const counter = mockGroq('Paris is the capital of France.');
+        const first = await ask('What is the capital of France?');
+        expect(first.status).toBe(200);
+        expect(first.headers.get('x-omnipix-cache')).toBe('MISS');
+        const second = await ask('What is the capital of France?!');
+        expect(second.status).toBe(200);
+        expect(second.headers.get('x-omnipix-cache')).toBe('HIT');
+        expect(second.headers.get('x-omnipix-cache-match')).toBe('semantic');
+        expect(second.body.choices[0].message.content).toBe('Paris is the capital of France.');
+        expect(counter.calls).toBe(1);
+        const stats = await request(app, 'GET', '/api/cache/stats');
+        expect(stats.body.semanticHits).toBe(1);
+      } finally {
+        await request(app, 'PUT', '/api/cache/config', { enabled: true, semanticThreshold: 0 });
+      }
+    });
+
+    it('rejects an out-of-range threshold', async () => {
+      const bad = await request(app, 'PUT', '/api/cache/config', { enabled: true, semanticThreshold: 7 });
+      expect(bad.status).toBe(400);
+    });
+
+    it('stays exact-only when the tier is off', async () => {
+      const counter = mockGroq('Paris.');
+      const first = await ask('What is the capital of France?');
+      expect(first.status).toBe(200);
+      const second = await ask('What is the capital of France?!');
+      expect(second.status).toBe(200);
+      expect(second.headers.get('x-omnipix-cache')).toBe('MISS');
+      expect(counter.calls).toBe(2);
+    });
+  });
 });
