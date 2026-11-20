@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { IconRail } from './IconRail';
 import { TopBar } from './TopBar';
+import { StatusBar } from './StatusBar';
 import { useStudio } from '../state/store';
 
 function stored(key: string, fallback: number): number {
@@ -81,6 +82,7 @@ export function AppShell({ sidebar, main, right }: { sidebar: ReactNode; main: R
           </>
         )}
       </div>
+      <StatusBar />
     </div>
   );
 }

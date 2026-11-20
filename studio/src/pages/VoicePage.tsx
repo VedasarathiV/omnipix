@@ -1,13 +1,13 @@
 import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Mic, Play } from 'lucide-react';
+import { Copy, KeyRound, Mic, Play } from 'lucide-react';
 import { useStudio } from '../state/store';
 import { apiFetch } from '../lib/api';
-import { speakText } from '../lib/voice';
+import { speakText, startDictationRecording, transcribeAudio, type DictationRecorder } from '../lib/voice';
 import { useMedia, useUnifiedKey, useVoiceSettings } from '../lib/queries';
 
 export function VoicePage() {
-  const { pushToast } = useStudio();
+  const { pushToast, setRail } = useStudio();
   const queryClient = useQueryClient();
   const { data: voice } = useVoiceSettings();
   const { data: media } = useMedia();
@@ -24,10 +24,45 @@ export function VoicePage() {
       pushToast('error', err instanceof Error ? err.message : 'Sample failed');
     }
   }
-  const [listening, setListening] = useState(false);
+  const [recorder, setRecorder] = useState<DictationRecorder | null>(null);
+  const [transcribing, setTranscribing] = useState(false);
+  const [transcript, setTranscript] = useState('');
   const models = media?.models ?? [];
   const stt = models.filter(m => m.modality === 'transcription' && m.enabled);
   const tts = models.filter(m => m.modality === 'audio' && m.enabled);
+  const hasAudio = stt.length > 0 || tts.length > 0;
+
+  async function toggleDictation() {
+    if (recorder) {
+      const take = await recorder.stop().catch((err: unknown) => {
+        pushToast('error', err instanceof Error ? err.message : 'Recording failed');
+        return null;
+      });
+      setRecorder(null);
+      if (!take) return;
+      if (!keyData?.apiKey) {
+        pushToast('error', 'Add a provider key before dictating.');
+        return;
+      }
+      setTranscribing(true);
+      try {
+        const text = await transcribeAudio(take.blob, take.filename, keyData.apiKey, voice?.sttModel ?? 'auto');
+        setTranscript(text.trim());
+        if (!text.trim()) pushToast('info', 'Nothing transcribed — try speaking closer to the mic');
+      } catch (err) {
+        pushToast('error', err instanceof Error ? err.message : 'Transcription failed');
+      } finally {
+        setTranscribing(false);
+      }
+      return;
+    }
+    try {
+      setRecorder(await startDictationRecording());
+      setTranscript('');
+    } catch (err) {
+      pushToast('error', err instanceof Error ? err.message : 'Microphone unavailable');
+    }
+  }
 
   async function save(patch: Record<string, unknown>) {
     try {
@@ -41,22 +76,53 @@ export function VoicePage() {
   return (
     <div className="mx-auto max-w-2xl px-5 py-4">
       <h1 className="mb-4 text-lg font-semibold">Voice</h1>
+      {!hasAudio && (
+        <button
+          type="button"
+          onClick={() => setRail('keys')}
+          className="mb-3 flex w-full items-center gap-2 rounded-xl border border-warn/40 bg-warn/10 px-4 py-3 text-left text-xs outline-none hover:bg-warn/15 focus-visible:ring-2 focus-visible:ring-accent"
+        >
+          <KeyRound className="size-4 shrink-0 text-warn" strokeWidth={1.5} />
+          <span>
+            <span className="font-semibold">No audio models available.</span>{' '}
+            Voice needs a provider key with speech support — add one on the Providers page, then come back.
+          </span>
+        </button>
+      )}
       <div className="rounded-xl border border-line bg-base-1 p-5 text-center">
         <button
           type="button"
-          aria-label={listening ? 'Stop dictation' : 'Start dictation'}
-          onClick={() => {
-            setListening(l => !l);
-            if (!listening) pushToast('info', 'Listening… (browser mic transcribes on release)');
-          }}
-          className={`mx-auto flex size-16 items-center justify-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-accent ${
-            listening ? 'animate-pulse bg-bad text-base-0' : 'bg-accent text-base-0 hover:opacity-90'
+          aria-label={recorder ? 'Stop and transcribe' : 'Start dictation'}
+          disabled={transcribing}
+          onClick={() => void toggleDictation()}
+          className={`mx-auto flex size-16 items-center justify-center rounded-full outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50 ${
+            recorder ? 'animate-pulse bg-bad text-base-0' : 'bg-accent text-base-0 hover:opacity-90'
           }`}
         >
           <Mic className="size-6" strokeWidth={1.5} />
         </button>
-        <p className="mt-3 text-sm font-medium">{listening ? 'Listening…' : 'Tap to dictate'}</p>
+        <p className="mt-3 text-sm font-medium">
+          {transcribing ? 'Transcribing…' : recorder ? 'Tap again to stop & transcribe' : 'Tap to dictate'}
+        </p>
         <p className="mt-1 font-mono text-[11px] text-ink-dim">{voice?.sttModel ?? 'auto'} · dictation model</p>
+        {transcript && (
+          <div className="mx-auto mt-3 flex max-w-md items-start gap-2 rounded-lg bg-base-2 p-3 text-left">
+            <p className="min-w-0 flex-1 text-xs">{transcript}</p>
+            <button
+              type="button"
+              aria-label="Copy transcript"
+              onClick={() => {
+                void navigator.clipboard?.writeText(transcript).then(
+                  () => pushToast('ok', 'Transcript copied'),
+                  () => pushToast('error', 'Copy failed'),
+                );
+              }}
+              className="rounded-md p-1 text-ink-dim outline-none hover:text-ink focus-visible:ring-2 focus-visible:ring-accent"
+            >
+              <Copy className="size-3.5" strokeWidth={1.5} />
+            </button>
+          </div>
+        )}
       </div>
       <div className="mt-3 divide-y divide-line rounded-xl border border-line bg-base-1 px-4">
         <div className="flex items-center justify-between gap-3 py-3">

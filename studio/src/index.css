@@ -156,3 +156,17 @@ body {
 ::-webkit-scrollbar-track {
   background: transparent;
 }
+
+/* Desktop shell (Electron, macOS hiddenInset): traffic lights float over the
+ * app's own header, so the header clears them and doubles as the window drag
+ * region. The preload adds html.desktop; browsers never match these. */
+html.desktop .traffic-pad {
+  padding-left: 78px;
+}
+html.desktop .titlebar-drag {
+  -webkit-app-region: drag;
+}
+html.desktop .titlebar-drag .titlebar-nodrag,
+html.desktop .titlebar-nodrag {
+  -webkit-app-region: no-drag;
+}

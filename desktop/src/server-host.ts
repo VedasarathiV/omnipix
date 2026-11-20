@@ -20,10 +20,12 @@ import { startCustomModelSync } from '../../server/src/services/custom-model-syn
 import { startBuiltinModelDiscovery } from '../../server/src/services/builtin-model-discovery.js';
 import { startSecurityScanScheduler } from '../../server/src/services/security-scans.js';
 import { startAutomationScheduler } from '../../server/src/services/automations.js';
+import { startAutomationWatchers } from '../../server/src/services/automation-watch.js';
 import { startBackupScheduler, createBackup } from '../../server/src/services/backups.js';
 import { isAutoUpdateCheckEnabled } from '../../server/src/routes/update.js';
 import { cleanupExpiredCooldowns } from '../../server/src/services/ratelimit.js';
 import { loadCacheFromDb } from '../../server/src/services/cache.js';
+import { loadBundledCatalog } from '../../server/src/services/bundled-catalog.js';
 import { startWakeDetect } from '../../server/src/lib/wake-detect.js';
 import { installProcessSafetyNet } from '../../server/src/lib/process-safety-net.js';
 import { installLogRedaction } from '../../server/src/lib/log-redaction.js';
@@ -132,6 +134,8 @@ export async function startServer(opts: StartOptions): Promise<ServerHandle> {
   // 0.0.0.0, and a remote viewer must still enter the password.
   process.env.OMNIPIX_DESKTOP = '1';
   initDb(opts.dbPath);
+  // Signed catalog snapshot shipped in the binary (mirrors index.ts).
+  loadBundledCatalog();
   // One sweep at boot, while the DB is quiet — expired cooldown rows are only
   // collected lazily per route and would otherwise accumulate forever.
   const expiredCooldowns = cleanupExpiredCooldowns();
@@ -162,6 +166,7 @@ export async function startServer(opts: StartOptions): Promise<ServerHandle> {
   startCustomModelSync(getDb(), scheduler);
   startBuiltinModelDiscovery(getDb(), scheduler);
   startAutomationScheduler(scheduler);
+  startAutomationWatchers();
   startSecurityScanScheduler(scheduler);
   // Post-sleep recovery — the menu-bar app on a laptop is the canonical
   // lid-close case: flush pooled sockets and force-re-probe every key so the

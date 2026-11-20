@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Cpu, GripVertical, KeyRound, X } from 'lucide-react';
 import { useKeys, useModels, useOllama } from '../lib/queries';
+import { ProviderIcon } from '../components/ProviderIcon';
 import { apiFetch } from '../lib/api';
 import { useStudio } from '../state/store';
 import { EmptyState } from '../components/EmptyState';
@@ -106,6 +107,7 @@ export function ProvidersPage() {
               <div className="flex items-center gap-2">
                 <GripVertical className="size-4 cursor-grab text-ink-faint" strokeWidth={1.5} />
                 <span className={`size-2 rounded-full ${healthy ? 'bg-ok' : hasKey ? 'bg-bad' : 'bg-ink-faint'}`} />
+                <ProviderIcon platform={id} />
                 <p className="text-sm font-semibold">{titleCase(id)}</p>
                 {freeTier && <span className="rounded-md bg-ok/15 px-1.5 py-0.5 text-[10px] font-semibold text-ok">FREE TIER</span>}
                 <span className="flex-1" />

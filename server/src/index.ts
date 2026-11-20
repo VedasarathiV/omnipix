@@ -25,6 +25,7 @@ import { warnOnRoutingOverrideDrift } from './services/model-weight-overrides.js
 import { installLogRedaction } from './lib/log-redaction.js';
 import { cleanupExpiredCooldowns } from './services/ratelimit.js';
 import { loadCacheFromDb } from './services/cache.js';
+import { loadBundledCatalog } from './services/bundled-catalog.js';
 import { installGracefulShutdown } from './lib/graceful-shutdown.js';
 
 // Before any other statement runs, so no provider key can reach stdout — users
@@ -49,6 +50,10 @@ async function main() {
     await restoreDbBackupIfNeeded();
   }
   initDb(config.dbPath ?? undefined);
+  // Signed snapshot shipped in the binary: standalone installs get the full
+  // catalog on first boot, upgrades pick up the newer snapshot. Before the
+  // drift warning so it reads the catalog users actually get.
+  loadBundledCatalog();
   applyDeclarativeConfigFromEnv();
   // After initDb: the unknown-model half of this check reads the catalog.
   warnOnRoutingOverrideDrift();

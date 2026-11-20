@@ -58,6 +58,12 @@ vi.mock('../../../server/src/services/cache.js', () => ({
   }),
 }));
 
+vi.mock('../../../server/src/services/bundled-catalog.js', () => ({
+  loadBundledCatalog: vi.fn(() => {
+    calls.push('loadBundledCatalog');
+  }),
+}));
+
 vi.mock('../../../server/src/services/cooldown-probe.js', () => ({
   startCooldownProbe: vi.fn(() => {
     calls.push('startCooldownProbe');
@@ -94,6 +100,12 @@ vi.mock('../../../server/src/services/builtin-model-discovery.js', () => ({
 vi.mock('../../../server/src/services/automations.js', () => ({
   startAutomationScheduler: vi.fn(() => {
     calls.push('startAutomationScheduler');
+  }),
+}));
+
+vi.mock('../../../server/src/services/automation-watch.js', () => ({
+  startAutomationWatchers: vi.fn(() => {
+    calls.push('startAutomationWatchers');
   }),
 }));
 
@@ -184,6 +196,7 @@ describe('desktop server boot sequence (#949)', () => {
       'installLogRedaction',
       'installProcessSafetyNet',
       'initDb',
+      'loadBundledCatalog',
       'cleanupExpiredCooldowns',
       'restoreProxySettings',
       'loadCacheFromDb',
@@ -197,6 +210,7 @@ describe('desktop server boot sequence (#949)', () => {
       'startCustomModelSync',
       'startBuiltinModelDiscovery',
       'startAutomationScheduler',
+      'startAutomationWatchers',
       'startSecurityScanScheduler',
       'startWakeDetect',
     ]);

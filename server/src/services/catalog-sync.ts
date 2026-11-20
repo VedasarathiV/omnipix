@@ -51,7 +51,7 @@ const DEFAULT_BASE_URL = '';
 // and has never been committed. Point CATALOG_BASE_URL at your own feed and
 // CATALOG_PUBKEY at its key to run a fully independent catalog.
 const PINNED_CATALOG_PUBKEY = `-----BEGIN PUBLIC KEY-----
-MCowBQYDK2VwAyEAxZw8YTm1D7eSdaEJXw1hiN+p2B4uo2uf9tSQmuLgAVE=
+MCowBQYDK2VwAyEAzNdv20zpObmdmBOOCo4d8q0qjkJHufTGOLx12lJ/dtQ=
 -----END PUBLIC KEY-----
 `;
 
@@ -66,9 +66,9 @@ const FETCH_TIMEOUT_MS = 20 * 1000;
 // settings table keys
 export const SETTING_LICENSE_KEY = 'premium_license_key';
 export const SETTING_LICENSE_STATUS = 'premium_license_status'; // JSON LicenseStatus
-const SETTING_APPLIED_VERSION = 'catalog_applied_version';
-const SETTING_APPLIED_TIER = 'catalog_applied_tier';
-const SETTING_APPLIED_JSON = 'catalog_applied_json';
+export const SETTING_APPLIED_VERSION = 'catalog_applied_version';
+export const SETTING_APPLIED_TIER = 'catalog_applied_tier';
+export const SETTING_APPLIED_JSON = 'catalog_applied_json';
 const SETTING_LAST_SYNC_MS = 'catalog_last_sync_ms';
 const SETTING_LAST_ERROR = 'catalog_last_error';
 
@@ -116,6 +116,18 @@ export async function catalogFetch(input: string | URL, init?: RequestInit): Pro
 function catalogPublicKey(): crypto.KeyObject {
   const pem = process.env.CATALOG_PUBKEY ? process.env.CATALOG_PUBKEY.replace(/\\n/g, '\n') : PINNED_CATALOG_PUBKEY;
   return crypto.createPublicKey({ key: pem, format: 'pem' });
+}
+
+/**
+ * Verify Ed25519 bytes against a base64 signature. Shared by the network
+ * sync path and the bundled snapshot — one verifier, no drift.
+ */
+export function verifyCatalogBytes(bytes: Buffer, signatureB64: string): boolean {
+  try {
+    return crypto.verify(null, bytes, catalogPublicKey(), Buffer.from(signatureB64, 'base64'));
+  } catch {
+    return false;
+  }
 }
 
 export interface LicenseStatus {
@@ -1096,7 +1108,7 @@ export async function syncCatalog(force = false): Promise<SyncResult> {
     const signature = res.headers.get('x-catalog-signature');
     if (!signature) throw new Error('catalog response missing signature');
     const bytes = Buffer.from(await res.arrayBuffer());
-    const verified = crypto.verify(null, bytes, catalogPublicKey(), Buffer.from(signature, 'base64'));
+    const verified = verifyCatalogBytes(bytes, signature);
     if (!verified) throw new Error('catalog signature verification FAILED — discarding response');
 
     const parsed: unknown = JSON.parse(bytes.toString('utf8'));

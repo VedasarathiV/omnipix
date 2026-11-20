@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useStudio } from '../state/store';
 import { apiFetch } from '../lib/api';
 import { useModels } from '../lib/queries';
+import { ProviderIcon } from '../components/ProviderIcon';
 
 const STRATEGIES = [
   { id: 'priority', label: 'Manual order', hint: 'Drag the chain; top wins' },
@@ -143,6 +144,7 @@ export function ModelsPage() {
         {rows.slice(0, 120).map(row => (
           <div key={row.modelDbId} className="flex items-center gap-2 rounded-xl border border-line bg-base-1 px-3 py-2">
             <span className="w-7 shrink-0 text-right font-mono text-[11px] text-ink-faint">{row.priority}</span>
+            <ProviderIcon platform={row.platform} size={14} />
             <div className="min-w-0 flex-1">
               <p className="truncate font-mono text-xs font-medium">
                 {row.modelId}

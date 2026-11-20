@@ -48,8 +48,8 @@ export function TopBar() {
   }
 
   return (
-    <header className="flex h-12 shrink-0 items-center gap-2 overflow-x-auto border-b border-line bg-base-1 px-3">
-      <div className="relative">
+    <header className="traffic-pad titlebar-drag flex h-12 shrink-0 items-center gap-2 overflow-x-auto border-b border-line bg-base-1 px-3">
+      <div className="titlebar-nodrag relative">
         <button
           type="button"
           onClick={() => setWsOpen(open => !open)}
@@ -106,7 +106,7 @@ export function TopBar() {
 
       <div className="flex-1" />
 
-      <div className="hidden items-center gap-1 rounded-lg bg-base-2 p-0.5 md:flex" role="tablist" aria-label="Agent mode">
+      <div className="titlebar-nodrag hidden items-center gap-1 rounded-lg bg-base-2 p-0.5 md:flex" role="tablist" aria-label="Agent mode">
         {MODES.map(m => (
           <button
             key={m.id}
@@ -124,7 +124,9 @@ export function TopBar() {
         ))}
       </div>
 
-      <ModelPicker />
+      <div className="titlebar-nodrag flex items-center">
+        <ModelPicker />
+      </div>
 
       <span
         className="hidden items-center gap-1.5 rounded-lg bg-base-2 px-2 py-1.5 font-mono text-[11px] text-ink-dim lg:flex"
@@ -139,7 +141,7 @@ export function TopBar() {
           type="button"
           title="Stop run (Esc)"
           onClick={() => void stopRun()}
-          className="rounded-lg bg-bad px-3 py-1.5 text-xs font-semibold text-base-0 outline-none hover:opacity-90 focus-visible:ring-2 focus-visible:ring-accent"
+          className="titlebar-nodrag rounded-lg bg-bad px-3 py-1.5 text-xs font-semibold text-base-0 outline-none hover:opacity-90 focus-visible:ring-2 focus-visible:ring-accent"
         >
           Stop
         </button>
