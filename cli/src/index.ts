@@ -21,6 +21,8 @@ import { automateHelp, memoryHelp, runAutomate, runMemory } from './assistant.js
 import type { CatalogModel, GenerateContext } from './types.js';
 
 interface CliOptions extends KeyCommandOptions {
+  json?: boolean;
+  wait?: boolean;
   apiKey?: string;
   profile: string;
   model?: string;
@@ -126,6 +128,14 @@ export function parseArgs(argv: string[]): { command?: string; options: CliOptio
     }
     if (arg === '--plan') {
       options.plan = true;
+      continue;
+    }
+    if (arg === '--json') {
+      options.json = true;
+      continue;
+    }
+    if (arg === '--wait') {
+      options.wait = true;
       continue;
     }
     const equals = arg.indexOf('=');
@@ -621,7 +631,7 @@ const COMMAND_FLAGS: Record<string, readonly string[]> = {
   launch: ['--url', '--api-key', '--model', '--profile', '--timeout'],
   'launch-codex': ['--url', '--api-key', '--model', '--timeout'],
   'setup-cursor': [],
-  agent: ['--url', '--token', '--timeout', '--goal', '--model', '--tools', '--skills', '--max-steps', '--max-tokens', '--compactions', '--session', '--auto', '--plan', '--tasks', '--budget', '--mode', '--preset', '--inputs'],
+  agent: ['--url', '--token', '--timeout', '--goal', '--model', '--tools', '--skills', '--max-steps', '--max-tokens', '--compactions', '--session', '--auto', '--plan', '--tasks', '--budget', '--mode', '--preset', '--inputs', '--json', '--wait'],
   skills: ['--url', '--token', '--timeout', '--name', '--description', '--instructions', '--bundle'],
   hooks: ['--url', '--token', '--timeout', '--name', '--event', '--tool', '--command'],
   scan: ['--url', '--token', '--timeout', '--schedule'],

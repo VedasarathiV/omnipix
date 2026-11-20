@@ -2,7 +2,9 @@
 // follow agent runs, and manage the skills registry. Like `keys`, these
 // commands need OMNIPIX_DASHBOARD_TOKEN / --token — the unified API key is
 // not dashboard authentication.
-import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 export interface AgentCommandOptions {
@@ -33,12 +35,14 @@ export interface AgentCommandOptions {
   bundle?: string;
   timeoutMs?: number;
   dryRun: boolean;
+  json?: boolean;
+  wait?: boolean;
 }
 
 export function agentHelp(): string {
   return [
     'Agent runs (dashboard authentication):',
-    '  omnipix agent run --goal "..." [--model ID] [--tools a,b] [--skills a,b] [--max-steps N] [--max-tokens N] [--compactions N] [--session ID] [--plan]',
+    '  omnipix agent run --goal "..." [--model ID] [--tools a,b] [--skills a,b] [--max-steps N] [--max-tokens N] [--compactions N] [--session ID] [--plan] [--json]',
     '  omnipix agent list',
     '  omnipix agent show <id>',
     '  omnipix agent search <words...>',
@@ -51,7 +55,7 @@ export function agentHelp(): string {
     '  omnipix agent sessions',
     '  omnipix agent session <id>',
     '  omnipix agent session-delete <id>',
-    '  omnipix agent group-create --goal "..." [--auto] [--tasks JSON] [--preset NAME] [--inputs JSON] [--budget N] [--mode dag|hierarchical]',
+    '  omnipix agent group-create --goal "..." [--auto] [--tasks JSON] [--preset NAME] [--inputs JSON] [--budget N] [--mode dag|hierarchical] [--wait] [--json]',
     '  omnipix agent runbooks',
     '  omnipix agent groups',
     '  omnipix agent group <id>',
@@ -62,6 +66,8 @@ export function agentHelp(): string {
     'run follows the run to completion and exits 1 when the run errors or is',
     'stopped; a run parked for approval exits 2 so scripts can tell the states apart.',
     '--plan drafts a plan first and parks it for approval before any tool runs.',
+    '--json prints NDJSON (one JSON object per line) for CI pipelines.',
+    'group-create --wait follows the group to completion; exit 0 on done, 1 otherwise.',
   ].join('\n');
 }
 
@@ -76,6 +82,7 @@ export function skillsHelp(): string {
     '  omnipix skills export <name>      (prints SKILL.md to stdout)',
     '  omnipix skills import <file>',
     '  omnipix skills import-dir <directory>   (imports every SKILL.md underneath)',
+    '  omnipix skills install <git-url|directory> (clones a skills repo and imports it)',
     '  omnipix skills proposals',
     '  omnipix skills accept <id>',
     '  omnipix skills discard <id>',
@@ -252,6 +259,54 @@ function printRun(run: AgentRun, fromSeq: number, write: (line: string) => void)
   return seen;
 }
 
+function printRunJson(run: AgentRun, fromSeq: number, write: (line: string) => void): number {
+  let seen = fromSeq;
+  for (const step of run.steps.filter(step => step.seq > fromSeq)) {
+    write(JSON.stringify({ seq: step.seq, kind: step.kind, label: step.label, text: stepLine(step) }));
+    seen = Math.max(seen, step.seq);
+  }
+  return seen;
+}
+
+interface GroupPoll {
+  id: number; status: string; tokens_used: number;
+  tasks: Array<{ id: number; name: string; status: string; error: string | null }>;
+}
+
+async function followGroup(
+  groupId: number,
+  options: AgentCommandOptions,
+  request: <T>(path: string, method?: string, body?: unknown) => Promise<T>,
+  write: (line: string) => void,
+  sleep: (ms: number) => Promise<void>,
+  asJson: boolean,
+): Promise<number> {
+  void options;
+  const seen = new Map<number, string>();
+  for (let polls = 0; polls < 600; polls += 1) {
+    const group = await request<GroupPoll>(`/api/agents/groups/${groupId}`);
+    for (const task of group.tasks) {
+      if (seen.get(task.id) !== task.status) {
+        seen.set(task.id, task.status);
+        write(asJson
+          ? JSON.stringify({ type: 'task', id: task.id, name: task.name, status: task.status, error: task.error })
+          : `  task ${task.id} ${task.name}: ${task.status}${task.error ? ` — ${task.error}` : ''}`);
+      }
+    }
+    if (group.status !== 'running') {
+      const done = group.tasks.filter(t => t.status === 'done').length;
+      if (asJson) {
+        write(JSON.stringify({ type: 'group_result', id: group.id, status: group.status, done_count: done, task_count: group.tasks.length, tokens_used: group.tokens_used }));
+      } else {
+        write(`[group ${group.id} ${group.status}] ${done}/${group.tasks.length} tasks, ${group.tokens_used} tokens`);
+      }
+      return group.status === 'done' ? 0 : 1;
+    }
+    await sleep(2000);
+  }
+  throw new Error(`group ${groupId} did not finish after 20 minutes of polling`);
+}
+
 export async function runAgent(
   options: AgentCommandOptions,
   write: (line: string) => void = line => process.stdout.write(`${line}\n`),
@@ -279,26 +334,39 @@ export async function runAgent(
       planMode: options.plan ?? false,
       compactions: options.compactions,
     });
-    write(`run ${created.id} (${created.status})`);
-    let seen = printRun(created, 0, write);
+    const asJson = options.json === true;
+    if (!asJson) write(`run ${created.id} (${created.status})`);
+    let seen = asJson ? printRunJson(created, 0, write) : printRun(created, 0, write);
     // Poll rather than SSE: the CLI has no EventSource and the run replays
     // persisted steps, so polling converges on the same transcript.
     for (let polls = 0; polls < 600; polls += 1) {
       const run = await request<AgentRun>(`/api/agents/runs/${created.id}`);
-      seen = printRun(run, seen, write);
+      seen = asJson ? printRunJson(run, seen, write) : printRun(run, seen, write);
       if (run.status === 'awaiting_approval') {
         const { approvals } = await request<{ approvals: ApprovalRow[] }>('/api/agents/approvals?status=pending&limit=100');
         const mine = approvals.filter(a => a.run_id === run.id);
         for (const approval of mine) {
-          write(`approval #${approval.id}: ${approval.summary} [${approval.tool}]`);
+          write(asJson
+            ? JSON.stringify({ type: 'approval', id: approval.id, summary: approval.summary, tool: approval.tool })
+            : `approval #${approval.id}: ${approval.summary} [${approval.tool}]`);
         }
-        write(`run ${run.id} is waiting for approval — decide with: omnipix agent approve|deny <approval-id>`);
+        write(asJson
+          ? JSON.stringify({ type: 'result', id: run.id, status: run.status, steps_used: run.steps_used, prompt_tokens: run.prompt_tokens, completion_tokens: run.completion_tokens })
+          : `run ${run.id} is waiting for approval — decide with: omnipix agent approve|deny <approval-id>`);
         return 2;
       }
       if (run.status !== 'running') {
-        if (run.final_answer) write(`\n${run.final_answer}`);
-        if (run.error) write(`error: ${run.error}`);
-        write(`[${run.status}] ${run.steps_used} steps, ${run.prompt_tokens + run.completion_tokens} tokens`);
+        if (asJson) {
+          write(JSON.stringify({
+            type: 'result', id: run.id, status: run.status, steps_used: run.steps_used,
+            prompt_tokens: run.prompt_tokens, completion_tokens: run.completion_tokens,
+            final_answer: run.final_answer, error: run.error,
+          }));
+        } else {
+          if (run.final_answer) write(`\n${run.final_answer}`);
+          if (run.error) write(`error: ${run.error}`);
+          write(`[${run.status}] ${run.steps_used} steps, ${run.prompt_tokens + run.completion_tokens} tokens`);
+        }
         return run.status === 'done' ? 0 : 1;
       }
       await sleep(1000);
@@ -347,8 +415,15 @@ export async function runAgent(
       ...(mode === 'hierarchical' ? { mode: 'hierarchical' } : {}),
       budgetTokens: options.budget,
     });
-    write(`group ${group.id} (${group.tasks.length} tasks)`);
-    for (const task of group.tasks) write(`  ${task.id}\t${task.name}`);
+    const groupJson = options.json === true;
+    if (!groupJson) write(`group ${group.id} (${group.tasks.length} tasks)`);
+    for (const task of group.tasks) {
+      write(groupJson
+        ? JSON.stringify({ type: 'task', id: task.id, name: task.name, status: 'pending' })
+        : `  ${task.id}\t${task.name}`);
+    }
+    if (options.wait === true) return followGroup(group.id, options, request, write, sleep, groupJson);
+    if (groupJson) write(JSON.stringify({ type: 'group', id: group.id, status: 'running', task_count: group.tasks.length }));
     return 0;
   }
 
@@ -529,8 +604,8 @@ export async function runSkills(
   write: (line: string) => void = line => process.stdout.write(`${line}\n`),
 ): Promise<number> {
   const [action, nameArg, ...extra] = options.args;
-  if (!action || !['list', 'create', 'enable', 'disable', 'delete', 'export', 'import', 'import-dir', 'proposals', 'accept', 'discard'].includes(action)) {
-    throw new Error(`Expected skills list, create, enable, disable, delete, export, import, import-dir, proposals, accept, or discard.\n\n${skillsHelp()}`);
+  if (!action || !['list', 'create', 'enable', 'disable', 'delete', 'export', 'import', 'import-dir', 'install', 'proposals', 'accept', 'discard'].includes(action)) {
+    throw new Error(`Expected skills list, create, enable, disable, delete, export, import, import-dir, install, proposals, accept, or discard.\n\n${skillsHelp()}`);
   }
   if (options.dryRun) throw new Error('--dry-run is not supported by skills; no request was made');
   const { request } = setup(options);
@@ -558,24 +633,7 @@ export async function runSkills(
     return 0;
   }
 
-  if (action === 'import-dir') {
-    if (!nameArg || extra.length) throw new Error(`skills import-dir needs a directory path.\n\n${skillsHelp()}`);
-    let entries: string[];
-    try {
-      entries = readdirSync(nameArg);
-    } catch {
-      throw new Error(`Cannot read directory: ${nameArg}`);
-    }
-    const files: string[] = [];
-    const walk = (dir: string): void => {
-      for (const entry of readdirSync(dir)) {
-        const full = path.join(dir, entry);
-        if (statSync(full).isDirectory()) { walk(full); continue; }
-        if (entry === 'SKILL.md') files.push(full);
-      }
-    };
-    walk(nameArg);
-    if (!entries.length) throw new Error(`Directory is empty: ${nameArg}`);
+  const importSkillFiles = async (files: string[]): Promise<number> => {
     let ok = 0;
     const failed: string[] = [];
     for (const file of files.sort()) {
@@ -592,6 +650,62 @@ export async function runSkills(
     for (const line of failed) write(`FAILED ${line}`);
     write(`${ok} imported, ${failed.length} failed (${files.length} files)`);
     return failed.length ? 1 : 0;
+  };
+
+  const collectSkillFiles = (dir: string): string[] => {
+    const files: string[] = [];
+    const walk = (d: string): void => {
+      for (const entry of readdirSync(d)) {
+        const full = path.join(d, entry);
+        if (statSync(full).isDirectory()) {
+          if (entry === '.git' || entry === 'node_modules') continue;
+          walk(full);
+          continue;
+        }
+        if (entry === 'SKILL.md') files.push(full);
+      }
+    };
+    walk(dir);
+    return files;
+  };
+
+  if (action === 'import-dir') {
+    if (!nameArg || extra.length) throw new Error(`skills import-dir needs a directory path.\n\n${skillsHelp()}`);
+    let entries: string[];
+    try {
+      entries = readdirSync(nameArg);
+    } catch {
+      throw new Error(`Cannot read directory: ${nameArg}`);
+    }
+    if (!entries.length) throw new Error(`Directory is empty: ${nameArg}`);
+    return importSkillFiles(collectSkillFiles(nameArg));
+  }
+
+  if (action === 'install') {
+    if (!nameArg || extra.length) throw new Error(`skills install needs a git URL or directory path.\n\n${skillsHelp()}`);
+    const source = nameArg;
+    const isUrl = /^(https?:\/\/|ssh:\/\/|git@)/.test(source) || source.endsWith('.git');
+    if (!isUrl) {
+      try {
+        return await importSkillFiles(collectSkillFiles(source));
+      } catch {
+        throw new Error(`Cannot read directory: ${source}`);
+      }
+    }
+    const dir = mkdtempSync(path.join(tmpdir(), 'omnipix-skills-'));
+    try {
+      try {
+        execFileSync('git', ['clone', '--depth', '1', '--quiet', source, dir], { stdio: 'pipe', timeout: 120000 });
+      } catch {
+        throw new Error(`Cannot clone skills repo: ${source} (is git installed and the URL reachable?)`);
+      }
+      const files = collectSkillFiles(dir);
+      if (!files.length) throw new Error(`No SKILL.md files found in ${source}`);
+      write(`cloned ${source} (${files.length} skill files)`);
+      return await importSkillFiles(files);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   }
 
   if (action === 'list') {

@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import type { RailId } from '../types';
 import { useStudio } from '../state/store';
+import { Logo } from './Logo';
 
 const ITEMS: Array<{ id: RailId; label: string; icon: typeof Bot; shortcut: string }> = [
   { id: 'chat', label: 'Chat', icon: Waypoints, shortcut: '⌘1' },
@@ -31,8 +32,8 @@ export function IconRail() {
   const { rail, setRail, setSettingsOpen } = useStudio();
   return (
     <nav aria-label="Primary" className="flex w-12 shrink-0 flex-col items-center gap-1 border-r border-line bg-base-1 py-2">
-      <div className="mb-2 flex size-10 items-center justify-center rounded-xl bg-ok font-mono text-base font-bold text-base-0 shadow-lg" aria-label="OmniPix">
-        O
+      <div className="mb-2 flex size-10 items-center justify-center" aria-label="OmniPix">
+        <Logo size={36} />
       </div>
       {ITEMS.slice(0, 7).map(item => (
         <RailButton key={item.id} active={rail === item.id} onClick={() => setRail(item.id)} label={`${item.label} (${item.shortcut})`}>

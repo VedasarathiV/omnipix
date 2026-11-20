@@ -119,6 +119,71 @@ describe('agent', () => {
     expect(fetchSpy).not.toHaveBeenCalled();
   });
 
+  it('run --json emits NDJSON steps plus a result object', async () => {
+    let polls = 0;
+    stubFetch((path, init) => {
+      if (path === '/api/agents/runs' && init.method === 'POST') return Response.json(RUNNING, { status: 202 });
+      if (path === '/api/agents/runs/3') return Response.json(polls++ === 0 ? RUNNING : DONE);
+      throw new Error(`Unexpected request: ${path}`);
+    });
+    const code = await main(['agent', 'run', '--goal', 'Say hi', '--json']);
+    expect(code).toBe(0);
+    const lines = output.trim().split('\n').map(line => JSON.parse(line));
+    expect(lines[0]).toMatchObject({ seq: 1, kind: 'thought', text: 'Hmm.' });
+    const result = lines[lines.length - 1];
+    expect(result).toMatchObject({ type: 'result', id: 3, status: 'done', steps_used: 2, final_answer: 'Hi!', error: null });
+  });
+
+  it('run --json exits 1 with the error in the result object', async () => {
+    stubFetch((path, init) => {
+      if (path === '/api/agents/runs' && init.method === 'POST') return Response.json(RUNNING, { status: 202 });
+      if (path === '/api/agents/runs/3') return Response.json({ ...RUNNING, status: 'error', error: 'boom' });
+      throw new Error(`Unexpected request: ${path}`);
+    });
+    const code = await main(['agent', 'run', '--goal', 'Say hi', '--json']);
+    expect(code).toBe(1);
+    const lines = output.trim().split('\n').map(line => JSON.parse(line));
+    expect(lines[lines.length - 1]).toMatchObject({ type: 'result', status: 'error', error: 'boom' });
+  });
+
+  it('group-create --wait follows the group to completion', async () => {
+    const RUNNING_GROUP = { id: 7, status: 'running', tokens_used: 10, tasks: [{ id: 1, name: 'a', status: 'running', error: null }] };
+    const DONE_GROUP = { id: 7, status: 'done', tokens_used: 20, tasks: [{ id: 1, name: 'a', status: 'done', error: null }] };
+    let polls = 0;
+    stubFetch((path, init) => {
+      if (path === '/api/agents/groups' && init.method === 'POST') {
+        return Response.json({ id: 7, tasks: [{ id: 1, name: 'a' }] }, { status: 202 });
+      }
+      if (path === '/api/agents/groups/7') return Response.json(polls++ === 0 ? RUNNING_GROUP : DONE_GROUP);
+      throw new Error(`Unexpected request: ${path} ${init.method}`);
+    });
+    const code = await main(['agent', 'group-create', '--goal', 'ship', '--preset', 'startup-mvp', '--wait']);
+    expect(code).toBe(0);
+    expect(output).toContain('[group 7 done] 1/1 tasks');
+  });
+
+  it('group-create --wait --json exits 1 when the group errors', async () => {
+    const ERR_GROUP = { id: 7, status: 'error', tokens_used: 20, tasks: [{ id: 1, name: 'a', status: 'error', error: 'nope' }] };
+    stubFetch((path, init) => {
+      if (path === '/api/agents/groups' && init.method === 'POST') {
+        return Response.json({ id: 7, tasks: [{ id: 1, name: 'a' }] }, { status: 202 });
+      }
+      if (path === '/api/agents/groups/7') return Response.json(ERR_GROUP);
+      throw new Error(`Unexpected request: ${path} ${init.method}`);
+    });
+    const code = await main(['agent', 'group-create', '--goal', 'ship', '--preset', 'startup-mvp', '--wait', '--json']);
+    expect(code).toBe(1);
+    const lines = output.trim().split('\n').map(line => JSON.parse(line));
+    expect(lines[lines.length - 1]).toMatchObject({ type: 'group_result', status: 'error', done_count: 0, task_count: 1 });
+  });
+
+  it('rejects --json on commands that do not take it', async () => {
+    const fetchSpy = vi.fn(async () => Response.json({}));
+    vi.stubGlobal('fetch', fetchSpy);
+    await expect(main(['doctor', '--json'])).rejects.toThrow('--json is not supported by doctor');
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
   it('exits 2 with the pending approvals when a run parks', async () => {
     stubFetch((path, init) => {
       if (path === '/api/agents/runs' && init.method === 'POST') return Response.json(RUNNING, { status: 202 });
@@ -521,6 +586,31 @@ describe('skills', () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+
+  it('installs from a local directory like import-dir', async () => {
+    const { mkdtempSync, writeFileSync, rmSync } = await import('node:fs');
+    const { tmpdir } = await import('node:os');
+    const { join } = await import('node:path');
+    const dir = mkdtempSync(join(tmpdir(), 'omnipix-install-'));
+    writeFileSync(join(dir, 'SKILL.md'), '---\nname: beta\ndescription: B.\n---\nDo B.');
+    try {
+      stubFetch((path, init) => {
+        if (path === '/api/skills/import' && init.method === 'POST') {
+          return Response.json({ skill: { name: 'beta', enabled: 1, builtin: 0 } }, { status: 201 });
+        }
+        throw new Error(`Unexpected request: ${path} ${init.method}`);
+      });
+      expect(await main(['skills', 'install', dir])).toBe(0);
+      expect(output).toContain('imported beta');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
+  it('install rejects bad git URLs without side effects', async () => {
+    await expect(main(['skills', 'install', 'https://invalid.invalid/nope.git'])).rejects.toThrow('Cannot clone');
+    await expect(main(['skills', 'install', '/nonexistent-dir-xyz'])).rejects.toThrow('Cannot read directory');
   });
 
   it('lists, accepts, and discards proposals', async () => {

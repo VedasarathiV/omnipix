@@ -21,6 +21,7 @@ import { reconcileOrphanedRuns } from './services/agent-runtime.js';
 import { skillsRouter } from './routes/skills.js';
 import { memoriesRouter } from './routes/memories.js';
 import { automationsRouter } from './routes/automations.js';
+import { terminalRouter } from './routes/terminal.js';
 import { localOllamaRouter } from './routes/local-ollama.js';
 import { notificationsRouter } from './routes/notifications.js';
 import { logsRouter } from './routes/logs.js';
@@ -330,6 +331,7 @@ export function createApp(config?: Config) {
   app.use('/api/skills', requireAuth, skillsRouter);
   app.use('/api/memories', requireAuth, memoriesRouter);
   app.use('/api/automations', requireAuth, automationsRouter);
+  app.use('/api/terminal', requireAuth, terminalRouter);
   app.use('/api/local', requireAuth, localOllamaRouter);
   app.use('/api/notifications', requireAuth, notificationsRouter);
   // Server logs for the dashboard viewer. Dashboard-session gated like the rest

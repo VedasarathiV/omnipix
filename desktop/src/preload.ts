@@ -79,6 +79,24 @@ contextBridge.exposeInMainWorld(
   versionArg ? versionArg.slice('--omnipix-version='.length) : null,
 );
 
+// Native menu actions (View > Go to …, File > New Chat, Settings). Strictly
+// receive-only: the main process pushes UI intents, the renderer subscribes.
+contextBridge.exposeInMainWorld('__OMNIPIX_MENU__', {
+  onAction: (cb: (action: { kind: 'navigate'; rail: string } | { kind: 'new-chat' } | { kind: 'open-settings' }) => void) => {
+    const nav = (_e: unknown, rail: string) => cb({ kind: 'navigate', rail });
+    const fresh = () => cb({ kind: 'new-chat' });
+    const prefs = () => cb({ kind: 'open-settings' });
+    ipcRenderer.on('omnipix:navigate', nav);
+    ipcRenderer.on('omnipix:new-chat', fresh);
+    ipcRenderer.on('omnipix:open-settings', prefs);
+    return () => {
+      ipcRenderer.removeListener('omnipix:navigate', nav);
+      ipcRenderer.removeListener('omnipix:new-chat', fresh);
+      ipcRenderer.removeListener('omnipix:open-settings', prefs);
+    };
+  },
+});
+
 // The in-app updater (the Settings update dialog and the update reminder). Like the session bridge above, deliberately
 // narrow: it can only check for, download and install the release published at
 // the configured feed — the feed URL and signature checks live in the main

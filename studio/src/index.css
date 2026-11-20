@@ -80,6 +80,7 @@ body {
   }
   .splash-ring,
   .splash-text,
+  .logo-spin,
   .splash-bar > span {
     animation: none !important;
   }
@@ -141,6 +142,20 @@ body {
 
 .splash-bar > span {
   animation: splash-load 900ms ease-in-out infinite;
+}
+
+@keyframes logo-spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.logo-spin {
+  animation: logo-spin 2.2s linear infinite;
+  transform-origin: center;
 }
 
 ::-webkit-scrollbar {

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { apiFetch, setToken, type AuthStatus } from '../lib/api';
+import { Logo } from './Logo';
 
 /**
  * Auth gate: setup (first run) → login → app. Desktop installs sign in
@@ -22,7 +23,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   if (isLoading || !data) {
     return (
       <div className="flex h-full items-center justify-center bg-base-0">
-        <div className="flex size-14 animate-pulse items-center justify-center rounded-2xl bg-ok font-mono text-xl font-bold text-base-0">O</div>
+        <Logo size={56} spin />
       </div>
     );
   }
@@ -35,7 +36,7 @@ function Shell({ title, body, children }: { title: string; body: string; childre
   return (
     <div className="flex h-full items-center justify-center bg-base-0 p-4">
       <div className="w-full max-w-sm rounded-2xl border border-line bg-base-1 p-6">
-        <div className="mx-auto mb-3 flex size-12 items-center justify-center rounded-xl bg-ok font-mono text-lg font-bold text-base-0">O</div>
+        <div className="mx-auto mb-3 flex justify-center"><Logo size={48} /></div>
         <h1 className="text-center text-base font-semibold">{title}</h1>
         <p className="mt-1 mb-4 text-center text-xs text-ink-dim">{body}</p>
         {children}

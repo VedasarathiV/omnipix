@@ -14,6 +14,7 @@ import { normalizeLocale, nativeStrings, type NativeLocale } from './i18n.js';
 import { installGpuRecovery } from './gpu-recovery-host.js';
 import { initUpdater, getUpdateState, checkForUpdates, downloadUpdate, installUpdate, checkFromTray } from './updater.js';
 import { gatewayBaseUrl, parseBaseUrlKind } from './base-urls.js';
+import { installAppMenu } from './menu.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DEFAULT_PORT = 31415;
@@ -261,6 +262,7 @@ if (!app.requestSingleInstanceLock()) {
   }
 
   app.whenReady().then(async () => {
+    installAppMenu(getDashboardWindow);
     applyDockVisibility(loadConfig().showInDock ?? true);
 
     const cfg = loadConfig();

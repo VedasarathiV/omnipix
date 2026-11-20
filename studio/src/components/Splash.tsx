@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { Logo } from './Logo';
 
 /** App-open splash: animated logo, auto-dismisses. Shows once per launch. */
 export function Splash() {
@@ -23,8 +24,8 @@ export function Splash() {
       }`}
       aria-hidden="true"
     >
-      <div className="splash-ring flex size-20 items-center justify-center rounded-2xl bg-ok font-mono text-3xl font-bold text-base-0">
-        O
+      <div className="splash-ring flex size-24 items-center justify-center">
+        <Logo size={88} spin />
       </div>
       <p className="splash-text text-sm font-semibold tracking-wide">OmniPix Studio</p>
       <div className="splash-bar h-1 w-40 overflow-hidden rounded-full bg-base-2">

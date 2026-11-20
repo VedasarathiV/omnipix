@@ -41,19 +41,23 @@ export function TerminalPanel() {
   const [selected, setSelected] = useState<string | null>(null);
   const [local, setLocal] = useState<ExecSession[]>([]);
   const [command, setCommand] = useState('');
+  const [cwd, setCwd] = useState('');
   const [running, setRunning] = useState(false);
-  if (activeRunId === null) {
-    return <p className="px-3 py-6 text-center text-xs text-ink-faint">Shell output from the active run appears here.</p>;
-  }
 
   async function exec() {
     const cmd = command.trim();
-    if (!cmd || running || activeRunId === null) return;
+    if (!cmd || running) return;
     setRunning(true);
     try {
+      // With an active run, commands execute in its workspace; otherwise
+      // they run in the standalone terminal (workspace root, or the cwd
+      // below — absolute project paths allowed).
+      const endpoint = activeRunId === null ? '/api/terminal/exec' : `/api/agents/runs/${activeRunId}/exec`;
+      const body: Record<string, unknown> = { command: cmd };
+      if (activeRunId === null && cwd.trim()) body.cwd = cwd.trim();
       const res = await apiFetch<{ stdout: string; stderr: string; exitCode: number | null; timedOut: boolean; durationMs: number }>(
-        `/api/agents/runs/${activeRunId}/exec`,
-        { method: 'POST', body: JSON.stringify({ command: cmd }) },
+        endpoint,
+        { method: 'POST', body: JSON.stringify(body) },
       );
       const errText = res.stderr ? `\n${res.stderr}` : '';
       const session: ExecSession = {
@@ -76,10 +80,29 @@ export function TerminalPanel() {
 
   const sessions = [...sessionsFromSteps(run?.steps ?? []), ...local];
   const active = sessions.find(s => s.id === selected) ?? sessions[sessions.length - 1];
+  const cwdRow = activeRunId === null ? (
+    <div className="flex shrink-0 items-center gap-1.5 border-t border-line bg-base-1 px-2 py-1.5">
+      <span className="shrink-0 font-mono text-[11px] text-ink-faint">cwd</span>
+      <input
+        value={cwd}
+        onChange={e => setCwd(e.target.value)}
+        placeholder="workspace root — or an absolute project path"
+        spellCheck={false}
+        autoComplete="off"
+        aria-label="Working directory"
+        className="min-w-0 flex-1 rounded-md bg-transparent px-1 py-0.5 font-mono text-[11px] outline-none placeholder:text-ink-faint focus-visible:ring-2 focus-visible:ring-accent"
+      />
+    </div>
+  ) : null;
   if (!sessions.length) {
     return (
       <div className="flex h-full flex-col">
-        <p className="flex-1 px-3 py-6 text-center text-xs text-ink-faint">This run has not executed any shell commands yet.</p>
+        <p className="flex-1 px-3 py-6 text-center text-xs text-ink-faint">
+          {activeRunId === null
+            ? 'No shell sessions yet. Type a command below — npm install works here.'
+            : 'This run has not executed any shell commands yet.'}
+        </p>
+        {cwdRow}
         <ExecInput command={command} setCommand={setCommand} running={running} onRun={() => void exec()} />
       </div>
     );
@@ -124,6 +147,7 @@ export function TerminalPanel() {
           </p>
         )}
       </div>
+      {cwdRow}
       <ExecInput command={command} setCommand={setCommand} running={running} onRun={() => void exec()} />
     </div>
   );

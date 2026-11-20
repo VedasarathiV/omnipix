@@ -3,6 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { StudioProvider, useStudio } from './state/store';
 import { AuthGate } from './components/AuthGate';
 import { useShortcuts } from './hooks/shortcuts';
+import { useNativeMenu } from './hooks/useNativeMenu';
 import { useIsMobile } from './hooks/mobile';
 import { AppShell } from './components/AppShell';
 import { Sidebar } from './components/Sidebar';
@@ -57,6 +58,7 @@ function MainPane() {
 
 function Shell() {
   useShortcuts();
+  useNativeMenu();
   const mobile = useIsMobile();
   const [pane, setPane] = useState<MobilePane>('chat');
 
