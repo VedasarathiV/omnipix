@@ -270,15 +270,6 @@ authRouter.post('/logout', (req: Request, res: Response) => {
   res.json({ success: true });
 });
 
-authRouter.get('/me', (req: Request, res: Response) => {
-  const session = validateSession(bearer(req));
-  if (!session) {
-    res.status(401).json({ error: { message: 'Authentication required', type: 'authentication_error' } });
-    return;
-  }
-  res.json({ email: session.email });
-});
-
 // Change email (requires active session + current password)
 const changeEmailSchema = z.object({
   currentPassword: z.string().min(1, 'Current password is required'),

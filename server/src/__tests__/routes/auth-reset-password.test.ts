@@ -139,9 +139,10 @@ describe('password reset by log code', () => {
     expect(reset.status).toBe(200);
     expect(reset.body.email).toBe(EMAIL);
     expect(typeof reset.body.token).toBe('string');
-    const me = await get(app, '/api/auth/me', reset.body.token);
-    expect(me.status).toBe(200);
-    expect(me.body.email).toBe(EMAIL);
+    const status = await get(app, '/api/auth/status', reset.body.token);
+    expect(status.status).toBe(200);
+    expect(status.body.authenticated).toBe(true);
+    expect(status.body.email).toBe(EMAIL);
   });
 
   it('returns no session for a wrong code', async () => {

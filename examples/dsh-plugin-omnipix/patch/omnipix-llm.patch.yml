@@ -1,0 +1,19 @@
+# OmniPix route for DeepSeek Harness, via the mounted llm-pi-ai plugin.
+# Install with ../setup.sh (writes to $DSH_HOME/profiles/headless/cordis.patch.yml)
+# or pass per-invocation: dsh --profile headless --patch omnipix-llm.patch.yml "task"
+- id: llm-pi-ai
+  config:
+    providers:
+      omnipix:
+        displayName: OmniPix
+        apiKeyEnv: OMNIPIX_API_KEY
+        api: openai-completions
+        baseURL: http://127.0.0.1:3101/v1
+        models:
+          - id: auto
+            name: OmniPix Auto
+            contextWindow: 128000
+- id: agent-default-model
+  config:
+    provider: omnipix
+    model: auto
