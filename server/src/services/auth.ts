@@ -30,19 +30,32 @@ export function userCount(): number {
   return row.c;
 }
 
+function emailTakenError(): Error & { code: string } {
+  const err = new Error('An account with that email already exists') as any;
+  err.code = 'email_taken';
+  return err;
+}
+
+function isUniqueViolation(err: unknown): boolean {
+  return (err as { code?: string })?.code === 'SQLITE_CONSTRAINT_UNIQUE';
+}
+
 /** Create a user. Throws { code: 'email_taken' } if the email already exists. */
 export function createUser(email: string, password: string): SessionUser {
   const db = getDb();
   const normalized = normalizeEmail(email);
   const existing = db.prepare('SELECT id FROM users WHERE email = ?').get(normalized);
-  if (existing) {
-    const err = new Error('An account with that email already exists') as any;
-    err.code = 'email_taken';
+  if (existing) throw emailTakenError();
+  // The UNIQUE backstop turns a check-then-write race into the same typed
+  // error instead of a raw 500.
+  try {
+    const result = db.prepare('INSERT INTO users (email, password_hash) VALUES (?, ?)')
+      .run(normalized, hashPassword(password));
+    return { userId: Number(result.lastInsertRowid), email: normalized };
+  } catch (err) {
+    if (isUniqueViolation(err)) throw emailTakenError();
     throw err;
   }
-  const result = db.prepare('INSERT INTO users (email, password_hash) VALUES (?, ?)')
-    .run(normalized, hashPassword(password));
-  return { userId: Number(result.lastInsertRowid), email: normalized };
 }
 
 /** Verify credentials. Returns the user on success, null on failure. */
@@ -137,13 +150,20 @@ export function updateEmail(userId: number, currentPassword: string, newEmail: s
   if (!verifyPassword(currentPassword, row.password_hash)) return false;
 
   const normalized = normalizeEmail(newEmail);
-  const existing = db.prepare('SELECT id FROM users WHERE email = ? AND id != ?').get(normalized, userId);
-  if (existing) {
-    const err = new Error('An account with that email already exists') as any;
-    err.code = 'email_taken';
+  // Check + write in one transaction (the slow scrypt verify stays outside
+  // so it never holds the write lock); the UNIQUE backstop maps a race to
+  // the same typed error.
+  try {
+    db.transaction(() => {
+      const existing = db.prepare('SELECT id FROM users WHERE email = ? AND id != ?').get(normalized, userId);
+      if (existing) throw emailTakenError();
+      db.prepare('UPDATE users SET email = ? WHERE id = ?').run(normalized, userId);
+    })();
+  } catch (err) {
+    if ((err as { code?: string })?.code === 'email_taken') throw err;
+    if (isUniqueViolation(err)) throw emailTakenError();
     throw err;
   }
-  db.prepare('UPDATE users SET email = ? WHERE id = ?').run(normalized, userId);
   // Keep sessions alive; the new email will be reflected on the next validateSession call.
   return true;
 }
@@ -155,8 +175,12 @@ export function updatePassword(userId: number, currentPassword: string, newPassw
     .get(userId) as { password_hash: string } | undefined;
   if (!row) return false;
   if (!verifyPassword(currentPassword, row.password_hash)) return false;
-  db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(hashPassword(newPassword), userId);
-  db.prepare('DELETE FROM sessions WHERE user_id = ?').run(userId);
+  // Password change + session invalidation commit atomically: a crash
+  // between them must not leave the old sessions valid under a new secret.
+  db.transaction(() => {
+    db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(hashPassword(newPassword), userId);
+    db.prepare('DELETE FROM sessions WHERE user_id = ?').run(userId);
+  })();
   return true;
 }
 

@@ -10,8 +10,10 @@ import { getSyncState } from '../services/catalog-sync.js';
 import { encrypt, decrypt, maskKey } from '../lib/crypto.js';
 import { parseKeysFromFile, stripJsoncComments, stripTrailingCommas } from '../lib/key-parser.js';
 import { assessProviderUrl } from '../lib/url-guard.js';
+import { pageOf, pageParams } from '../lib/pagination.js';
 import { verifyCredentials, recordReauthFailure, clearReauthFailures } from '../services/auth.js';
 import { getActiveCooldownsForKeys, clearCooldownsForKey, clearApinexCheckinCooldownsForKey } from '../services/ratelimit.js';
+import type { ActiveCooldown } from '../services/ratelimit.js';
 import { getMonthlyBudgetCaps, getMonthlyUsage, nextMonthResetAt } from '../services/key-budget.js';
 import { resolveCustomEndpointKey, customEndpointKeyIds, siblingEndpointKeyId, endpointHasCredential, normalizeGroupLabel, setCustomEndpointGroup } from '../services/custom-endpoint.js';
 import { registerCustomModels, registerCustomChatModels } from '../services/custom-model-register.js';
@@ -394,10 +396,17 @@ keysRouter.get('/providers', (_req: Request, res: Response) => {
   });
 });
 
-// List all keys (masked)
-keysRouter.get('/', (_req: Request, res: Response) => {
-  const db = getDb();
-  const rows = db.prepare('SELECT * FROM api_keys ORDER BY created_at DESC').all() as any[];
+// Shared key-row shape for GET / and GET /:id. One formatter, so the
+// single-key response can never drift from the list rows.
+interface KeyRowContext {
+  modelCountFor: (platform: string) => number;
+  canDiscover: (platform: string) => boolean;
+  cooldownsByKeyId: Map<number, ActiveCooldown[]>;
+  modelsByEndpoint: Map<string, any[]>;
+  endpointOf: (keyId: number) => string;
+}
+
+function buildKeyRowContext(db: Db, rows: any[]): KeyRowContext {
   const modelCounts = new Map<string, number>();
   const modelCountFor = (platform: string): number => {
     if (!modelCounts.has(platform)) modelCounts.set(platform, enabledModelCount(platform));
@@ -464,90 +473,101 @@ keysRouter.get('/', (_req: Request, res: Response) => {
     if (!discoverable.has(platform)) discoverable.set(platform, isBuiltinDiscoveryEligible(db, platform));
     return discoverable.get(platform)!;
   };
+  return { modelCountFor, canDiscover, cooldownsByKeyId, modelsByEndpoint, endpointOf };
+}
 
-  const keys = rows.map(row => {
-    let maskedKey = '****';
-    let realKey = '';
-    try {
-      realKey = decrypt(row.encrypted_key, row.iv, row.auth_tag);
-      maskedKey = maskKey(realKey);
-    } catch {
-      maskedKey = '[decrypt failed]';
-    }
-    const cooldowns = cooldownsByKeyId.get(Number(row.id)) ?? [];
-    const scope = parseModelScope(row.model_scope_json);
-    const budgetCaps = getMonthlyBudgetCaps(Number(row.id));
-    // Usage alongside the caps so the dashboard can show "342 of 1,000 this
-    // month" instead of only the cap (OpenRouter's GET /api/v1/key returns
-    // limit_remaining for the same reason).
-    const monthlyUsage = getMonthlyUsage(Number(row.id));
-    return {
-      id: row.id,
-      platform: row.platform,
-      label: row.label,
-      maskedKey,
-      baseUrl: row.base_url ?? null,
-      // Optional custom-endpoint group label (#1176); null = legacy single
-      // "Custom" group.
-      groupLabel: row.group_label ?? null,
-      monthlyRequestCap: budgetCaps.requestCap,
-      monthlyTokenCap: budgetCaps.tokenCap,
-      monthlyUsage: {
-        requests: monthlyUsage.requests,
-        tokens: monthlyUsage.tokens,
-        resetsAt: nextMonthResetAt(),
-      },
-      status: row.status,
-      enabled: row.enabled === 1,
-      // `keyOptional`: the platform works with or without a key (Kilo, OVH,
-      // AI Horde). `keyless`: THIS row is the anonymous sentinel, so there is
-      // no credential to copy, scope or reveal. A real key saved on a
-      // key-optional platform is an ordinary key row (#1331).
-      keyOptional: resolveProvider(row.platform)?.keyless === true,
-      keyless: resolveProvider(row.platform)?.keyless === true && isAnonymousCredential(realKey),
-      // #1459: false for a provider that forbids automated key checks (LLMTR).
-      // Its keys stay 'unknown' until they serve a request, and "Check now"
-      // sends nothing, so the dashboard explains that instead of showing an
-      // unexplained "unchecked". modelsAvailable says whether this install has
-      // any of the provider's models to serve that first request with.
-      autoHealthCheck: resolveProvider(row.platform)?.supportsKeyValidation !== false,
-      // Search keys serve engines, not models, so they never count as missing models.
-      ...(resolveProvider(row.platform)?.supportsKeyValidation === false && !isSearchPlatform(row.platform)
-        ? { modelsAvailable: modelCountFor(row.platform) }
-        : {}),
-      // Lets the export dialog count exactly what the export will write.
-      exportable: isExportableKey({ platform: row.platform, baseUrl: row.base_url ?? null, key: realKey }),
-      createdAt: row.created_at,
-      lastCheckedAt: row.last_checked_at,
-      // #1493: last time this key was proven to work (valid probe or served
-      // request) — distinct from lastCheckedAt, which a transport error also
-      // refreshes.
-      lastHealthyAt: row.last_healthy_at ?? null,
-      // #1516 (display-only): what the healthy verdict rests on — a /models
-      // probe ('models_only') or a served request ('inference_verified').
-      // Null = never verified. Exposed so the dashboard can say which it is;
-      // it changes no routing.
-      verificationBasis: row.verification_basis ?? null,
-      lastHealthError: row.last_health_error ?? null,
-      // The model_id list this key is limited to; null = serves everything (#657).
-      modelScope: scope ? [...scope] : null,
-      // The per-key proxy override with its password masked (#590). '' = no
-      // override. Enough for the dashboard to show that a key routes through
-      // its own exit, without handing the proxy credentials back out.
-      maskedProxyUrl: maskProxyUrl(decryptProxyUrl(row)),
-      models: row.platform === 'custom' ? (modelsByEndpoint.get(endpointOf(Number(row.id))) ?? []) : undefined,
-      modelDiscovery: canDiscover(row.platform),
-      cooldowns: cooldowns.map(c => ({
-        modelId: c.modelId,
-        source: c.source,
-        expiresAtMs: c.expiresAtMs,
-        remainingMs: c.remainingMs,
-      })),
-    };
-  });
+function formatKeyRow(row: any, ctx: KeyRowContext): object {
+  let maskedKey = '****';
+  let realKey = '';
+  try {
+    realKey = decrypt(row.encrypted_key, row.iv, row.auth_tag);
+    maskedKey = maskKey(realKey);
+  } catch {
+    maskedKey = '[decrypt failed]';
+  }
+  const cooldowns = ctx.cooldownsByKeyId.get(Number(row.id)) ?? [];
+  const scope = parseModelScope(row.model_scope_json);
+  const budgetCaps = getMonthlyBudgetCaps(Number(row.id));
+  // Usage alongside the caps so the dashboard can show "342 of 1,000 this
+  // month" instead of only the cap (OpenRouter's GET /api/v1/key returns
+  // limit_remaining for the same reason).
+  const monthlyUsage = getMonthlyUsage(Number(row.id));
+  return {
+    id: row.id,
+    platform: row.platform,
+    label: row.label,
+    maskedKey,
+    baseUrl: row.base_url ?? null,
+    // Optional custom-endpoint group label (#1176); null = legacy single
+    // "Custom" group.
+    groupLabel: row.group_label ?? null,
+    monthlyRequestCap: budgetCaps.requestCap,
+    monthlyTokenCap: budgetCaps.tokenCap,
+    monthlyUsage: {
+      requests: monthlyUsage.requests,
+      tokens: monthlyUsage.tokens,
+      resetsAt: nextMonthResetAt(),
+    },
+    status: row.status,
+    enabled: row.enabled === 1,
+    // `keyOptional`: the platform works with or without a key (Kilo, OVH,
+    // AI Horde). `keyless`: THIS row is the anonymous sentinel, so there is
+    // no credential to copy, scope or reveal. A real key saved on a
+    // key-optional platform is an ordinary key row (#1331).
+    keyOptional: resolveProvider(row.platform)?.keyless === true,
+    keyless: resolveProvider(row.platform)?.keyless === true && isAnonymousCredential(realKey),
+    // #1459: false for a provider that forbids automated key checks (LLMTR).
+    // Its keys stay 'unknown' until they serve a request, and "Check now"
+    // sends nothing, so the dashboard explains that instead of showing an
+    // unexplained "unchecked". modelsAvailable says whether this install has
+    // any of the provider's models to serve that first request with.
+    autoHealthCheck: resolveProvider(row.platform)?.supportsKeyValidation !== false,
+    // Search keys serve engines, not models, so they never count as missing models.
+    ...(resolveProvider(row.platform)?.supportsKeyValidation === false && !isSearchPlatform(row.platform)
+      ? { modelsAvailable: ctx.modelCountFor(row.platform) }
+      : {}),
+    // Lets the export dialog count exactly what the export will write.
+    exportable: isExportableKey({ platform: row.platform, baseUrl: row.base_url ?? null, key: realKey }),
+    createdAt: row.created_at,
+    lastCheckedAt: row.last_checked_at,
+    // #1493: last time this key was proven to work (valid probe or served
+    // request) — distinct from lastCheckedAt, which a transport error also
+    // refreshes.
+    lastHealthyAt: row.last_healthy_at ?? null,
+    // #1516 (display-only): what the healthy verdict rests on — a /models
+    // probe ('models_only') or a served request ('inference_verified').
+    // Null = never verified. Exposed so the dashboard can say which it is;
+    // it changes no routing.
+    verificationBasis: row.verification_basis ?? null,
+    lastHealthError: row.last_health_error ?? null,
+    // The model_id list this key is limited to; null = serves everything (#657).
+    modelScope: scope ? [...scope] : null,
+    // The per-key proxy override with its password masked (#590). '' = no
+    // override. Enough for the dashboard to show that a key routes through
+    // its own exit, without handing the proxy credentials back out.
+    maskedProxyUrl: maskProxyUrl(decryptProxyUrl(row)),
+    models: row.platform === 'custom' ? (ctx.modelsByEndpoint.get(ctx.endpointOf(Number(row.id))) ?? []) : undefined,
+    modelDiscovery: ctx.canDiscover(row.platform),
+    cooldowns: cooldowns.map(c => ({
+      modelId: c.modelId,
+      source: c.source,
+      expiresAtMs: c.expiresAtMs,
+      remainingMs: c.remainingMs,
+    })),
+  };
+}
 
-  res.json(keys);
+// List all keys (masked). ?limit=&offset= opt into a { total, limit, offset,
+// rows } envelope; without them the legacy bare array is returned.
+keysRouter.get('/', (req: Request, res: Response) => {
+  const db = getDb();
+  const rows = db.prepare('SELECT * FROM api_keys ORDER BY created_at DESC').all() as any[];
+  const ctx = buildKeyRowContext(db, rows);
+  const shaped = rows.map(row => formatKeyRow(row, ctx));
+  const page = pageParams(req.query as Record<string, unknown>);
+  res.json(page.paged ? pageOf(shaped, page) : shaped);
 });
+
 
 // Clear every active cooldown for one key. An escalated cooldown can bench a key
 // for up to 24h from a single bad window; once the operator has fixed the cause
@@ -750,6 +770,28 @@ keysRouter.get('/export', (req: Request, res: Response) => {
   res.setHeader('Content-Type', 'application/json; charset=utf-8');
   res.setHeader('Content-Disposition', 'attachment; filename="omnipix-keys.json"');
   res.json(jsonExport);
+});
+
+// Fetch one key (masked, same shape as the list rows)
+keysRouter.get('/:id', (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) {
+    res.status(400).json({ error: { message: 'Invalid key id' } });
+    return;
+  }
+  const db = getDb();
+  const row = db.prepare('SELECT * FROM api_keys WHERE id = ?').get(id) as any | undefined;
+  if (!row) {
+    res.status(404).json({ error: { message: 'Key not found' } });
+    return;
+  }
+  // Endpoint grouping needs the sibling credential rows: every key of an
+  // endpoint serves the whole endpoint model list (#619).
+  let ctxRows = [row];
+  if (row.platform === 'custom' && row.base_url) {
+    ctxRows = db.prepare("SELECT * FROM api_keys WHERE platform = 'custom' AND base_url = ?").all(row.base_url) as any[];
+  }
+  res.json(formatKeyRow(row, buildKeyRowContext(db, ctxRows)));
 });
 
 // Reveal ONE key in plaintext, so the dashboard can offer a copy action for a

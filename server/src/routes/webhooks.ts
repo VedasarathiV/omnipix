@@ -2,7 +2,7 @@ import { Router } from 'express';
 import type { Request, Response } from 'express';
 import { z } from 'zod';
 import { getDb } from '../db/index.js';
-import { createWebhook, deleteWebhook, fireWebhookTest, listWebhooks, WEBHOOK_EVENTS } from '../services/webhooks.js';
+import { createWebhook, deleteWebhook, fireWebhookTest, getWebhook, listWebhooks, updateWebhook, WEBHOOK_EVENTS } from '../services/webhooks.js';
 
 // Outbound webhook registrations. Dashboard-gated: the URLs and secrets are
 // operator config, and firing state names internal outcomes.
@@ -32,6 +32,45 @@ webhooksRouter.post('/', (req: Request, res: Response) => {
   }
   try {
     res.status(201).json({ webhook: createWebhook(getDb(), parsed.data) });
+  } catch (err) {
+    res.status(400).json({ error: { message: err instanceof Error ? err.message : String(err) } });
+  }
+});
+
+webhooksRouter.get('/:id', (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) {
+    res.status(400).json({ error: { message: 'Invalid webhook ID' } });
+    return;
+  }
+  const webhook = getWebhook(getDb(), id);
+  if (!webhook) {
+    res.status(404).json({ error: { message: 'Webhook not found' } });
+    return;
+  }
+  res.json({ webhook });
+});
+
+const patchSchema = createSchema.partial();
+
+webhooksRouter.patch('/:id', (req: Request, res: Response) => {
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) {
+    res.status(400).json({ error: { message: 'Invalid webhook ID' } });
+    return;
+  }
+  const parsed = patchSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: { message: parsed.error.issues.map(e => e.message).join(', ') } });
+    return;
+  }
+  try {
+    const webhook = updateWebhook(getDb(), id, parsed.data);
+    if (!webhook) {
+      res.status(404).json({ error: { message: 'Webhook not found' } });
+      return;
+    }
+    res.json({ webhook });
   } catch (err) {
     res.status(400).json({ error: { message: err instanceof Error ? err.message : String(err) } });
   }

@@ -218,10 +218,21 @@ authRouter.post('/setup', (req: Request, res: Response) => {
     res.status(400).json({ error: { message: parsed.error.issues.map(e => e.message).join(', ') } });
     return;
   }
-  const user = createUser(parsed.data.email, parsed.data.password);
-  clearSetupCode(); // one-time: the dashboard is now claimed
-  const token = createSession(user.userId);
-  res.status(201).json({ token, email: user.email });
+  try {
+    const user = createUser(parsed.data.email, parsed.data.password);
+    clearSetupCode(); // one-time: the dashboard is now claimed
+    const token = createSession(user.userId);
+    res.status(201).json({ token, email: user.email });
+  } catch (err: any) {
+    // A concurrent setup slipping past the userCount check lands here
+    // instead of a 500: the dashboard was just claimed by someone else.
+    if (err?.code === 'email_taken') {
+      clearSetupCode();
+      res.status(409).json({ error: { message: 'Setup already completed. Use login instead.', type: 'setup_complete' } });
+      return;
+    }
+    throw err;
+  }
 });
 
 authRouter.post('/login', (req: Request, res: Response) => {

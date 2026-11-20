@@ -93,6 +93,47 @@ describe('Keys API', () => {
     expect(body.maskedKey).toContain('...');
   });
 
+  it('GET /api/keys/:id returns the same shape as the list row', async () => {
+    const created = await request(app, 'POST', '/api/keys', {
+      platform: 'groq',
+      key: 'gsk_test123456789',
+      label: 'Single Key',
+    });
+    expect(created.status).toBe(201);
+    const list = await request(app, 'GET', '/api/keys');
+    expect(list.status).toBe(200);
+    const single = await request(app, 'GET', `/api/keys/${created.body.id}`);
+    expect(single.status).toBe(200);
+    expect(single.body).toEqual(list.body.find((k: any) => k.id === created.body.id));
+    expect(single.body.maskedKey).not.toContain('gsk_test123456789');
+  });
+
+  it('GET /api/keys/:id validates ids and 404s on missing keys', async () => {
+    for (const bad of ['0', '-3', 'abc', '1.5']) {
+      const res = await request(app, 'GET', `/api/keys/${bad}`);
+      expect(res.status).toBe(400);
+    }
+    const missing = await request(app, 'GET', '/api/keys/999999');
+    expect(missing.status).toBe(404);
+  });
+
+  it('GET /api/keys paginates only when asked, keeping the bare array default', async () => {
+    for (const label of ['k1', 'k2', 'k3']) {
+      await request(app, 'POST', '/api/keys', { platform: 'groq', key: `gsk_${label}-secret`, label });
+    }
+    const bare = await request(app, 'GET', '/api/keys');
+    expect(bare.status).toBe(200);
+    expect(Array.isArray(bare.body)).toBe(true);
+    expect(bare.body).toHaveLength(3);
+    const page = await request(app, 'GET', '/api/keys?limit=2&offset=1');
+    expect(page.status).toBe(200);
+    expect(page.body.total).toBe(3);
+    expect(page.body.limit).toBe(2);
+    expect(page.body.offset).toBe(1);
+    expect(page.body.rows).toHaveLength(2);
+    expect(page.body.rows).toEqual(bare.body.slice(1, 3));
+  });
+
   it.each(['typecast', 'cartesia', 'silvr'])('adds a %s key without seeding fresh catalog models', async platform => {
     // Migrations seed fallback voice rows; key creation must not add more.
     const beforeModels = (getDb().prepare('SELECT COUNT(*) AS n FROM models WHERE platform=?').get(platform) as { n: number }).n;

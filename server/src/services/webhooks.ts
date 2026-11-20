@@ -116,6 +116,52 @@ export function createWebhook(
   return toRow(row);
 }
 
+export function getWebhook(db: Db, id: number): WebhookRow | null {
+  const row = db.prepare('SELECT * FROM webhooks WHERE id = ?').get(id) as StoredWebhook | undefined;
+  return row ? toRow(row) : null;
+}
+
+export function updateWebhook(
+  db: Db,
+  id: number,
+  patch: { name?: string; url?: string; events?: string[]; secret?: string; enabled?: boolean },
+): WebhookRow | null {
+  const existing = db.prepare('SELECT * FROM webhooks WHERE id = ?').get(id) as StoredWebhook | undefined;
+  if (!existing) return null;
+  const name = patch.name ?? existing.name;
+  const url = patch.url ?? existing.url;
+  const events = patch.events ?? JSON.parse(existing.events_json) as string[];
+  const urlError = validateWebhookUrl(url);
+  if (urlError) throw new Error(`Invalid URL: ${urlError}`);
+  const unknown = events.filter((e) => e !== '*' && !(WEBHOOK_EVENTS as readonly string[]).includes(e));
+  if (unknown.length) throw new Error(`Unknown event(s): ${unknown.join(', ')}. Known: ${WEBHOOK_EVENTS.join(', ')}`);
+  // Secret: omitted keeps, non-empty replaces, empty string clears.
+  let sealed = {
+    encrypted: existing.secret_encrypted,
+    iv: existing.secret_iv,
+    authTag: existing.secret_auth_tag,
+  };
+  if (patch.secret !== undefined) {
+    if (patch.secret) {
+      const fresh = encrypt(patch.secret);
+      sealed = { encrypted: fresh.encrypted, iv: fresh.iv, authTag: fresh.authTag };
+    } else {
+      sealed = { encrypted: null, iv: null, authTag: null };
+    }
+  }
+  const row = db.prepare(
+    `UPDATE webhooks SET name = ?, url = ?, events_json = ?,
+       secret_encrypted = ?, secret_iv = ?, secret_auth_tag = ?,
+       enabled = ? WHERE id = ? RETURNING *`,
+  ).get(
+    name, url, JSON.stringify(events),
+    sealed.encrypted, sealed.iv, sealed.authTag,
+    patch.enabled === undefined ? existing.enabled : (patch.enabled ? 1 : 0),
+    id,
+  ) as StoredWebhook;
+  return toRow(row);
+}
+
 export function deleteWebhook(db: Db, id: number): boolean {
   return db.prepare('DELETE FROM webhooks WHERE id = ?').run(id).changes > 0;
 }

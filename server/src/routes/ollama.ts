@@ -585,9 +585,13 @@ ollamaRouter.post('/api/embed', (req, res) => {
   return handleEmbed(req, res, false);
 });
 
-// The dashboard already owns POST /api/embeddings. A valid dashboard session
-// always falls through to that router; otherwise this exact path is Ollama's
-// legacy embeddings endpoint and is governed by the emulation auth mode.
+// Path collision, resolved by auth scheme: this exact path is Ollama's legacy
+// embeddings endpoint AND the dashboard embeddings router root. A valid
+// dashboard session always falls through to embeddingsRouter (which serves
+// the admin routes — GET/PUT/usage/custom — but defines no inference POST,
+// so a dashboard POST ends in the JSON 404, by design: dashboard inference
+// goes through /v1/embeddings with the unified key). Anything else is an
+// Ollama client governed by the emulation auth mode below.
 ollamaRouter.post('/api/embeddings', (req: Request, res: Response, next: NextFunction) => {
   const dashboardToken = req.headers.authorization?.replace(/^Bearer\s+/i, '')
     ?? (req.headers['x-dashboard-token'] as string | undefined);

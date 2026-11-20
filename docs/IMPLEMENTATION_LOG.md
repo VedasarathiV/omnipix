@@ -28,11 +28,35 @@
   sprint-status stubs `ARCHITECTURE.md`, `MODEL_ROUTING.md`,
   `AGENT_RUNTIME.md`, `TESTING.md`.
 
+## 2026-11-20 — Sprint 2 (core architecture, this session)
+
+- Declared Studio the shipped UI; fixed `desktop:dist:mac:x64|win|linux`
+  to build studio (they built client while stage-client stages studio —
+  stale-bundle bug); `desktop:dev` intentionally still builds client
+  (dev loads repoRoot/client/dist). Guarded by new
+  `desktop/src/__tests__/dist-targets.test.ts`. Recorded in
+  `ARCHITECTURE_HARDENING.md`. `client/` kept (build+tests+dev).
+- **API-01**: `GET /api/keys/:id` via extracted `formatKeyRow` shared
+  formatter (single-row output provably identical to list rows);
+  route placed after literals (fixed a shadowing regression caught by
+  export tests during verification). 2 tests.
+- **API-02**: webhooks `GET /:id` + `PATCH /:id` (`getWebhook`/
+  `updateWebhook`; secret replace/clear semantics). 1 test.
+- **API-03**: investigated — no dashboard consumer POSTs /api/embeddings
+  and a test pins the fallthrough-to-404 contract; resolved as
+  by-design with corrected comments (ollama.ts, app.ts). No new endpoint.
+- **API-08 start**: shared `lib/pagination.ts` (opt-in envelope, bare
+  array default = backward compatible); wired to keys + models lists
+  (561 rows). Unit + route tests.
+- **DB-04**: auth writes transactional with UNIQUE→email_taken mapping;
+  setup race → 409. 3 atomicity tests. DB-03 (new FKs) analyzed and
+  deferred: needs per-install orphan audit before any migration.
+- Full suite: **477 files, 5982 passed**; desktop 20/101; tsc + eslint
+  clean. One self-caught regression (route shadowing) fixed same session.
+
 ## Next unfinished task
 
-**Sprint 2 (core architecture)**: Studio/Client responsibility doc +
-`GET /api/keys/:id` + webhooks GET/:id+PATCH + embeddings POST ownership
-fix + pagination rollout start. After that: Sprint 3 routing observability,
-Sprint 4 agent lifecycle, Sprint 5 Studio honesty fixes, Sprint 6 e2e.
-Queued approval needed: SEC-03 unified-key hashing, SEC-05 full MCP
-allowlist.
+**Sprint 3 (AI infrastructure)**: routing explainability + decision
+recording + capability gating. Then Sprint 4 agent lifecycle, Sprint 5
+Studio honesty, Sprint 6 e2e. Approvals still queued: SEC-03 unified-key
+hashing, SEC-05 full MCP allowlist.

@@ -44,6 +44,8 @@ const PURE_MODULES = [
   'loopback.ts',
   'provider-identity.ts',
   'provider-size-parser.ts',
+  // Opt-in list pagination; pure functions over the query + rows.
+  'pagination.ts',
   'retry-hint.ts',
   // Search platform list; the provider list, keys route and search service import it.
   'search-platforms.ts',

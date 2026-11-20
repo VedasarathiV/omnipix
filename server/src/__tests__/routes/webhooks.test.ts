@@ -155,6 +155,29 @@ describe('webhooks', () => {
     expect(row.last_error.length).toBeGreaterThan(0);
   });
 
+  it('fetches and patches one registration', async () => {
+    const created = await call('POST', '/api/webhooks', {
+      name: 'one', url: 'http://127.0.0.1:9/hook', events: ['run.finished'], secret: 's3cret',
+    });
+    const id = created.body.webhook.id;
+    const single = await call('GET', `/api/webhooks/${id}`);
+    expect(single.status).toBe(200);
+    expect(single.body.webhook).toMatchObject({ name: 'one', hasSecret: true });
+    expect(JSON.stringify(single.body)).not.toContain('s3cret');
+    expect((await call('GET', '/api/webhooks/999')).status).toBe(404);
+    expect((await call('GET', '/api/webhooks/abc')).status).toBe(400);
+
+    const patched = await call('PATCH', `/api/webhooks/${id}`, { name: 'renamed', enabled: false });
+    expect(patched.status).toBe(200);
+    expect(patched.body.webhook).toMatchObject({ name: 'renamed', enabled: 0, hasSecret: true });
+    // Empty secret clears; omitted secret keeps.
+    expect((await call('PATCH', `/api/webhooks/${id}`, { secret: '' })).body.webhook.hasSecret).toBe(false);
+    expect((await call('PATCH', `/api/webhooks/${id}`, { secret: 'new-secret' })).body.webhook.hasSecret).toBe(true);
+    expect((await call('PATCH', `/api/webhooks/${id}`, { url: 'ftp://x/y' })).status).toBe(400);
+    expect((await call('PATCH', `/api/webhooks/${id}`, { events: ['nope'] })).status).toBe(400);
+    expect((await call('PATCH', '/api/webhooks/999', { name: 'x' })).status).toBe(404);
+  });
+
   it('sends a test delivery to one hook', async () => {
     const target = await startReceiver();
     receivers.push(target.close);

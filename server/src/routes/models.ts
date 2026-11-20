@@ -5,6 +5,7 @@ import type { Platform } from '@omnipix/shared/types.js';
 import { getDb } from '../db/index.js';
 import { getProvider, hasProvider } from '../providers/index.js';
 import { deleteUnusedCustomEndpointKey } from '../lib/custom-provider-cleanup.js';
+import { pageOf, pageParams } from '../lib/pagination.js';
 import {
   isCatalogManagedModel,
   overriddenFieldNames,
@@ -471,7 +472,7 @@ modelsRouter.post('/:id/test', async (req: Request, res: Response) => {
 });
 
 // List all models with availability info
-modelsRouter.get('/', (_req: Request, res: Response) => {
+modelsRouter.get('/', (req: Request, res: Response) => {
   const db = getDb();
   const activeProfileId = getActiveProfileId(db);
   const models = activeProfileId == null ? db.prepare(`
@@ -544,5 +545,6 @@ modelsRouter.get('/', (_req: Request, res: Response) => {
     keyCount: keyCountMap.get(m.platform) ?? 0,
   }));
 
-  res.json(result);
+  const page = pageParams(req.query as Record<string, unknown>);
+  res.json(page.paged ? pageOf(result, page) : result);
 });

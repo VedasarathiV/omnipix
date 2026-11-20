@@ -7,6 +7,17 @@ Status: **current-state record (Sprint 1 done)**. Canonical responsibilities
 and any restructuring land in Sprint 2; nothing here describes future work
 as built.
 
+## Declared UI boundary (Sprint 2 decision, closes GAP-DOC-03)
+
+- **studio/ is the shipped UI.** All four `desktop:dist*` targets build it;
+  `stage-client.mjs` stages `studio/dist`; the packaged app serves it.
+  Guarded by `desktop/src/__tests__/dist-targets.test.ts`.
+- **client/ is the legacy admin dashboard** (19 routes, 60 locales). Kept:
+  root `build` + `test` still cover it, root `dev` and `desktop:dev` still
+  serve it (dev mode loads `repoRoot/client/dist`). Not shipped in desktop
+  packages. No new workflows go here; no deletion (tests + deep-admin
+  reference value).
+
 ## Current module responsibilities
 
 - **server/**: Express gateway. Inference (`/v1`, `/v1beta`, `/mcp`,
@@ -15,10 +26,11 @@ as built.
 - **studio/**: agent-workspace UI shipped in the desktop app (chat, runs,
   approvals, diffs, terminal, providers, evals, voice). Live data layer;
   known honesty gaps (see audit GAP-UI-01/02/03) queued for Sprint 5.
-- **client/**: legacy admin dashboard (19 routes, 60 locales). Kept for its
-  tests; canonical-UI decision queued (GAP-DOC-03, Sprint 2).
+- **client/**: legacy admin dashboard — see boundary above.
 - **desktop/**: Electron shell embedding the server (`server-host.ts`
   mirrors `index.ts`, contract-tested) + tray/popover/updater.
+  Notable: desktop LAN toggle rebinds its embedded server to 0.0.0.0 —
+  explicit, persisted, tray-driven; consistent with the loopback default.
 - **cli/**: operator tooling driving live gateway APIs.
 - **shared/**: types-only contracts.
 

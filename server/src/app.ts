@@ -266,7 +266,9 @@ export function createApp(config?: Config) {
   // Ollama emulation owns only its exact fixed /api/* paths. Mount it before
   // the dashboard session gate because real Ollama clients do not use that
   // auth scheme. Its legacy /api/embeddings handler explicitly falls through
-  // when it sees a valid dashboard session.
+  // on a valid dashboard session to embeddingsRouter (admin routes only —
+  // dashboard inference uses /v1/embeddings, so a dashboard POST here 404s
+  // by design rather than double-serving inference under two auth schemes).
   // The same per-IP limiter as /v1 runs first: key-required mode is a
   // brute-forceable credential check without it. Dashboard traffic on the
   // shared /api/embeddings path shares the (generous, configurable) budget.

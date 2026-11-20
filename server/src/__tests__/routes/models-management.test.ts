@@ -594,4 +594,15 @@ describe('Model management API', () => {
     expect(missing.status).toBe(400);
     expect(JSON.stringify(missing.body)).toContain('no-such-group');
   });
+
+  it('GET /api/models paginates only when asked, keeping the bare array default', async () => {
+    const bare = await request(app, 'GET', '/api/models');
+    expect(bare.status).toBe(200);
+    expect(Array.isArray(bare.body)).toBe(true);
+    expect(bare.body.length).toBeGreaterThan(2);
+    const page = await request(app, 'GET', '/api/models?limit=2&offset=1');
+    expect(page.status).toBe(200);
+    expect(page.body.total).toBe(bare.body.length);
+    expect(page.body.rows).toEqual(bare.body.slice(1, 3));
+  });
 });
