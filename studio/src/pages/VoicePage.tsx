@@ -4,7 +4,7 @@ import { Copy, KeyRound, Mic, Play } from 'lucide-react';
 import { useStudio } from '../state/store';
 import { apiFetch } from '../lib/api';
 import { speakText, startDictationRecording, transcribeAudio, type DictationRecorder } from '../lib/voice';
-import { useMedia, useUnifiedKey, useVoiceSettings } from '../lib/queries';
+import { useKeys, useMedia, useUnifiedKey, useVoiceSettings } from '../lib/queries';
 
 export function VoicePage() {
   const { pushToast, setRail } = useStudio();
@@ -12,6 +12,8 @@ export function VoicePage() {
   const { data: voice } = useVoiceSettings();
   const { data: media } = useMedia();
   const { data: keyData } = useUnifiedKey();
+  const { data: keys = [] } = useKeys();
+  const configuredKeys = keys.filter(k => k.enabled).length;
 
   async function playSample() {
     if (!keyData?.apiKey) {
@@ -30,7 +32,6 @@ export function VoicePage() {
   const models = media?.models ?? [];
   const stt = models.filter(m => m.modality === 'transcription' && m.enabled);
   const tts = models.filter(m => m.modality === 'audio' && m.enabled);
-  const hasAudio = stt.length > 0 || tts.length > 0;
 
   async function toggleDictation() {
     if (recorder) {
@@ -76,7 +77,7 @@ export function VoicePage() {
   return (
     <div className="mx-auto max-w-2xl px-5 py-4">
       <h1 className="mb-4 text-lg font-semibold">Voice</h1>
-      {!hasAudio && (
+      {configuredKeys === 0 && (
         <button
           type="button"
           onClick={() => setRail('keys')}
@@ -84,8 +85,8 @@ export function VoicePage() {
         >
           <KeyRound className="size-4 shrink-0 text-warn" strokeWidth={1.5} />
           <span>
-            <span className="font-semibold">No audio models available.</span>{' '}
-            Voice needs a provider key with speech support — add one on the Providers page, then come back.
+            <span className="font-semibold">Voice needs a provider key.</span>{' '}
+            Dictation and read-aloud call speech models through your keys — add one on the Providers page, then come back.
           </span>
         </button>
       )}
