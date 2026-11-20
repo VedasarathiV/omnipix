@@ -1,7 +1,25 @@
 # OmniPix — Model Routing (Hardening Track)
 
-Status: **current-state record. Routing-intelligence improvements are
-Sprint 3 scope — nothing below is changed yet.**
+Status: **Sprint 3 implemented (2026-11-20).**
+
+## What Sprint 3 found
+
+Capability-aware filtering, eligibility gating, history-weighted scoring,
+cooldowns/penalties, reliability floor, sticky/exploration/degraded handling
+all **already existed and were tested** — no algorithm change was made
+(per the do-not-replace rule). The verified gap was success-path
+explainability: exclusion reasons existed only on the exhaustion path.
+
+## What Sprint 3 added
+
+- `RouteResult.decision: RoutingDecision` — strategy, reason
+  (`preferred-model` | `exploration-probe` | `first-eligible` |
+  `margin-deferred` | `tool-deferred`), rows considered, keyless-skipped
+  count, and per-cause exclusion counters mirroring the diag lines.
+- `summarizeRoutingDecision()` one-line form, emitted as `why=` on the
+  per-attempt `start`/`next` trace events (proxy ×2, responses ×1).
+  Wire format unchanged (`X-Routed-Via`, `_routed_via` untouched).
+- 8 tests (`route-decision-explain.test.ts`); full suite green.
 
 ## How routing works today (verified from code + tests)
 

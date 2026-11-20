@@ -194,10 +194,58 @@ export interface ChainRow {
   profile_strategy?: string | null;
 }
 
+export type RoutingDecisionReason =
+  | 'preferred-model'
+  | 'exploration-probe'
+  | 'first-eligible'
+  | 'margin-deferred'
+  | 'tool-deferred';
+
+/**
+ * Why a route was selected, recorded at route time. The diag lines only
+ * survive on the exhaustion path; this survives on success, so logs and
+ * operators can answer "why this model" for every served request.
+ */
+export interface RoutingDecision {
+  strategy: string;
+  reason: RoutingDecisionReason;
+  /** Chain rows walked (after the keyless pre-filter). */
+  considered: number;
+  /** Rows dropped before the walk for lack of any usable key. */
+  keylessSkipped: number;
+  excluded: {
+    ruledOut: number;
+    providerRuledOut: number;
+    vision: number;
+    tools: number;
+    structured: number;
+    context: number;
+    tpm: number;
+    noKey: number;
+  };
+}
+
+/** One-line log form: `balanced:first-eligible considered=22 excluded=vision×3`. */
+export function summarizeRoutingDecision(d: RoutingDecision): string {
+  const parts: string[] = [];
+  if (d.excluded.ruledOut) parts.push(`ruled-out×${d.excluded.ruledOut}`);
+  if (d.excluded.providerRuledOut) parts.push(`provider×${d.excluded.providerRuledOut}`);
+  if (d.excluded.vision) parts.push(`vision×${d.excluded.vision}`);
+  if (d.excluded.tools) parts.push(`tools×${d.excluded.tools}`);
+  if (d.excluded.structured) parts.push(`structured×${d.excluded.structured}`);
+  if (d.excluded.context) parts.push(`context×${d.excluded.context}`);
+  if (d.excluded.tpm) parts.push(`tpm×${d.excluded.tpm}`);
+  if (d.excluded.noKey) parts.push(`no-key×${d.excluded.noKey}`);
+  const tail = parts.length ? ` excluded=${parts.join(',')}` : '';
+  return `${d.strategy}:${d.reason} considered=${d.considered}${tail}`;
+}
+
 export interface RouteResult {
   provider: BaseProvider;
   modelId: string;
   modelDbId: number;
+  /** Set by routeRequest only; other constructors (pins, fusion, tests) omit it. */
+  decision?: RoutingDecision;
   apiKey: string;
   keyId: number;
   /**
@@ -2258,6 +2306,7 @@ export function routeRequest(estimatedTokens = 1000, skipKeys?: Set<string>, pre
   // entirely: probing unmeasured models during a fleet-wide outage just burns
   // retry budget on the same dead providers, and the scored order of known
   // survivors is the only thing worth trying.
+  let exploreProbeDbId: number | null = null;
   if (strategy !== 'priority' && getExploreEnabled() && !isDegraded() && Math.random() < EXPLORE_CHANCE) {
     // A model the operator zeroed out via MODEL_ROUTING_OVERRIDES never wins a
     // bandit draw, so it would stay under EXPLORE_MIN_SAMPLES forever and become
@@ -2283,6 +2332,7 @@ export function routeRequest(estimatedTokens = 1000, skipKeys?: Set<string>, pre
     });
     if (unmeasured.length > 0) {
       const probe = unmeasured[Math.floor(Math.random() * unmeasured.length)];
+      exploreProbeDbId = probe.model_db_id;
       const idx = sortedChain.findIndex(e => e.model_db_id === probe.model_db_id);
       if (idx > 0) {
         const [probeRow] = sortedChain.splice(idx, 1);
@@ -2383,6 +2433,12 @@ export function routeRequest(estimatedTokens = 1000, skipKeys?: Set<string>, pre
     (fitsContextWindow(e.platform, e.context_window, estimatedTokens, exactOutputReserve) ? servingChain : marginDeferred).push(e);
   }
   servingChain.push(...marginDeferred, ...toolDeferred);
+  const marginIds = new Set(marginDeferred.map(e => e.model_db_id));
+  const toolIds = new Set(toolDeferred.map(e => e.model_db_id));
+
+  // Decision counters mirror the diag lines below so the SUCCESS path keeps
+  // the same "why" record the exhaustion error already carries.
+  const excluded = { ruledOut: 0, providerRuledOut: 0, vision: 0, tools: 0, structured: 0, context: 0, tpm: 0, noKey: 0 };
 
   for (const entry of servingChain) {
     const label = `${entry.platform}/${entry.model_id}`;
@@ -2390,25 +2446,25 @@ export function routeRequest(estimatedTokens = 1000, skipKeys?: Set<string>, pre
     // "model removed upstream" already seen this request: trying the same
     // model again on a different key would just burn another attempt on the
     // same dead route (PR #111, credits @barbotkonv).
-    if (skipModels?.has(entry.model_db_id)) { diag.push(`${label}: ruled out earlier this request`); continue; }
+    if (skipModels?.has(entry.model_db_id)) { diag.push(`${label}: ruled out earlier this request`); excluded.ruledOut++; continue; }
 
     // Platforms the caller has ruled out wholesale (#788): a provider-level
     // failure this request — a 5xx, a timeout, a dead socket — is about the
     // PROVIDER, so its other keys and its other models would fail the same way.
     // Skipping the platform moves failover to the next provider instead of
     // burning one hop per key. Request-scoped; nothing is benched by this.
-    if (skipPlatforms?.has(entry.platform)) { diag.push(`${label}: provider ruled out earlier this request`); continue; }
+    if (skipPlatforms?.has(entry.platform)) { diag.push(`${label}: provider ruled out earlier this request`); excluded.providerRuledOut++; continue; }
 
     // Vision requests skip text-only models — including a sticky/preferred one,
     // which is correct: don't pin an image turn to a model that can't see it.
-    if (requireVision && !entry.supports_vision) { diag.push(`${label}: no vision support`); continue; }
+    if (requireVision && !entry.supports_vision) { diag.push(`${label}: no vision support`); excluded.vision++; continue; }
 
     // Tool-bearing requests skip models that can't emit structured tool_calls.
     // A model that "answers" a tool request with the call serialized as text
     // looks successful at the transport level while the client's harness sees
     // nothing — worse than a failover. Applies to sticky models too, same
     // reasoning as vision above.
-    if (requireTools && !entry.supports_tools) { diag.push(`${label}: no tool-calling support`); continue; }
+    if (requireTools && !entry.supports_tools) { diag.push(`${label}: no tool-calling support`); excluded.tools++; continue; }
 
     // Structured-output routing (#514 follow-up): when the request carries a
     // response_format, skip platforms whose param policy can't even receive it
@@ -2416,7 +2472,7 @@ export function routeRequest(estimatedTokens = 1000, skipKeys?: Set<string>, pre
     // prose and burn a failover hop). Platform-level fast path — model-level
     // capability isn't in the catalog; models that accept the param but ignore
     // it are caught by the non-stream JSON enforcement downstream.
-    if (requireStructured && platformDropsResponseFormat(entry.platform)) { diag.push(`${label}: platform drops response_format`); continue; }
+    if (requireStructured && platformDropsResponseFormat(entry.platform)) { diag.push(`${label}: platform drops response_format`); excluded.structured++; continue; }
 
     // Context-aware routing fast path (#167): skip a model whose RAW advertised
     // window cannot hold the request — a dispatch there is a guaranteed 413.
@@ -2436,6 +2492,7 @@ export function routeRequest(estimatedTokens = 1000, skipKeys?: Set<string>, pre
       const reserve = Math.max(0, exactOutputReserve);
       const requiredWithMargin = Math.ceil(Math.max(0, estimatedTokens - reserve) * CONTEXT_WINDOW_SAFETY_FACTOR + reserve);
       diag.push(`${label}: context ${entry.context_window} < estimated ${estimatedTokens} x${CONTEXT_WINDOW_SAFETY_FACTOR} = ${requiredWithMargin}`);
+      excluded.context++;
       continue;
     }
 
@@ -2444,14 +2501,25 @@ export function routeRequest(estimatedTokens = 1000, skipKeys?: Set<string>, pre
     // returns a guaranteed 413 (e.g. Groq gpt-oss-120b: 131k context but 8k TPM).
     // estimatedTokens carries the same capped output reserve, mirroring the
     // check above (#470).
-    if (entry.tpm_limit != null && estimatedTokens > entry.tpm_limit) { diag.push(`${label}: tpm_limit ${entry.tpm_limit} < estimated ${estimatedTokens}`); continue; }
+    if (entry.tpm_limit != null && estimatedTokens > entry.tpm_limit) { diag.push(`${label}: tpm_limit ${entry.tpm_limit} < estimated ${estimatedTokens}`); excluded.tpm++; continue; }
 
     // Key selection + accounting pre-checks for this one model. Returns the
     // first usable key's RouteResult, or null when the model has no key that
     // can serve right now — in which case we fall through to the next model in
     // the sorted chain for THIS request (no explicit penalty needed).
     const route = selectKeyForModel(entry, estimatedTokens, skipKeys, diag);
-    if (route) return route;
+    if (!route) { excluded.noKey++; continue; }
+    const reason: RoutingDecisionReason =
+      entry.model_db_id === exploreProbeDbId ? 'exploration-probe'
+      : entry.model_db_id === preferredModelDbId ? 'preferred-model'
+      : toolIds.has(entry.model_db_id) ? 'tool-deferred'
+      : marginIds.has(entry.model_db_id) ? 'margin-deferred'
+      : 'first-eligible';
+    route.decision = {
+      strategy, reason, considered: servingChain.length, keylessSkipped,
+      excluded: { ...excluded },
+    };
+    return route;
   }
 
   // The aggregate keyless line rides in diagnostics but NOT in the summary's

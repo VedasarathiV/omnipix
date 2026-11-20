@@ -54,9 +54,20 @@
 - Full suite: **477 files, 5982 passed**; desktop 20/101; tsc + eslint
   clean. One self-caught regression (route shadowing) fixed same session.
 
+## 2026-11-20 — Sprint 3 (AI infrastructure, this session)
+
+- Mapped router: capability gates (vision/tools/structured/context/TPM),
+  bandit/explore/sticky/degraded, cooldowns/penalties, floor — all present
+  and tested. No algorithm change (per rules).
+- Added success-path explainability: `RouteResult.decision` (strategy,
+  reason, considered, keylessSkipped, 8 exclusion counters) +
+  `summarizeRoutingDecision()` + `why=` on selection trace events
+  (proxy ×2, responses ×1). Wire format untouched.
+- 8 tests; live attachment check outside vitest.
+- Full suite: **478 files, 5990 passed**; tsc + eslint clean.
+
 ## Next unfinished task
 
-**Sprint 3 (AI infrastructure)**: routing explainability + decision
-recording + capability gating. Then Sprint 4 agent lifecycle, Sprint 5
-Studio honesty, Sprint 6 e2e. Approvals still queued: SEC-03 unified-key
-hashing, SEC-05 full MCP allowlist.
+**Sprint 4 (agent runtime)**: lifecycle states, cancellation/stale-op
+safety, tracing. Then Sprint 5 Studio honesty, Sprint 6 e2e. Approvals
+still queued: SEC-03 unified-key hashing, SEC-05 full MCP allowlist.

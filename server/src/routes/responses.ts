@@ -9,7 +9,7 @@ import type {
   ChatToolChoice,
   Platform,
 } from '@omnipix/shared/types.js';
-import { routeRequest, hasEnabledVisionModel, hasEnabledToolsModel, resolveStickyPreference, routingReserveTokens, resolveModelGroupCandidates, resolveRoutingChain, failureAttributionFor, type RouteResult, type ResolvedChain, type ChainRow } from '../services/router.js';
+import { routeRequest, hasEnabledVisionModel, hasEnabledToolsModel, resolveStickyPreference, routingReserveTokens, resolveModelGroupCandidates, resolveRoutingChain, failureAttributionFor, summarizeRoutingDecision, type RouteResult, type ResolvedChain, type ChainRow } from '../services/router.js';
 import { getDb } from '../db/index.js';
 import { resolveAuth, prependSystemPrompt } from '../lib/system-prompt.js';
 import { isUnifyEnabled, getModelGroups, resolveRequestedIdForDispatch } from '../services/model-groups.js';
@@ -1237,6 +1237,7 @@ export async function handleResponses(req: Request, res: Response): Promise<void
         platform: route.platform,
         model: route.modelId,
         requestedModel: attempt === 0 ? requestedModelLabel : undefined,
+        decision: route.decision ? summarizeRoutingDecision(route.decision) : undefined,
       });
       if (stream) {
         // Every output item (message text + each function_call) claims the next

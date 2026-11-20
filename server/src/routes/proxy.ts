@@ -3,7 +3,7 @@ import { Router } from 'express';
 import type { Request, Response } from 'express';
 import { z } from 'zod';
 import type { ChatMessage, ChatToolCall, TokenUsage } from '@omnipix/shared/types.js';
-import { type RouteResult, type ResolvedChain, type ChainRow, routeRequest, resolveRoutingChain, resolveModelGroupCandidates, resolveStickyPreference, hasEnabledVisionModel, hasEnabledToolsModel, routingReserveTokens, failureAttributionFor } from '../services/router.js';
+import { type RouteResult, type ResolvedChain, type ChainRow, routeRequest, resolveRoutingChain, resolveModelGroupCandidates, resolveStickyPreference, hasEnabledVisionModel, hasEnabledToolsModel, routingReserveTokens, failureAttributionFor, summarizeRoutingDecision } from '../services/router.js';
 import { secondsUntilNextMonth, nextMonthResetAt } from '../services/key-budget.js';
 import { runEmbeddings, EmbeddingsError } from '../services/embeddings.js';
 import { runRerank, RerankError, rerankRetryAfterSec } from '../services/rerank.js';
@@ -144,6 +144,7 @@ export function traceRouteEvent(
     inputTokens?: number;
     outputTokens?: number;
     error?: string;
+    decision?: string;
   },
 ) {
   const parts = [
@@ -161,6 +162,7 @@ export function traceRouteEvent(
   if (opts.inputTokens != null) parts.push(`in=${opts.inputTokens}`);
   if (opts.outputTokens != null) parts.push(`out=${opts.outputTokens}`);
   if (opts.error) parts.push(`err=${JSON.stringify(opts.error)}`);
+  if (opts.decision) parts.push(`why=${opts.decision}`);
   console.log(parts.join(' '));
 }
 
@@ -1593,6 +1595,7 @@ proxyRouter.post('/completions', async (req: Request, res: Response) => {
         platform: route.platform,
         model: route.modelId,
         requestedModel: attempt === 0 ? requestedModelLabel : undefined,
+        decision: route.decision ? summarizeRoutingDecision(route.decision) : undefined,
       });
 
       if (stream) {
@@ -2589,6 +2592,7 @@ proxyRouter.post('/chat/completions', async (req: Request, res: Response) => {
       platform: route.platform,
       model: route.modelId,
       requestedModel: attempt === 0 ? requestedModelLabel : undefined,
+      decision: route.decision ? summarizeRoutingDecision(route.decision) : undefined,
     });
     let outboundMessages = messages;
     // #797: thinking trace accumulated from this turn's streamed deltas, then
