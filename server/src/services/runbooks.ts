@@ -50,6 +50,57 @@ const RUNBOOKS: RunbookPreset[] = [
     ],
   },
   {
+    name: 'code-review',
+    description: 'Read, critique, verify — a review crew for a change or repo.',
+    tasks: [
+      {
+        name: 'read', role: 'researcher',
+        goal: 'Read the change under review for: {{goal}}. Summarize what it does, file by file.',
+        expectedOutput: 'A file-by-file summary of the change.',
+      },
+      {
+        name: 'critique', role: 'reviewer',
+        goal: 'Critique the change for correctness, security, and maintainability. Every finding cites file and line.',
+        dependsOn: [0],
+        expectedOutput: 'Findings with file/line citations, or a clean bill.',
+        inputs: [{ name: 'summary', from: 0 }],
+      },
+      {
+        name: 'verify', role: 'tester',
+        goal: 'Run the repo checks (tests, lint, typecheck) that cover the change.',
+        dependsOn: [0],
+        expectedOutput: 'Check results: what ran, what passed, what failed.',
+        inputs: [{ name: 'summary', from: 0 }],
+      },
+    ],
+  },
+  {
+    name: 'research-sweep',
+    description: 'Survey, compare, recommend — parallel research that converges.',
+    tasks: [
+      {
+        name: 'survey', role: 'researcher',
+        goal: 'Survey the landscape for: {{goal}}. Gather candidates with sources.',
+        expectedOutput: 'A sourced list of candidates.',
+      },
+      {
+        name: 'compare', role: 'planner',
+        goal: 'Compare the surveyed candidates on cost, fit, and risk. Build the comparison table.',
+        dependsOn: [0],
+        expectedOutput: 'A comparison table with a ranked shortlist.',
+        inputs: [{ name: 'survey', from: 0 }],
+      },
+      {
+        name: 'recommend', role: 'reviewer',
+        goal: 'Stress-test the shortlist and write the final recommendation with trade-offs.',
+        dependsOn: [1],
+        expectedOutput: 'A recommendation with trade-offs and next steps.',
+        inputs: [{ name: 'comparison', from: 1 }],
+        guardrail: JUDGE('The recommendation names a winner, cites evidence, and states trade-offs.'),
+      },
+    ],
+  },
+  {
     name: 'incident-response',
     description: 'Triage, mitigate, verify, retro — run an incident with discipline.',
     tasks: [

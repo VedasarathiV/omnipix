@@ -10,6 +10,7 @@ import { startModelProbe } from './services/model-probe.js';
 import { startCustomModelSync } from './services/custom-model-sync.js';
 import { startBuiltinModelDiscovery } from './services/builtin-model-discovery.js';
 import { startAutomationScheduler } from './services/automations.js';
+import { startAutomationWatchers } from './services/automation-watch.js';
 import { startSecurityScanScheduler } from './services/security-scans.js';
 import { installProcessSafetyNet } from './lib/process-safety-net.js';
 import { NodeScheduler } from './lib/scheduler.js';
@@ -93,6 +94,7 @@ async function main() {
     startCustomModelSync(getDb(), scheduler);
     startBuiltinModelDiscovery(getDb(), scheduler);
     startAutomationScheduler(scheduler);
+    startAutomationWatchers();
     startSecurityScanScheduler(scheduler);
 
     // Post-sleep recovery: while the host was suspended (laptop lid, VM

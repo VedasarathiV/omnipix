@@ -1,3 +1,5 @@
+import { statSync } from 'node:fs';
+import { isAbsolute } from 'node:path';
 import { getDb } from '../db/index.js';
 import type { Scheduler } from '../lib/scheduler.js';
 import { notify } from '../lib/notifications.js';
@@ -15,11 +17,50 @@ import { emitWebhook } from './webhooks.js';
 // - Every completion (manual or scheduled) writes a notification; failures
 //   name the run so the trace is one click away.
 
+export const MAX_WATCH_PATHS = 10;
+
+/** Normalize user-supplied watch paths: absolute, existing, files or dirs. */
+export function normalizeWatchPaths(input: unknown): string[] {
+  if (!Array.isArray(input)) throw new Error('watch must be an array of paths.');
+  if (input.length > MAX_WATCH_PATHS) {
+    throw new Error(`watch accepts at most ${MAX_WATCH_PATHS} paths.`);
+  }
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const raw of input) {
+    if (typeof raw !== 'string' || !raw.trim()) throw new Error('watch paths must be non-empty strings.');
+    const path = raw.trim();
+    if (!isAbsolute(path)) throw new Error(`watch path must be absolute: ${path}`);
+    if (seen.has(path)) continue;
+    seen.add(path);
+    let stat;
+    try {
+      stat = statSync(path);
+    } catch {
+      throw new Error(`watch path does not exist: ${path}`);
+    }
+    if (!stat.isFile() && !stat.isDirectory()) throw new Error(`watch path is not a file or directory: ${path}`);
+    out.push(path);
+  }
+  return out;
+}
+
+export function parseWatchJson(raw: string | null | undefined): string[] {
+  if (!raw) return [];
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((p): p is string => typeof p === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
 export interface AutomationRow {
   id: number;
   name: string;
   goal: string;
   schedule: string;
+  watch_json: string;
   model: string;
   enabled: number;
   reviewed: number;
@@ -99,6 +140,7 @@ export interface AutomationInput {
   name: string;
   goal: string;
   schedule?: string;
+  watch?: string[];
   model?: string;
   enabled?: boolean;
 }
@@ -110,12 +152,13 @@ export function createAutomation(input: AutomationInput): number {
   }
   const schedule = (input.schedule ?? '').trim();
   if (schedule && !parseCron(schedule)) throw new Error(`Invalid cron schedule: ${schedule}`);
+  const watch = input.watch === undefined ? [] : normalizeWatchPaths(input.watch);
   try {
     const row = getDb().prepare(
-      `INSERT INTO automations (name, goal, schedule, model, enabled, next_run_at)
-       VALUES (?, ?, ?, ?, ?, ?) RETURNING id`,
+      `INSERT INTO automations (name, goal, schedule, watch_json, model, enabled, next_run_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING id`,
     ).get(
-      name, input.goal.trim(), schedule, input.model?.trim() || 'auto',
+      name, input.goal.trim(), schedule, JSON.stringify(watch), input.model?.trim() || 'auto',
       input.enabled === false ? 0 : 1,
       schedule ? (nextCronFire(schedule)?.toISOString() ?? null) : null,
     ) as { id: number };
@@ -142,11 +185,13 @@ export function updateAutomation(id: number, input: Partial<AutomationInput>): v
   if (!/^[a-z0-9][a-z0-9-_]*$/i.test(name)) throw new Error('Invalid automation name.');
   const schedule = (input.schedule ?? existing.schedule).trim();
   if (schedule && !parseCron(schedule)) throw new Error(`Invalid cron schedule: ${schedule}`);
+  const watch = input.watch === undefined ? parseWatchJson(existing.watch_json) : normalizeWatchPaths(input.watch);
   getDb().prepare(
-    `UPDATE automations SET name = ?, goal = ?, schedule = ?, model = ?, enabled = ?,
+    `UPDATE automations SET name = ?, goal = ?, schedule = ?, watch_json = ?, model = ?, enabled = ?,
        next_run_at = ? WHERE id = ?`,
   ).run(
-    name, (input.goal ?? existing.goal).trim(), schedule, (input.model ?? existing.model).trim() || 'auto',
+    name, (input.goal ?? existing.goal).trim(), schedule, JSON.stringify(watch),
+    (input.model ?? existing.model).trim() || 'auto',
     input.enabled === undefined ? existing.enabled : (input.enabled ? 1 : 0),
     schedule ? (nextCronFire(schedule)?.toISOString() ?? null) : null, id,
   );

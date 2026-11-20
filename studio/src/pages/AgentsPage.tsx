@@ -6,7 +6,7 @@ import { EmptyState } from '../components/EmptyState';
 import { ApprovalPrompt } from '../components/ApprovalPrompt';
 import { useStudio } from '../state/store';
 import { apiFetch } from '../lib/api';
-import { useApprovals, useAutomations, useGroups, useMemories, useRuns, type AgentRun } from '../lib/queries';
+import { useApprovals, useAutomations, useGroups, useMemories, useRunbooks, useRuns, type AgentRun } from '../lib/queries';
 
 const TABS = ['Runs', 'Teams', 'Approvals', 'Hooks', 'Automations', 'Assistant'] as const;
 
@@ -104,11 +104,76 @@ function RunCard({ run, active, onOpen, onStop }: { run: AgentRun; active: boole
 
 function TeamsTab() {
   const { data } = useGroups();
+  const { data: runbooksData } = useRunbooks();
   const { pushToast } = useStudio();
   const queryClient = useQueryClient();
+  const [goal, setGoal] = useState('');
+  const [preset, setPreset] = useState('');
+  const [busy, setBusy] = useState(false);
   const groups = data?.groups ?? [];
+  const runbooks = runbooksData?.runbooks ?? [];
+
+  async function create(e: React.FormEvent) {
+    e.preventDefault();
+    if (!goal.trim()) {
+      pushToast('error', 'Describe the goal first');
+      return;
+    }
+    setBusy(true);
+    try {
+      const body: Record<string, unknown> = { goal: goal.trim() };
+      if (preset) body.preset = preset;
+      else body.auto = true;
+      await apiFetch('/api/agents/groups', { method: 'POST', body: JSON.stringify(body) });
+      pushToast('ok', preset ? `Team started from ${preset}` : 'Team started — the planner is building its tasks');
+      setGoal('');
+      void queryClient.invalidateQueries({ queryKey: ['agent-groups'] });
+    } catch (err) {
+      pushToast('error', err instanceof Error ? err.message : 'Create failed');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const form = (
+    <form onSubmit={e => void create(e)} className="mb-3 rounded-xl border border-line bg-base-1 p-4">
+      <p className="mb-2 text-[13px] font-medium">Start a team</p>
+      <div className="flex flex-col gap-1.5 sm:flex-row">
+        <input
+          value={goal}
+          onChange={e => setGoal(e.target.value)}
+          placeholder="Goal: ship user auth with tests…"
+          className="min-w-0 flex-1 rounded-lg border border-line bg-base-0 px-2.5 py-2 text-xs outline-none placeholder:text-ink-faint focus-visible:ring-2 focus-visible:ring-accent"
+        />
+        <select
+          value={preset}
+          onChange={e => setPreset(e.target.value)}
+          aria-label="Team template"
+          className="rounded-lg border border-line bg-base-0 px-2 py-2 text-xs outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        >
+          <option value="">Auto-plan tasks</option>
+          {runbooks.map(r => (
+            <option key={r.name} value={r.name} title={r.description}>{r.name} — {r.description}</option>
+          ))}
+        </select>
+        <button
+          type="submit"
+          disabled={busy}
+          className="rounded-lg bg-accent px-3 py-2 text-xs font-semibold text-base-0 outline-none hover:opacity-90 focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50"
+        >
+          {busy ? 'Starting…' : 'Start team'}
+        </button>
+      </div>
+    </form>
+  );
+
   if (!groups.length) {
-    return <EmptyState icon={<Users className="size-5" strokeWidth={1.5} />} title="No teams yet" body="Multi-agent crews with a shared workspace appear here." />;
+    return (
+      <div>
+        {form}
+        <EmptyState icon={<Users className="size-5" strokeWidth={1.5} />} title="No teams yet" body="Multi-agent crews with a shared workspace appear here." />
+      </div>
+    );
   }
   async function act(id: number, action: 'stop' | 'resume') {
     try {
@@ -121,6 +186,7 @@ function TeamsTab() {
   }
   return (
     <div className="space-y-2">
+      {form}
       {groups.map(g => (
         <article key={g.id} className="rounded-xl border border-line bg-base-1 p-4">
           <div className="flex items-center gap-2">
@@ -277,13 +343,136 @@ function HooksTab() {
   );
 }
 
+function parseWatchList(raw: string | null): string[] {
+  if (!raw) return [];
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((p): p is string => typeof p === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
 function AutomationsTab() {
   const { data } = useAutomations();
   const { pushToast } = useStudio();
   const queryClient = useQueryClient();
+  const [showForm, setShowForm] = useState(false);
+  const [name, setName] = useState('');
+  const [goal, setGoal] = useState('');
+  const [schedule, setSchedule] = useState('');
+  const [watch, setWatch] = useState('');
+  const [model, setModel] = useState('');
+  const [busy, setBusy] = useState(false);
   const automations = data?.automations ?? [];
+
+  async function create(e: React.FormEvent) {
+    e.preventDefault();
+    if (!name.trim() || !goal.trim()) {
+      pushToast('error', 'Name and goal are required');
+      return;
+    }
+    setBusy(true);
+    try {
+      const body: Record<string, unknown> = { name: name.trim(), goal: goal.trim() };
+      if (schedule.trim()) body.schedule = schedule.trim();
+      const watchPaths = watch.split(',').map(s => s.trim()).filter(Boolean);
+      if (watchPaths.length) body.watch = watchPaths;
+      if (model.trim()) body.model = model.trim();
+      await apiFetch('/api/automations', { method: 'POST', body: JSON.stringify(body) });
+      pushToast('ok', `Automation '${name.trim()}' created — run it once to review`);
+      setName('');
+      setGoal('');
+      setSchedule('');
+      setWatch('');
+      setModel('');
+      setShowForm(false);
+      void queryClient.invalidateQueries({ queryKey: ['automations'] });
+    } catch (err) {
+      pushToast('error', err instanceof Error ? err.message : 'Create failed');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const form = showForm ? (
+    <form onSubmit={e => void create(e)} className="rounded-xl border border-line bg-base-1 p-4">
+      <p className="mb-2 text-[13px] font-medium">New automation</p>
+      <div className="grid gap-1.5 sm:grid-cols-2">
+        <input
+          value={name}
+          onChange={e => setName(e.target.value)}
+          placeholder="Name: morning-briefing"
+          className="rounded-lg border border-line bg-base-0 px-2.5 py-2 text-xs outline-none placeholder:text-ink-faint focus-visible:ring-2 focus-visible:ring-accent"
+        />
+        <input
+          value={schedule}
+          onChange={e => setSchedule(e.target.value)}
+          placeholder="Cron (optional): 0 9 * * *"
+          spellCheck={false}
+          autoComplete="off"
+          className="rounded-lg border border-line bg-base-0 px-2.5 py-2 font-mono text-xs outline-none placeholder:text-ink-faint focus-visible:ring-2 focus-visible:ring-accent"
+        />
+      </div>
+      <textarea
+        value={goal}
+        onChange={e => setGoal(e.target.value)}
+        placeholder="Goal: summarize yesterday's commits in ~/work/app…"
+        rows={2}
+        className="mt-1.5 w-full rounded-lg border border-line bg-base-0 px-2.5 py-2 text-xs outline-none placeholder:text-ink-faint focus-visible:ring-2 focus-visible:ring-accent"
+      />
+      <div className="mt-1.5 grid gap-1.5 sm:grid-cols-2">
+        <input
+          value={watch}
+          onChange={e => setWatch(e.target.value)}
+          placeholder="Watch paths, comma-separated (optional)"
+          spellCheck={false}
+          autoComplete="off"
+          className="rounded-lg border border-line bg-base-0 px-2.5 py-2 font-mono text-xs outline-none placeholder:text-ink-faint focus-visible:ring-2 focus-visible:ring-accent"
+        />
+        <input
+          value={model}
+          onChange={e => setModel(e.target.value)}
+          placeholder="Model (optional): auto"
+          spellCheck={false}
+          autoComplete="off"
+          className="rounded-lg border border-line bg-base-0 px-2.5 py-2 font-mono text-xs outline-none placeholder:text-ink-faint focus-visible:ring-2 focus-visible:ring-accent"
+        />
+      </div>
+      <div className="mt-2 flex gap-1.5">
+        <button
+          type="submit"
+          disabled={busy}
+          className="rounded-lg bg-accent px-3 py-2 text-xs font-semibold text-base-0 outline-none hover:opacity-90 focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50"
+        >
+          {busy ? 'Creating…' : 'Create automation'}
+        </button>
+        <button
+          type="button"
+          onClick={() => setShowForm(false)}
+          className="rounded-lg border border-line px-3 py-2 text-xs outline-none hover:bg-base-2 focus-visible:ring-2 focus-visible:ring-accent"
+        >
+          Cancel
+        </button>
+      </div>
+    </form>
+  ) : (
+    <button
+      type="button"
+      onClick={() => setShowForm(true)}
+      className="flex items-center gap-1.5 rounded-lg border border-line bg-base-1 px-3 py-2 text-xs outline-none hover:bg-base-2 focus-visible:ring-2 focus-visible:ring-accent"
+    >
+      <Plus className="size-3.5" strokeWidth={1.5} /> New automation
+    </button>
+  );
+
   if (!automations.length) {
-    return <EmptyState icon={<Play className="size-5" strokeWidth={1.5} />} title="No automations" body="Scheduled agent goals with a review-first safety gate." />;
+    return (
+      <div className="space-y-2">
+        {form}
+        {!showForm && <EmptyState icon={<Play className="size-5" strokeWidth={1.5} />} title="No automations" body="Scheduled or file-triggered agent goals with a review-first safety gate." />}
+      </div>
+    );
   }
   async function toggle(id: number, enabled: boolean) {
     try {
@@ -304,11 +493,15 @@ function AutomationsTab() {
   }
   return (
     <div className="space-y-2">
-      {automations.map(a => (
+      {form}
+      {automations.map(a => {
+        const watching = parseWatchList(a.watch_json);
+        return (
         <div key={a.id} className="flex items-center gap-3 rounded-xl border border-line bg-base-1 px-4 py-3">
           <div className="min-w-0 flex-1">
             <p className="truncate text-[13px] font-medium">{a.name}{!a.reviewed && <span className="ml-2 rounded-md bg-warn/15 px-1.5 py-0.5 text-[10px] font-semibold text-warn">NEEDS REVIEW</span>}</p>
-            <p className="truncate font-mono text-[11px] text-ink-dim">{a.schedule ?? 'manual'} · last: {a.last_status ?? 'never'}</p>
+            <p className="truncate font-mono text-[11px] text-ink-dim">{a.schedule || 'manual'}{watching.length ? ` · watches ${watching.length} path${watching.length === 1 ? '' : 's'}` : ''} · last: {a.last_status ?? 'never'}</p>
+            {!!watching.length && <p className="truncate font-mono text-[11px] text-ink-faint" title={watching.join(', ')}>{watching.join(', ')}</p>}
           </div>
           <button type="button" onClick={() => void runNow(a.id)} className="shrink-0 rounded-lg border border-line px-2.5 py-1.5 text-xs outline-none hover:bg-base-2 focus-visible:ring-2 focus-visible:ring-accent">Run now</button>
           <button
@@ -322,8 +515,9 @@ function AutomationsTab() {
             <span className={`absolute top-0.5 size-4 rounded-full bg-white transition-all ${a.enabled ? 'left-[18px]' : 'left-0.5'}`} />
           </button>
         </div>
-      ))}
-      <p className="text-xs text-ink-dim">Schedules fire only after one reviewed manual run.</p>
+        );
+      })}
+      <p className="text-xs text-ink-dim">Schedules and file watches fire only after one reviewed manual run.</p>
     </div>
   );
 }

@@ -563,7 +563,7 @@ describe('agent groups', () => {
 
   it('ships valid runbook presets', () => {
     const runbooks = listRunbooks();
-    expect(runbooks.map(r => r.name).sort()).toEqual(['incident-response', 'startup-mvp']);
+    expect(runbooks.map(r => r.name).sort()).toEqual(['code-review', 'incident-response', 'research-sweep', 'startup-mvp']);
     for (const runbook of runbooks) {
       const tasks = resolveRunbook(runbook.name, 'Build a widget API')!;
       expect(validateTaskGraph(tasks)).toBeNull();
@@ -589,7 +589,7 @@ describe('agent groups', () => {
     expect(group.status).toBe('done');
 
     const listed = await call('GET', '/api/agents/runbooks');
-    expect(listed.body.runbooks.map((r: any) => r.name).sort()).toEqual(['incident-response', 'startup-mvp']);
+    expect(listed.body.runbooks.map((r: any) => r.name).sort()).toEqual(['code-review', 'incident-response', 'research-sweep', 'startup-mvp']);
 
     expect((await call('POST', '/api/agents/groups', { goal: 'x', preset: 'nope' })).status).toBe(400);
     expect((await call('POST', '/api/agents/groups', {

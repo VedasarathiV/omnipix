@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { GripVertical, KeyRound, X } from 'lucide-react';
-import { useKeys, useModels } from '../lib/queries';
+import { Cpu, GripVertical, KeyRound, X } from 'lucide-react';
+import { useKeys, useModels, useOllama } from '../lib/queries';
 import { apiFetch } from '../lib/api';
 import { useStudio } from '../state/store';
 import { EmptyState } from '../components/EmptyState';
@@ -78,7 +78,8 @@ export function ProvidersPage() {
         <h1 className="text-lg font-semibold">Provider keys</h1>
         <span className="font-mono text-xs text-ink-dim">{configured} of {platforms.length} configured</span>
       </div>
-      <div className="grid gap-3 md:grid-cols-2">
+      <OllamaCard />
+      <div className="mt-3 grid gap-3 md:grid-cols-2">
         {ids.map(id => {
           const platformModels = models.filter(m => m.platform === id);
           const platformKeys = keysByPlatform.get(id) ?? [];
@@ -143,6 +144,101 @@ export function ProvidersPage() {
       <p className="mt-3 text-xs text-ink-dim">Drag cards (or use ↑ ↓) to set the Auto fallback order.</p>
       {adding && <AddKeyDialog platform={adding} onClose={() => setAdding(null)} />}
     </div>
+  );
+}
+
+function OllamaCard() {
+  const { data, isLoading } = useOllama();
+  const { pushToast } = useStudio();
+  const queryClient = useQueryClient();
+  const [pull, setPull] = useState('');
+  const [busy, setBusy] = useState<'connect' | 'pull' | null>(null);
+  const ollama = data?.ollama;
+
+  function refresh() {
+    void queryClient.invalidateQueries({ queryKey: ['ollama'] });
+    void queryClient.invalidateQueries({ queryKey: ['keys'] });
+    void queryClient.invalidateQueries({ queryKey: ['models'] });
+  }
+
+  async function connect() {
+    setBusy('connect');
+    try {
+      const res = await apiFetch<{ models: string[]; created: string[] }>('/api/local/ollama/connect', { method: 'POST' });
+      pushToast('ok', res.created.length ? `Connected — registered ${res.created.join(', ')}` : `Connected — ${res.models.length} model(s) already registered`);
+      refresh();
+    } catch (err) {
+      pushToast('error', err instanceof Error ? err.message : 'Connect failed');
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  async function pullModel(e: React.FormEvent) {
+    e.preventDefault();
+    if (!pull.trim()) return;
+    setBusy('pull');
+    try {
+      await apiFetch('/api/local/ollama/pull', { method: 'POST', body: JSON.stringify({ model: pull.trim() }) });
+      pushToast('ok', `Pulled ${pull.trim()}`);
+      setPull('');
+      refresh();
+    } catch (err) {
+      pushToast('error', err instanceof Error ? err.message : 'Pull failed');
+    } finally {
+      setBusy(null);
+    }
+  }
+
+  return (
+    <article className="rounded-xl border border-line bg-base-1 p-4">
+      <div className="flex items-center gap-2">
+        <Cpu className="size-4 text-ink-dim" strokeWidth={1.5} />
+        <span className={`size-2 rounded-full ${isLoading ? 'animate-pulse bg-ink-faint' : ollama?.running ? 'bg-ok' : 'bg-bad'}`} />
+        <p className="text-sm font-semibold">Local Ollama</p>
+        <span className="rounded-md bg-ok/15 px-1.5 py-0.5 text-[10px] font-semibold text-ok">FREE · NO KEY</span>
+        <span className="flex-1" />
+        <span className="font-mono text-[11px] text-ink-dim">
+          {isLoading ? 'probing…' : ollama?.running ? `v${ollama.version ?? '?'} · ${ollama.models.length} pulled · ${ollama.registeredModels.length} registered` : 'not running'}
+        </span>
+      </div>
+      {!isLoading && ollama && (
+        <p className="mt-2 font-mono text-[11px] text-ink-dim">
+          {ollama.running
+            ? ollama.models.length
+              ? `On this laptop: ${ollama.models.map(m => m.name).join(', ')}`
+              : 'Daemon is up but no models are pulled yet.'
+            : 'Start Ollama (`ollama serve` or the Ollama app), then connect. Models run on your laptop — no API key, no cost.'}
+        </p>
+      )}
+      <div className="mt-3 flex gap-1.5">
+        <button
+          type="button"
+          onClick={() => void connect()}
+          disabled={busy !== null || isLoading}
+          className="rounded-lg border border-line px-2.5 py-1.5 text-xs outline-none hover:bg-base-2 focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50"
+        >
+          {busy === 'connect' ? 'Connecting…' : ollama?.connected ? 'Reconnect (pick up new models)' : 'Connect local Ollama'}
+        </button>
+        <form onSubmit={e => void pullModel(e)} className="flex flex-1 gap-1.5">
+          <input
+            value={pull}
+            onChange={e => setPull(e.target.value)}
+            placeholder="Pull a model: qwen2.5-coder:7b"
+            spellCheck={false}
+            autoComplete="off"
+            className="min-w-0 flex-1 rounded-lg border border-line bg-base-0 px-2.5 py-1.5 font-mono text-xs outline-none placeholder:text-ink-faint focus-visible:ring-2 focus-visible:ring-accent"
+          />
+          <button
+            type="submit"
+            disabled={busy !== null || !pull.trim()}
+            className="rounded-lg border border-line px-2.5 py-1.5 text-xs outline-none hover:bg-base-2 focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50"
+          >
+            {busy === 'pull' ? 'Pulling…' : 'Pull'}
+          </button>
+        </form>
+      </div>
+    </article>
   );
 }
 

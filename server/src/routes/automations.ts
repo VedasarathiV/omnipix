@@ -9,6 +9,7 @@ import {
   runAutomationOnce,
   updateAutomation,
 } from '../services/automations.js';
+import { refreshAutomationWatchers } from '../services/automation-watch.js';
 
 export const automationsRouter = Router();
 
@@ -16,6 +17,7 @@ const automationSchema = z.object({
   name: z.string().trim().min(1).max(64),
   goal: z.string().trim().min(1).max(8000),
   schedule: z.string().trim().max(64).optional(),
+  watch: z.array(z.string().trim().min(1).max(1024)).max(10).optional(),
   model: z.string().trim().min(1).max(200).optional(),
   enabled: z.boolean().optional(),
 });
@@ -32,6 +34,7 @@ automationsRouter.post('/', (req: Request, res: Response) => {
   }
   try {
     const id = createAutomation(parsed.data);
+    refreshAutomationWatchers();
     res.status(201).json({ automation: getAutomation(id) });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -67,6 +70,7 @@ automationsRouter.patch('/:id', (req: Request, res: Response) => {
   }
   try {
     updateAutomation(id, parsed.data);
+    refreshAutomationWatchers();
     res.json({ automation: getAutomation(id) });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
@@ -85,6 +89,7 @@ automationsRouter.delete('/:id', (req: Request, res: Response) => {
     res.status(404).json({ error: { message: 'Automation not found' } });
     return;
   }
+  refreshAutomationWatchers();
   res.json({ deleted: id });
 });
 

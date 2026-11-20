@@ -82,6 +82,7 @@ const VOICE_MODELS_FILENAME = '20261119_000022_voice_models.ts';
 const APPROVAL_RULES_FILENAME = '20261119_000023_approval_rules.ts';
 const WEBHOOKS_FILENAME = '20261119_000024_webhooks.ts';
 const DEBATES_FILENAME = '20261119_000025_debates.ts';
+const AUTOMATION_WATCH_FILENAME = '20261119_000026_automation_watch.ts';
 
 interface SchemaRow {
   type: string;
@@ -211,6 +212,7 @@ describe('migration round trip', () => {
         APPROVAL_RULES_FILENAME,
         WEBHOOKS_FILENAME,
         DEBATES_FILENAME,
+        AUTOMATION_WATCH_FILENAME,
       ]);
     } finally {
       db.close();

@@ -250,9 +250,40 @@ export interface AutomationRow {
   name: string;
   goal: string;
   schedule: string | null;
+  watch_json: string | null;
   enabled: number;
   reviewed: number;
   last_status: string | null;
+}
+
+export interface OllamaStatus {
+  running: boolean;
+  version: string | null;
+  models: { name: string; size: number | null }[];
+  connected: boolean;
+  registeredModels: string[];
+}
+
+export function useOllama() {
+  return useQuery<{ ollama: OllamaStatus }>({
+    queryKey: ['ollama'],
+    queryFn: () => apiFetch('/api/local/ollama'),
+    staleTime: 15_000,
+  });
+}
+
+export interface RunbookRow {
+  name: string;
+  description: string;
+  tasks: { name: string; role: string; goal: string }[];
+}
+
+export function useRunbooks() {
+  return useQuery<{ runbooks: RunbookRow[] }>({
+    queryKey: ['runbooks'],
+    queryFn: () => apiFetch('/api/agents/runbooks'),
+    staleTime: 60_000,
+  });
 }
 
 export function useAutomations() {

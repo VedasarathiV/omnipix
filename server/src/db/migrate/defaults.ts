@@ -78,6 +78,7 @@ import * as voiceModels from '../migrations/20261119_000022_voice_models.js';
 import * as approvalRules from '../migrations/20261119_000023_approval_rules.js';
 import * as webhooks from '../migrations/20261119_000024_webhooks.js';
 import * as debates from '../migrations/20261119_000025_debates.js';
+import * as automationWatch from '../migrations/20261119_000026_automation_watch.js';
 
 export interface MigrationModule {
   up(db: Db): void;
@@ -167,6 +168,7 @@ export const VOICE_MODELS_FILENAME = '20261119_000022_voice_models.ts';
 export const APPROVAL_RULES_FILENAME = '20261119_000023_approval_rules.ts';
 export const WEBHOOKS_FILENAME = '20261119_000024_webhooks.ts';
 export const DEBATES_FILENAME = '20261119_000025_debates.ts';
+export const AUTOMATION_WATCH_FILENAME = '20261119_000026_automation_watch.ts';
 
 export const DEFAULT_MIGRATIONS: readonly DefaultMigration[] = [
   { filename: LEGACY_BASELINE_FILENAME, module: legacyBaseline },
@@ -248,4 +250,5 @@ export const DEFAULT_MIGRATIONS: readonly DefaultMigration[] = [
   { filename: APPROVAL_RULES_FILENAME, module: approvalRules },
   { filename: WEBHOOKS_FILENAME, module: webhooks },
   { filename: DEBATES_FILENAME, module: debates },
+  { filename: AUTOMATION_WATCH_FILENAME, module: automationWatch },
 ];
