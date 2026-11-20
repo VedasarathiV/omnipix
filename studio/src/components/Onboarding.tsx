@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { FolderGit2, KeyRound, Rocket, X } from 'lucide-react';
+import { Bot, KeyRound, MessagesSquare, X } from 'lucide-react';
 import { useStudio } from '../state/store';
 
 const SEEN_KEY = 'studio:onboarded';
@@ -12,9 +12,9 @@ function seen(): boolean {
   }
 }
 
-/** First-run onboarding: key → workspace → done. Shown once per browser. */
+/** First-run onboarding: keys → chat modes → agents. Shown once per browser. */
 export function Onboarding() {
-  const { setRail, pushToast } = useStudio();
+  const { setRail } = useStudio();
   const [open, setOpen] = useState(() => !seen());
   const [step, setStep] = useState(0);
 
@@ -29,26 +29,27 @@ export function Onboarding() {
     setOpen(false);
   }
 
+  const last = 2;
   const steps = [
     {
       icon: <KeyRound className="size-6 text-accent" strokeWidth={1.5} />,
       title: 'Add a provider key',
-      body: 'OmniPix routes across your own keys — Groq, Cerebras, and Google all have free tiers. Keys stay encrypted on this machine.',
+      body: 'OmniPix routes across your own keys — Groq, Cerebras, and Google all have free tiers. Keys stay encrypted on this machine. No key? Connect free local Ollama instead.',
       cta: 'Add a key',
-      run: () => { setRail('keys'); finish(); pushToast('info', 'Pick a provider to add your first key'); },
+      run: () => { setRail('keys'); setStep(1); },
     },
     {
-      icon: <FolderGit2 className="size-6 text-accent" strokeWidth={1.5} />,
-      title: 'Open a workspace',
-      body: 'Point the agent at a repo. Plans, diffs, and terminal sessions all stay scoped to it.',
-      cta: 'Open folder…',
-      run: () => { setRail('chat'); finish(); pushToast('ok', 'Workspace omnipix opened'); },
+      icon: <MessagesSquare className="size-6 text-accent" strokeWidth={1.5} />,
+      title: 'Chat, plan, or delegate',
+      body: 'Ask answers questions. Plan drafts a checklist for approval. Agent edits files and runs commands, asking before anything risky.',
+      cta: 'Continue',
+      run: () => { setStep(2); },
     },
     {
-      icon: <Rocket className="size-6 text-accent" strokeWidth={1.5} />,
-      title: 'Run your first task',
-      body: 'Ask a question, approve a plan, or let the agent edit. Every change is reviewable and reversible.',
-      cta: 'Start chatting',
+      icon: <Bot className="size-6 text-accent" strokeWidth={1.5} />,
+      title: 'Crews that work alone',
+      body: 'The Agents tab runs multi-agent teams and scheduled automations. Every run keeps a step trace you can review and revert.',
+      cta: 'Get started',
       run: () => { setRail('chat'); finish(); },
     },
   ];
@@ -69,12 +70,7 @@ export function Onboarding() {
           {step > 0 && (
             <button type="button" onClick={() => setStep(step - 1)} className="rounded-lg border border-line px-4 py-2 text-xs outline-none hover:bg-base-2 focus-visible:ring-2 focus-visible:ring-accent">Back</button>
           )}
-          {step > 0 && step < steps.length - 1 && (
-            <button type="button" onClick={() => setStep(step + 1)} className="rounded-lg bg-accent px-4 py-2 text-xs font-semibold text-base-0 outline-none hover:opacity-90 focus-visible:ring-2 focus-visible:ring-accent">Next</button>
-          )}
-          {(step === 0 || step === steps.length - 1) && (
-            <button type="button" onClick={current.run} className="rounded-lg bg-accent px-4 py-2 text-xs font-semibold text-base-0 outline-none hover:opacity-90 focus-visible:ring-2 focus-visible:ring-accent">{current.cta}</button>
-          )}
+          <button type="button" onClick={current.run} className="rounded-lg bg-accent px-4 py-2 text-xs font-semibold text-base-0 outline-none hover:opacity-90 focus-visible:ring-2 focus-visible:ring-accent">{step === last ? 'Get started' : current.cta}</button>
         </div>
         <button
           type="button"

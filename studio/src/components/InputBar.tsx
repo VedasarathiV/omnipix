@@ -1,21 +1,22 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { AtSign, LayoutTemplate, Mic, Paperclip, Send, Slash, X } from 'lucide-react';
+import { AtSign, Image as ImageIcon, LayoutTemplate, Mic, Paperclip, Send, Slash, X } from 'lucide-react';
 import { useStudio } from '../state/store';
 import { ModelPicker } from './ModelPicker';
 import { apiFetch, streamChat } from '../lib/api';
 import { readSampling } from './SettingsModal';
 import { startDictationRecording, transcribeAudio, type DictationRecorder } from '../lib/voice';
-import { useConversation, useDocs, useUnifiedKey, useVoiceSettings, type AgentRun, type Conversation } from '../lib/queries';
+import { useConversation, useDocs, useUnifiedKey, useVoiceSettings, type AgentRun, type Conversation, type DocRow } from '../lib/queries';
 
+// Every entry does exactly what its description says: /clear and /plan act
+// locally, the rest expand into full prompts that are then sent.
 const SLASH = [
-  { cmd: '/plan', desc: 'Draft a plan for approval' },
-  { cmd: '/test', desc: 'Run the test suite' },
-  { cmd: '/fix', desc: 'Fix the last failure' },
-  { cmd: '/explain', desc: 'Explain the selected code' },
-  { cmd: '/commit', desc: 'Suggest a commit message' },
-  { cmd: '/clear', desc: 'Clear this chat' },
-];
+  { cmd: '/plan', desc: 'Switch to Plan mode', action: 'mode' },
+  { cmd: '/test', desc: 'Run the test suite', expand: 'Run the test suite and report failures with file:line.' },
+  { cmd: '/fix', desc: 'Fix the last failure', expand: 'Fix the last failure. Reproduce it first if needed, then verify the fix.' },
+  { cmd: '/commit', desc: 'Suggest a commit message', expand: 'Suggest a commit message for the current changes.' },
+  { cmd: '/clear', desc: 'Clear this chat', action: 'clear' },
+] as const;
 
 
 const TEMPLATES = [
@@ -25,10 +26,28 @@ const TEMPLATES = [
   { name: 'Refactor', text: 'Refactor for clarity without changing behavior. Keep the diff minimal: ' },
 ];
 
+const ATTACH_TEXT_MAX_BYTES = 100 * 1024;
+const ATTACH_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
+const IMAGE_MIMES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'];
+const CHUNKS_PER_CHIP = 3;
+const STOPWORDS = new Set('the,a,an,and,or,for,with,from,that,this,what,when,how,why,can,you,your,have,has,are,was,were,will,would,should,could,please,into,over'.split(','));
+
+function distinctiveWords(text: string, max: number): string[] {
+  const words = text.toLowerCase().replace(/[^a-z0-9\s-]/g, ' ').split(/\s+/)
+    .filter(w => w.length > 3 && !STOPWORDS.has(w) && !/^\d+$/.test(w));
+  return [...new Set(words)].slice(0, max);
+}
+
+interface ResolvedChip {
+  url: string;
+  title: string;
+  chunks: Array<{ section: string; content: string }>;
+}
+
 export function InputBar() {
   const {
     mode, setMode, model, pushToast, conversationId, setConversationId,
-    setActiveRunId, setStreamingReply, dictation,
+    setActiveRunId, setStreamingReply, dictation, editDraft, setEditDraft,
   } = useStudio();
   const queryClient = useQueryClient();
   const { data: keyData } = useUnifiedKey();
@@ -38,6 +57,7 @@ export function InputBar() {
   const [recorder, setRecorder] = useState<DictationRecorder | null>(null);
   const [transcribing, setTranscribing] = useState(false);
   const lastDictationSeq = useRef(-1);
+  const lastEditSeq = useRef(-1);
 
   // Floating-mic takes land here.
   useEffect(() => {
@@ -47,6 +67,16 @@ export function InputBar() {
       boxRef.current?.focus();
     }
   }, [dictation]);
+
+  // Message edits replace the box content (resend continues from the edit).
+  useEffect(() => {
+    if (editDraft && editDraft.seq !== lastEditSeq.current) {
+      lastEditSeq.current = editDraft.seq;
+      setText(editDraft.text);
+      setEditDraft(null);
+      boxRef.current?.focus();
+    }
+  }, [editDraft, setEditDraft]);
 
   async function toggleDictation() {
     if (recorder) {
@@ -77,7 +107,8 @@ export function InputBar() {
       pushToast('error', err instanceof Error ? err.message : 'Microphone unavailable');
     }
   }
-  const mentionFiles = (docsData?.docs ?? []).map(d => d.source_url);
+  const docs = docsData?.docs ?? [];
+  const mentionFiles = docs.map(d => d.source_url);
   // Prompt history (↑): the current conversation's own user messages, newest first.
   const history = (conversation?.messages ?? [])
     .filter(m => m.role === 'user' && typeof m.content === 'string')
@@ -85,22 +116,143 @@ export function InputBar() {
     .reverse();
   const [text, setText] = useState('');
   const [chips, setChips] = useState<string[]>([]);
+  const [image, setImage] = useState<{ name: string; dataUrl: string } | null>(null);
   const [menu, setMenu] = useState<'slash' | 'mention' | 'templates' | null>(null);
   const [histIdx, setHistIdx] = useState(-1);
   const [sending, setSending] = useState(false);
   const boxRef = useRef<HTMLTextAreaElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  function docFor(url: string): DocRow | undefined {
+    return docs.find(d => d.source_url === url);
+  }
+
+  /** Resolve attached docs to their top chunks for the given goal text. */
+  async function resolveChips(urls: string[], goal: string): Promise<ResolvedChip[]> {
+    const out: ResolvedChip[] = [];
+    const queryWords = distinctiveWords(goal, 6);
+    for (const url of urls) {
+      const doc = docFor(url);
+      if (!doc) continue;
+      // Goal-matched chunks first; fall back to title-matched so a chip
+      // always resolves to real content when the doc has any.
+      const queries = [queryWords.join(' '), ...distinctiveWords(doc.title, 4).map(w => w)];
+      let chunks: Array<{ section: string; content: string }> = [];
+      for (const q of [queries.join(' ') || doc.title, doc.title]) {
+        if (!q.trim()) continue;
+        try {
+          const res = await apiFetch<{ chunks: Array<{ section: string; content: string }> }>(
+            `/api/memories/docs/search?project=${encodeURIComponent(doc.project_key)}&q=${encodeURIComponent(q)}&url=${encodeURIComponent(url)}&limit=${CHUNKS_PER_CHIP}`,
+          );
+          if (res.chunks.length) { chunks = res.chunks; break; }
+        } catch {
+          // One unresolvable chip must not block the send.
+        }
+      }
+      out.push({ url, title: doc.title, chunks });
+    }
+    return out;
+  }
+
+  function withChipContext(goal: string, resolved: ResolvedChip[]): string {
+    if (!resolved.length) return goal;
+    const blocks = resolved.map(r => {
+      if (!r.chunks.length) return `--- context: ${r.title} (${r.url}) — no matching chunks found ---`;
+      const body = r.chunks.map(c => (c.section ? `## ${c.section}\n` : '') + c.content).join('\n\n');
+      return `--- context from ${r.title} (${r.url}) ---\n${body}`;
+    });
+    return `${blocks.join('\n\n')}\n\n--- user request ---\n${goal}`;
+  }
+
+  function handleAttachClick() {
+    fileRef.current?.click();
+  }
+
+  async function handleAttachFile(file: File) {
+    if (IMAGE_MIMES.includes(file.type)) {
+      if (mode !== 'ask') {
+        pushToast('error', 'Images attach in Ask mode — agent runs take text only.');
+        return;
+      }
+      if (file.size > ATTACH_IMAGE_MAX_BYTES) {
+        pushToast('error', `Image too large (${Math.round(file.size / 1024 / 1024)} MB; 5 MB max).`);
+        return;
+      }
+      const dataUrl = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = () => reject(new Error('read failed'));
+        reader.readAsDataURL(file);
+      }).catch(() => null);
+      if (!dataUrl) {
+        pushToast('error', 'Could not read that image.');
+        return;
+      }
+      setImage({ name: file.name, dataUrl });
+      return;
+    }
+    if (file.size > ATTACH_TEXT_MAX_BYTES) {
+      pushToast('error', `File too large (${Math.round(file.size / 1024)} KB; 100 KB of text max).`);
+      return;
+    }
+    const content = await file.text().catch(() => null);
+    if (content === null || content.includes('\0')) {
+      pushToast('error', 'Only text files and images attach — that file looks binary.');
+      return;
+    }
+    setText(current => `${current}${current && !current.endsWith('\n') ? '\n' : ''}\n--- attached file: ${file.name} ---\n${content.trim()}\n`);
+    boxRef.current?.focus();
+  }
 
   async function send() {
-    const goal = text.trim();
-    if (!goal || sending) return;
+    let goal = text.trim();
+    if ((!goal && !image) || sending) return;
+    // Slash commands: /clear and /plan act, the rest expand to real prompts.
+    if (goal.startsWith('/')) {
+      const [cmd, ...rest] = goal.split(/\s+/);
+      const tail = rest.join(' ').trim();
+      if (cmd === '/clear') {
+        setConversationId(null);
+        setActiveRunId(null);
+        setText('');
+        setChips([]);
+        setImage(null);
+        setMenu(null);
+        setHistIdx(-1);
+        pushToast('ok', 'Started a new chat');
+        return;
+      }
+      if (cmd === '/plan') {
+        setMode('plan');
+        if (!tail) {
+          setText('');
+          setMenu(null);
+          pushToast('info', 'Plan mode on — describe the change to draft a plan');
+          return;
+        }
+        goal = tail;
+      } else {
+        const entry = SLASH.find(s => (s as { cmd?: string }).cmd === cmd);
+        const expansion = entry && 'expand' in entry ? (entry.expand as string) : null;
+        if (expansion) goal = tail ? `${expansion} ${tail}` : expansion;
+      }
+    }
     setSending(true);
     try {
+      const resolved = await resolveChips(chips, goal);
+      const full = withChipContext(goal, resolved);
       if (mode === 'ask') {
-        await sendChat(goal);
+        await sendChat(full, image?.dataUrl ?? null);
       } else {
+        // Images attach in Ask mode only; a mode switch after attaching must
+        // refuse loudly rather than silently drop the image.
+        if (image) {
+          pushToast('error', 'Images send in Ask mode — remove it or switch back to Ask.');
+          return;
+        }
         const run = await apiFetch<AgentRun>('/api/agents/runs', {
           method: 'POST',
-          body: JSON.stringify({ goal, model, planMode: mode === 'plan' }),
+          body: JSON.stringify({ goal: full, model, planMode: mode === 'plan' }),
         });
         setConversationId(null);
         setActiveRunId(run.id);
@@ -108,6 +260,8 @@ export function InputBar() {
         void queryClient.invalidateQueries({ queryKey: ['agent-runs'] });
       }
       setText('');
+      setChips([]);
+      setImage(null);
       setMenu(null);
       setHistIdx(-1);
     } catch (err) {
@@ -117,16 +271,16 @@ export function InputBar() {
     }
   }
 
-  async function sendChat(goal: string) {
+  async function sendChat(goal: string, imageDataUrl: string | null) {
     const apiKey = keyData?.apiKey;
     if (!apiKey) {
       pushToast('error', 'No unified API key — add a provider key first.');
       return;
     }
     let convId = conversationId;
-    let messages: Array<{ role: string; content: string }> = (conversation?.messages ?? []).map(m => ({
+    let messages: Array<{ role: string; content: unknown }> = (conversation?.messages ?? []).map(m => ({
       role: m.role,
-      content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content),
+      content: m.content,
     }));
     if (convId === null) {
       const created = await apiFetch<Conversation>('/api/conversations', {
@@ -136,7 +290,13 @@ export function InputBar() {
       convId = created.id;
       setConversationId(convId);
     }
-    messages = [...messages, { role: 'user', content: goal }];
+    const userContent: unknown = imageDataUrl
+      ? [
+          ...(goal ? [{ type: 'text', text: goal }] : []),
+          { type: 'image_url', image_url: { url: imageDataUrl } },
+        ]
+      : goal;
+    messages = [...messages, { role: 'user', content: userContent }];
     await apiFetch(`/api/conversations/${convId}`, {
       method: 'PUT',
       body: JSON.stringify({ messages }),
@@ -168,20 +328,36 @@ export function InputBar() {
     <div className="shrink-0 border-t border-line bg-base-1 p-3">
       {chips.length > 0 && (
         <div className="mb-2 flex flex-wrap gap-1.5" aria-label="Attached context">
-          {chips.map(c => (
-            <span key={c} className="flex items-center gap-1 rounded-md bg-base-2 py-1 pr-1 pl-2 font-mono text-[11px]">
-              {c} <span className="text-ink-faint">1.2k</span>
-              <button
-                type="button"
-                aria-label={`Remove ${c}`}
-                onClick={() => setChips(list => list.filter(x => x !== c))}
-                className="rounded p-0.5 text-ink-faint outline-none hover:text-ink focus-visible:ring-2 focus-visible:ring-accent"
-              >
-                <X className="size-3" strokeWidth={1.5} />
-              </button>
-            </span>
-          ))}
-          <span className="py-1 font-mono text-[11px] text-ink-faint">2.4k tokens</span>
+          {chips.map(c => {
+            const doc = docFor(c);
+            return (
+              <span key={c} title={c} className="flex items-center gap-1 rounded-md bg-base-2 py-1 pr-1 pl-2 font-mono text-[11px]">
+                {doc?.title ?? c} <span className="text-ink-faint">{doc ? `${doc.chunks} chunks` : ''}</span>
+                <button
+                  type="button"
+                  aria-label={`Remove ${c}`}
+                  onClick={() => setChips(list => list.filter(x => x !== c))}
+                  className="rounded p-0.5 text-ink-faint outline-none hover:text-ink focus-visible:ring-2 focus-visible:ring-accent"
+                >
+                  <X className="size-3" strokeWidth={1.5} />
+                </button>
+              </span>
+            );
+          })}
+        </div>
+      )}
+      {image && (
+        <div className="mb-2 flex items-center gap-2 rounded-lg border border-line bg-base-2 px-2 py-1.5">
+          <ImageIcon className="size-4 text-ink-dim" strokeWidth={1.5} />
+          <span className="min-w-0 flex-1 truncate font-mono text-[11px]">{image.name}</span>
+          <button
+            type="button"
+            aria-label={`Remove ${image.name}`}
+            onClick={() => setImage(null)}
+            className="rounded p-0.5 text-ink-faint outline-none hover:text-ink focus-visible:ring-2 focus-visible:ring-accent"
+          >
+            <X className="size-3" strokeWidth={1.5} />
+          </button>
         </div>
       )}
       <div className="relative">
@@ -244,8 +420,20 @@ export function InputBar() {
           aria-label="Message input"
           className="w-full resize-none rounded-xl border border-line bg-base-0 px-3 pt-2.5 pb-11 text-sm outline-none placeholder:text-ink-faint focus-visible:ring-2 focus-visible:ring-accent"
         />
+        <input
+          ref={fileRef}
+          type="file"
+          aria-hidden
+          tabIndex={-1}
+          className="hidden"
+          onChange={e => {
+            const file = e.target.files?.[0];
+            e.target.value = '';
+            if (file) void handleAttachFile(file);
+          }}
+        />
         <div className="absolute right-2 bottom-2 left-2 flex items-center gap-1">
-          <IconBtn label="Attach file or image" onClick={() => pushToast('info', 'Drop files or paste a screenshot')}><Paperclip className="size-4" strokeWidth={1.5} /></IconBtn>
+          <IconBtn label="Attach file or image" onClick={handleAttachClick}><Paperclip className="size-4" strokeWidth={1.5} /></IconBtn>
           <IconBtn label="Mention file (@)" onClick={() => { setText(t => t + '@'); setMenu('mention'); boxRef.current?.focus(); }}><AtSign className="size-4" strokeWidth={1.5} /></IconBtn>
           <IconBtn label="Prompt templates" onClick={() => setMenu(menu === 'templates' ? null : 'templates')}><LayoutTemplate className="size-4" strokeWidth={1.5} /></IconBtn>
           <select
@@ -272,7 +460,7 @@ export function InputBar() {
             type="button"
             aria-label="Send (Enter)"
             onClick={() => void send()}
-            disabled={!text.trim() || sending}
+            disabled={(!text.trim() && !image) || sending}
             className="flex size-8 items-center justify-center rounded-lg bg-accent text-base-0 outline-none hover:opacity-90 focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-40"
           >
             <Send className="size-4" strokeWidth={1.5} />

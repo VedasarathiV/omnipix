@@ -104,7 +104,12 @@ export function TerminalPanel() {
           type="button"
           title="Copy output"
           aria-label="Copy output"
-          onClick={() => pushToast('ok', 'Terminal output copied')}
+          onClick={() => {
+            void navigator.clipboard.writeText(`$ ${active.command}\n${active.output}`).then(
+              () => pushToast('ok', 'Terminal output copied'),
+              () => pushToast('error', 'Copy failed — clipboard unavailable'),
+            );
+          }}
           className="rounded-md p-1 text-ink-faint outline-none hover:bg-base-2 hover:text-ink focus-visible:ring-2 focus-visible:ring-accent"
         >
           <Copy className="size-3.5" strokeWidth={1.5} />

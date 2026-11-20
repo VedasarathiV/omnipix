@@ -1,18 +1,52 @@
 import { useState } from 'react';
-import { Check, Copy, FileDiff, GitBranch, History, Pencil, Trash2, WrapText } from 'lucide-react';
+import { Check, Copy, GitBranch, Pencil, Trash2, WrapText } from 'lucide-react';
 import type { ChatMessage } from '../types';
 import { useStudio } from '../state/store';
 
-export function MessageBubble({ message }: { message: ChatMessage }) {
+/** Render a conversation message part: plain strings as-is, array content
+ *  (vision turns) as its text parts plus an image marker per image part. */
+export function renderMessageContent(content: unknown): string {
+  if (typeof content === 'string') return content;
+  if (!Array.isArray(content)) return '';
+  const out: string[] = [];
+  for (const part of content) {
+    if (typeof part === 'string') {
+      out.push(part);
+    } else if (part && typeof part === 'object') {
+      const p = part as { type?: string; text?: string };
+      if (p.type === 'text' && typeof p.text === 'string') out.push(p.text);
+      else if (p.type === 'image_url') out.push('[image attached]');
+    }
+  }
+  return out.join('\n');
+}
+
+export function MessageBubble({
+  message,
+  onDelete,
+  onBranch,
+  onEdit,
+}: {
+  message: ChatMessage;
+  /** Conversation actions; omitted for run-final and streaming bubbles. */
+  onDelete?: () => void;
+  onBranch?: () => void;
+  onEdit?: () => void;
+}) {
   const { pushToast } = useStudio();
   const [wrapped, setWrapped] = useState(false);
   const [copied, setCopied] = useState(false);
   const mine = message.role === 'user';
 
-  function copy() {
-    setCopied(true);
-    pushToast('ok', 'Copied to clipboard');
-    window.setTimeout(() => setCopied(false), 1500);
+  async function copy() {
+    try {
+      await navigator.clipboard.writeText(message.text);
+      setCopied(true);
+      pushToast('ok', 'Copied to clipboard');
+      window.setTimeout(() => setCopied(false), 1500);
+    } catch {
+      pushToast('error', 'Copy failed — clipboard unavailable');
+    }
   }
 
   return (
@@ -30,17 +64,11 @@ export function MessageBubble({ message }: { message: ChatMessage }) {
         </span>
       </div>
       <div className="mt-1 flex items-center gap-0.5 opacity-0 group-hover:opacity-100 focus-within:opacity-100">
-        <MsgBtn label="Copy" onClick={copy}>{copied ? <Check className="size-3.5 text-ok" strokeWidth={1.5} /> : <Copy className="size-3.5" strokeWidth={1.5} />}</MsgBtn>
-        {!mine && (
-          <>
-            <MsgBtn label="Apply to file" onClick={() => pushToast('ok', 'Applied to src/auth/session.ts')}><FileDiff className="size-3.5" strokeWidth={1.5} /></MsgBtn>
-            <MsgBtn label="Toggle wrap" onClick={() => setWrapped(w => !w)}><WrapText className="size-3.5" strokeWidth={1.5} /></MsgBtn>
-            <MsgBtn label="Branch from here" onClick={() => pushToast('ok', 'Branched chat from this message')}><GitBranch className="size-3.5" strokeWidth={1.5} /></MsgBtn>
-          </>
-        )}
-        {mine && <MsgBtn label="Edit and resend" onClick={() => pushToast('info', 'Editing message…')}><Pencil className="size-3.5" strokeWidth={1.5} /></MsgBtn>}
-        {message.checkpoint && <MsgBtn label="Restore checkpoint" onClick={() => pushToast('ok', 'Checkpoint restored')}><History className="size-3.5" strokeWidth={1.5} /></MsgBtn>}
-        <MsgBtn label="Delete message" onClick={() => pushToast('error', 'Message deleted')}><Trash2 className="size-3.5" strokeWidth={1.5} /></MsgBtn>
+        <MsgBtn label="Copy" onClick={() => void copy()}>{copied ? <Check className="size-3.5 text-ok" strokeWidth={1.5} /> : <Copy className="size-3.5" strokeWidth={1.5} />}</MsgBtn>
+        {!mine && <MsgBtn label="Toggle wrap" onClick={() => setWrapped(w => !w)}><WrapText className="size-3.5" strokeWidth={1.5} /></MsgBtn>}
+        {onBranch && !mine && <MsgBtn label="Branch from here" onClick={onBranch}><GitBranch className="size-3.5" strokeWidth={1.5} /></MsgBtn>}
+        {onEdit && mine && <MsgBtn label="Edit and resend" onClick={onEdit}><Pencil className="size-3.5" strokeWidth={1.5} /></MsgBtn>}
+        {onDelete && <MsgBtn label="Delete message" onClick={onDelete}><Trash2 className="size-3.5" strokeWidth={1.5} /></MsgBtn>}
       </div>
     </div>
   );

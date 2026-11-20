@@ -8,7 +8,7 @@ import { useApprovalRules, useConversation, useModels, useVoiceSettings } from '
 const SECTIONS = ['Model', 'Sampling', 'System prompt', 'Search', 'Voice', 'Permissions', 'Appearance', 'Shortcuts', 'Data'] as const;
 
 export function SettingsModal() {
-  const { settingsOpen, setSettingsOpen, pushToast } = useStudio();
+  const { settingsOpen, setSettingsOpen } = useStudio();
   const [section, setSection] = useState<(typeof SECTIONS)[number]>('Model');
   if (!settingsOpen) return null;
 
@@ -60,10 +60,10 @@ export function SettingsModal() {
           <div className="flex justify-end gap-2 border-t border-line px-5 py-3">
             <button
               type="button"
-              onClick={() => { setSettingsOpen(false); pushToast('ok', 'Settings saved'); }}
+              onClick={() => setSettingsOpen(false)}
               className="rounded-lg bg-accent px-4 py-1.5 text-xs font-semibold text-base-0 outline-none hover:opacity-90 focus-visible:ring-2 focus-visible:ring-accent"
             >
-              Save changes
+              Done
             </button>
           </div>
         </div>

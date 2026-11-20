@@ -77,8 +77,29 @@
   beforeEach quiesce-timeout flake under load; file green standalone).
 - tsc + eslint clean.
 
+## 2026-11-20 — Sprint 5 (Studio honesty, this session)
+
+- Onboarding: real 3-step tour (keys → modes → agents), Back/Next/Get
+  started; fake folder picker removed.
+- Message actions real: clipboard copy, delete (PUT), branch (POST prefix
+  + switch), edit (truncate + editDraft into box). Removed apply-to-file
+  and checkpoint buttons (no backing data); removed dead `checkpoint` field.
+- Chips resolve doc content on send (docs/search per chip, goal-then-title
+  query, honest no-match blocks); real chunk counts replace fake tokens.
+- Slash: /clear executes, /plan switches mode, /test /fix /commit expand
+  to full prompts; /explain dropped (no selection exists).
+- Attach: real file picker — text inserts fenced content (100KB cap,
+  binary rejected); images → vision parts in Ask mode only (blocked with
+  explanation elsewhere); array-content rendering in bubbles.
+- Terminal copy writes the real clipboard; Settings "Save changes" → "Done".
+- Found + fixed via verification: setConversationId never synced the hash
+  (cleared chats reopened on reload) — ref-mirrored hash writers now.
+- Verified: tsc + build green; 15/15 headless interaction checks
+  (tour/copy/delete/branch/edit/attach//clear against live scratch stack);
+  server suite 479/5993 green (1 unrelated load flake, green on re-run).
+
 ## Next unfinished task
 
-**Sprint 5 (Studio honesty)**: onboarding flow, real copy/attach/save,
-chips/slash payloads. Then Sprint 6 e2e. Approvals still queued: SEC-03
-unified-key hashing, SEC-05 full MCP allowlist.
+**Sprint 6 (QA)**: studio test runner + unit tests, e2e journey suite,
+load smoke. Approvals still queued: SEC-03 unified-key hashing, SEC-05
+full MCP allowlist.

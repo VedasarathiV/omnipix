@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useMemo, useState } from 'react';
+import { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { AgentMode, RailId, RightTab } from '../types';
 
@@ -44,6 +44,9 @@ interface StudioState {
   setStreamingReply: (text: string | null) => void;
   dictation: { text: string; seq: number } | null;
   setDictation: (d: { text: string; seq: number } | null) => void;
+  /** Message-edit draft: replaces (not appends) the input box content. */
+  editDraft: { text: string; seq: number } | null;
+  setEditDraft: (d: { text: string; seq: number } | null) => void;
   selectedFile: string | null;
   setSelectedFile: (path: string | null) => void;
 }
@@ -71,14 +74,31 @@ function hashParts(): { rail: RailId; runId: number | null; conversationId: numb
 
 export function StudioProvider({ children }: { children: ReactNode }) {
   const [rail, setRailState] = useState<RailId>(() => hashParts().rail);
-  const setRail = useCallback((next: RailId) => {
-    setRailState(next);
+  // The location hash mirrors rail+chat+run so reloads and links reopen the
+  // same view. Refs mirror the state so sequential setter calls in one
+  // handler (e.g. clear chat AND run) each see the latest values.
+  const railRef = useRef<RailId>(rail);
+  const initialParts = useRef(hashParts());
+  const chatRef = useRef<number | null>(initialParts.current.conversationId);
+  const runRef = useRef<number | null>(initialParts.current.runId);
+  const fileRef = useRef<string | null>(initialParts.current.file);
+  const writeHash = useCallback(() => {
     try {
-      window.history.replaceState(null, '', `#/${next}`);
+      const params = new URLSearchParams();
+      if (runRef.current !== null) params.set('run', String(runRef.current));
+      if (chatRef.current !== null) params.set('chat', String(chatRef.current));
+      if (fileRef.current) params.set('file', fileRef.current);
+      const q = params.toString();
+      window.history.replaceState(null, '', `#/${railRef.current}${q ? `?${q}` : ''}`);
     } catch {
-      // No history in exotic embeds; the rail still switches.
+      // No history in exotic embeds; the state still switches.
     }
   }, []);
+  const setRail = useCallback((next: RailId) => {
+    railRef.current = next;
+    setRailState(next);
+    writeHash();
+  }, [writeHash]);
   const [mode, setMode] = useState<AgentMode>('agent');
   const [model, setModel] = useState('auto');
   const [rightOpen, setRightOpen] = useState(true);
@@ -90,11 +110,27 @@ export function StudioProvider({ children }: { children: ReactNode }) {
   const [acceptedFiles, setAcceptedFiles] = useState<Set<string>>(new Set());
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [agentEditor, setAgentEditor] = useState<string | null>(null);
-  const [conversationId, setConversationId] = useState<number | null>(() => hashParts().conversationId);
-  const [activeRunId, setActiveRunId] = useState<number | null>(() => hashParts().runId);
+  const [conversationId, setConversationIdState] = useState<number | null>(() => hashParts().conversationId);
+  const [activeRunId, setActiveRunIdState] = useState<number | null>(() => hashParts().runId);
+  const setConversationId = useCallback((id: number | null) => {
+    chatRef.current = id;
+    setConversationIdState(id);
+    writeHash();
+  }, [writeHash]);
+  const setActiveRunId = useCallback((id: number | null) => {
+    runRef.current = id;
+    setActiveRunIdState(id);
+    writeHash();
+  }, [writeHash]);
   const [streamingReply, setStreamingReply] = useState<string | null>(null);
   const [dictation, setDictation] = useState<{ text: string; seq: number } | null>(null);
-  const [selectedFile, setSelectedFile] = useState<string | null>(() => hashParts().file);
+  const [editDraft, setEditDraft] = useState<{ text: string; seq: number } | null>(null);
+  const [selectedFile, setSelectedFileState] = useState<string | null>(() => hashParts().file);
+  const setSelectedFile = useCallback((path: string | null) => {
+    fileRef.current = path;
+    setSelectedFileState(path);
+    writeHash();
+  }, [writeHash]);
 
   const pushToast = useCallback((kind: Toast['kind'], text: string) => {
     const id = toastSeq++;
@@ -131,11 +167,12 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     agentEditor, setAgentEditor,
     conversationId, setConversationId, activeRunId, setActiveRunId,
     streamingReply, setStreamingReply, dictation, setDictation,
+    editDraft, setEditDraft,
     selectedFile, setSelectedFile,
   }), [
     rail, mode, model, rightOpen, rightTab, sidebarOpen, sidebarTab,
     paletteOpen, settingsOpen, acceptedFiles, toasts,
-    agentEditor, conversationId, activeRunId, streamingReply, dictation, selectedFile,
+    agentEditor, conversationId, activeRunId, streamingReply, dictation, editDraft, selectedFile,
     acceptFile, acceptAll, pushToast, dismissToast,
   ]);
 

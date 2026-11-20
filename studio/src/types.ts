@@ -39,7 +39,6 @@ export interface ChatMessage {
   text: string;
   ts: string;
   model?: string;
-  checkpoint?: boolean;
 }
 
 export interface Approval {

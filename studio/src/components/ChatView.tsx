@@ -1,19 +1,78 @@
 import { Sparkles } from 'lucide-react';
-import { MessageBubble } from './MessageBubble';
+import { useQueryClient } from '@tanstack/react-query';
+import { MessageBubble, renderMessageContent } from './MessageBubble';
 import { PlanCard } from './PlanCard';
 import { RunTimeline } from './RunTimeline';
 import { ApprovalPrompt } from './ApprovalPrompt';
 import { EmptyState } from './EmptyState';
 import { KeyBanner, OfflineBanner, RunErrorBanner } from './StateBanners';
 import { useStudio } from '../state/store';
-import { useApprovals, useConversation, useRun } from '../lib/queries';
+import { apiFetch } from '../lib/api';
+import { useApprovals, useConversation, useRun, type Conversation } from '../lib/queries';
 
 export function ChatView() {
-  const { conversationId, activeRunId, streamingReply, setDictation } = useStudio();
+  const { conversationId, activeRunId, streamingReply, setDictation, setConversationId, setEditDraft, pushToast } = useStudio();
+  const queryClient = useQueryClient();
   const { data: conversation } = useConversation(conversationId);
   const { data: run } = useRun(activeRunId, true);
   const { data: approvalsData } = useApprovals();
   const liveApproval = (approvalsData?.approvals ?? []).find(a => a.status === 'pending' && (activeRunId === null || a.run_id === activeRunId)) ?? null;
+
+  const messages = conversation?.messages ?? [];
+
+  function refreshConversation() {
+    void queryClient.invalidateQueries({ queryKey: ['conversations'] });
+    if (conversationId !== null) void queryClient.invalidateQueries({ queryKey: ['conversation', conversationId] });
+  }
+
+  async function deleteMessage(index: number) {
+    if (conversationId === null) return;
+    try {
+      await apiFetch(`/api/conversations/${conversationId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ messages: messages.filter((_, i) => i !== index) }),
+      });
+      pushToast('ok', 'Message deleted');
+      refreshConversation();
+    } catch (err) {
+      pushToast('error', err instanceof Error ? err.message : 'Delete failed');
+    }
+  }
+
+  async function branchFrom(index: number) {
+    try {
+      const branched = await apiFetch<Conversation>('/api/conversations', {
+        method: 'POST',
+        body: JSON.stringify({
+          title: `${conversation?.title ?? 'Chat'} (branch)`,
+          model: conversation?.model ?? undefined,
+          messages: messages.slice(0, index + 1),
+        }),
+      });
+      setConversationId(branched.id);
+      pushToast('ok', 'Branched into a new chat');
+      refreshConversation();
+    } catch (err) {
+      pushToast('error', err instanceof Error ? err.message : 'Branch failed');
+    }
+  }
+
+  async function editMessage(index: number) {
+    if (conversationId === null) return;
+    const text = renderMessageContent((messages[index] as { content?: unknown })?.content);
+    try {
+      // Truncate the transcript at the edited message, then hand its text to
+      // the input box; sending resumes the conversation from the edit.
+      await apiFetch(`/api/conversations/${conversationId}`, {
+        method: 'PUT',
+        body: JSON.stringify({ messages: messages.slice(0, index) }),
+      });
+      setEditDraft({ text, seq: Date.now() });
+      refreshConversation();
+    } catch (err) {
+      pushToast('error', err instanceof Error ? err.message : 'Edit failed');
+    }
+  }
 
   const header = run ? run.goal : conversation?.title || 'New chat';
   const showEmpty = !conversationId && !activeRunId && !streamingReply;
@@ -76,16 +135,19 @@ export function ChatView() {
         {run?.final_answer && (
           <MessageBubble message={{ id: `final-${run.id}`, role: 'assistant', text: run.final_answer, ts: run.finished_at ?? '' }} />
         )}
-        {(conversation?.messages ?? []).map((m, i) => (
+        {messages.map((m, i) => (
           <MessageBubble
             key={i}
             message={{
               id: `m${i}`,
               role: m.role === 'user' ? 'user' : 'assistant',
-              text: typeof m.content === 'string' ? m.content : JSON.stringify(m.content),
+              text: renderMessageContent(m.content),
               ts: '',
               model: conversation?.model ?? undefined,
             }}
+            onDelete={() => void deleteMessage(i)}
+            onBranch={m.role === 'user' ? undefined : () => void branchFrom(i)}
+            onEdit={m.role === 'user' ? () => void editMessage(i) : undefined}
           />
         ))}
         {streamingReply !== null && (
