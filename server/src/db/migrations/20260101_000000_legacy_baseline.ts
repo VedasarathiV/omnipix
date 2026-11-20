@@ -2289,6 +2289,9 @@ function backfillFallback(db: Db) {
 function ensureUnifiedKey(db: Db) {
   const existing = db.prepare("SELECT value FROM settings WHERE key = 'unified_api_key'").get() as { value: string } | undefined;
   if (!existing) {
+    // Plaintext here is correct: migrations run before the encryption key
+    // exists. initDb seals it via encryptUnifiedKeyAtRest immediately after
+    // key init on every boot, so no served request ever reads it raw.
     const key = `omnipix-${crypto.randomBytes(24).toString('hex')}`;
     db.prepare("INSERT INTO settings (key, value) VALUES ('unified_api_key', ?)").run(key);
     // A direct stdout write bypasses the process-wide console redaction, so it

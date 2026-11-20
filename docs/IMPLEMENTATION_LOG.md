@@ -111,9 +111,24 @@
   p50 112ms / p99 187ms.
 - Verified: studio tsc+build+unit green; server 479/5993; e2e green.
 
-## Track status: COMPLETE (Phases 1–12, Sprints 1–6)
+## 2026-11-20 — Approved follow-ups (this session)
 
-Queued approvals never taken up (need explicit user approval):
-SEC-03 unified-key hashing, SEC-05 full MCP allowlist. Deferred with
-rationale: DB-03 new FKs (needs per-install orphan audit), Windows
-desktop parity, premium backend reality check.
+- **SEC-03**: unified key sealed at rest with AES-256-GCM (same mechanism
+  as provider keys) via boot-time `encryptUnifiedKeyAtRest` (migrations
+  run pre-key-init, so no migration could do it). Chose AES over hashing
+  deliberately: hashing would break URL-token injection, MCP self-calls,
+  and Studio/CLI retrieval, demanding session-auth on /v1 + pipeline
+  extraction; AES fixes the finding (offline DB theft) with zero ripple.
+  4 tests; live-verified (triplet on disk, retrieval works).
+- **SEC-05**: MCP stdio command allowlist — common-runtimes default
+  (npx/node/python3/python/uvx), operator list via new
+  GET/PUT `/api/settings/mcp-allowed-commands` (null resets, [] denies
+  all), enforced at registration AND every spawn. 7 tests; live-verified
+  (/bin/sh → 400, npx → 201).
+- Full suite: **481 files, 6007 passed**; tsc + eslint clean.
+
+## Track status: COMPLETE (Phases 1–12, Sprints 1–6 + approvals)
+
+All queued approvals taken up. Deferred with rationale: DB-03 new FKs
+(needs per-install orphan audit), Windows desktop parity, premium
+backend reality check.

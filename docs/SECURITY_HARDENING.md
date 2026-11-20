@@ -57,12 +57,20 @@ fix → files → verification.
   (persisted tier): server name + command + arg count. Args/env never
   logged (they carry tokens).
 - **Verified**: live-fake-server test asserts the line + secret absence.
-- **Residual**: no command allowlist yet — full allowlist breaks existing
-  MCP configs, so it needs product approval (queued, Sprint 3/4).
+- **Follow-up shipped**: full allowlist now enforced (see above).
 
-## Deferred for explicit approval
+## Approved follow-ups (implemented 2026-11-20)
 
-- **SEC-03** (unified-key hashing): changes credential semantics
-  (display → rotation flow). Not started.
+- **SEC-03**: unified key AES-256-GCM sealed at rest (boot-time
+  conversion, idempotent; legacy plaintext tolerated on read). Hashing
+  was evaluated and rejected: it would break URL-token injection, MCP
+  self-calls, and Studio/CLI retrieval, requiring session-auth on /v1 —
+  disproportionate, since a live session already equals total compromise.
+- **SEC-05**: full command allowlist shipped (default runtimes,
+  operator-managed setting, registration + spawn enforcement).
+
+## Still deferred (need product decisions)
+
 - **SEC-07** (persist lockouts), **SEC-02** (connection-pinned DNS),
-  **SEC-08/10**: queued with test plans in the roadmap.
+  argument-level MCP constraints (npx/python remain quasi-arbitrary —
+  documented residual).

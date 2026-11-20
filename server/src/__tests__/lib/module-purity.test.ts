@@ -37,6 +37,8 @@ const PURE_MODULES = [
   'error-classify.ts',
   // SSRF guard shared by the fetch_url tool and docs ingest; pure string checks.
   'fetch-guard.ts',
+  // MCP command matching over caller-supplied lists; pure string checks.
+  'mcp-allowlist.ts',
   // Signal handling for the container's PID 1; the server, DB and process are injected.
   'graceful-shutdown.ts',
   'header-value.ts',

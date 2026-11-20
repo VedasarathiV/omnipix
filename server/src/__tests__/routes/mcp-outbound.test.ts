@@ -80,7 +80,7 @@ describe('outbound MCP registry', () => {
     expect(JSON.stringify(created.body)).not.toContain('s3cret');
 
     expect((await call('POST', '/api/mcp/servers', {
-      name: 'fs', transport: 'stdio', command: 'y',
+      name: 'fs', transport: 'stdio', command: 'npx',
     })).status).toBe(409);
     expect((await call('POST', '/api/mcp/servers', {
       name: 'Bad Name!', transport: 'stdio', command: 'y',
@@ -125,6 +125,7 @@ describe('outbound MCP registry', () => {
   });
 
   it('reports dead servers as 502 and keeps them listed', async () => {
+    await call('PUT', '/api/settings/mcp-allowed-commands', { commands: ['mcp-xyz'] });
     const created = await call('POST', '/api/mcp/servers', {
       name: 'dead', transport: 'stdio', command: '/nonexistent/mcp-xyz',
     });

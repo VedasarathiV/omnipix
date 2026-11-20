@@ -4,7 +4,7 @@ import path from 'path';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'url';
 import { runMigrationsSync } from './migrate/runner.js';
-import { initEncryptionKey, isEncryptionKeyInitialized, probeStoredSecrets } from '../lib/crypto.js';
+import { decrypt, encrypt, initEncryptionKey, isEncryptionKeyInitialized, probeStoredSecrets } from '../lib/crypto.js';
 import { restrictAllToOwner, restrictDirToOwner } from '../lib/file-permissions.js';
 import { nodeSqliteFactory } from './node-sqlite.js';
 import type { Db, DbFactory } from './types.js';
@@ -219,6 +219,11 @@ export function initDb(
 
   if (!isEncryptionKeyInitialized()) initEncryptionKey(db);
 
+  // Seal the unified key at rest (idempotent; see encryptUnifiedKeyAtRest).
+  // Runs here — not as a migration — because migrations execute before the
+  // encryption key exists.
+  encryptUnifiedKeyAtRest(db);
+
   keyStoreDecryptable = probeStoredSecrets(db);
   if (keyStoreDecryptable === false) {
     console.error(
@@ -245,16 +250,60 @@ export function isKeyStoreDecryptable(): boolean | null {
   return keyStoreDecryptable;
 }
 
+interface SealedUnifiedKey {
+  encrypted: string;
+  iv: string;
+  authTag: string;
+}
+
+function parseSealedUnifiedKey(value: string): SealedUnifiedKey | null {
+  if (!value.startsWith('{')) return null;
+  try {
+    const parsed = JSON.parse(value) as Partial<SealedUnifiedKey>;
+    if (typeof parsed.encrypted === 'string' && typeof parsed.iv === 'string' && typeof parsed.authTag === 'string') {
+      return { encrypted: parsed.encrypted, iv: parsed.iv, authTag: parsed.authTag };
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Encrypt the unified API key at rest (SEC-03). The key lives in settings
+ * as an AES-256-GCM triplet — the same mechanism as provider keys — so a
+ * database copy, backup, or forensic image no longer compromises /v1.
+ *
+ * Why AES and not a hash: the key must remain retrievable in-process (URL
+ * token injection, MCP self-calls, dashboard retrieval for Studio/CLI),
+ * exactly like provider keys. A hash would demand session-auth on /v1 plus
+ * pipeline extraction — disproportionate, since a live session already
+ * equals total compromise. The threat fixed here is offline DB theft, for
+ * which AES-GCM under ENCRYPTION_KEY (never stored beside the DB) is the
+ * established system answer.
+ *
+ * Idempotent; runs on every boot after key init because migrations run
+ * before the encryption key exists, so no migration can do this itself.
+ */
+export function encryptUnifiedKeyAtRest(db: Db): void {
+  const row = db.prepare("SELECT value FROM settings WHERE key = 'unified_api_key'").get() as { value: string } | undefined;
+  if (!row || parseSealedUnifiedKey(row.value)) return;
+  const sealed = encrypt(row.value);
+  db.prepare("UPDATE settings SET value = ? WHERE key = 'unified_api_key'").run(JSON.stringify(sealed));
+}
+
 export function getUnifiedApiKey(): string {
   const db = getDb();
   const row = db.prepare("SELECT value FROM settings WHERE key = 'unified_api_key'").get() as { value: string };
-  return row.value;
+  const sealed = parseSealedUnifiedKey(row.value);
+  if (!sealed) return row.value; // Legacy plaintext (pre-conversion DBs, raw-baseline tests).
+  return decrypt(sealed.encrypted, sealed.iv, sealed.authTag);
 }
 
 export function regenerateUnifiedKey(): string {
   const db = getDb();
   const key = `omnipix-${crypto.randomBytes(24).toString('hex')}`;
-  db.prepare("UPDATE settings SET value = ? WHERE key = 'unified_api_key'").run(key);
+  db.prepare("UPDATE settings SET value = ? WHERE key = 'unified_api_key'").run(JSON.stringify(encrypt(key)));
   return key;
 }
 

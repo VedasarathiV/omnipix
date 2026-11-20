@@ -1,6 +1,7 @@
-import { getDb } from '../db/index.js';
+import { getDb, getSetting } from '../db/index.js';
 import { decrypt, encrypt } from '../lib/crypto.js';
 import { McpClient, type McpToolDef } from '../lib/mcp-client.js';
+import { DEFAULT_MCP_COMMANDS, isMcpCommandAllowed, MCP_ALLOWED_COMMANDS_SETTING, parseMcpAllowlist } from '../lib/mcp-allowlist.js';
 
 // MCP server registry + connection pool (Phase 2).
 //
@@ -136,12 +137,33 @@ export function deleteMcpServer(id: number): boolean {
   return result.changes > 0;
 }
 
+/** Effective allowlist: operator-saved list wins; unset/corrupt falls back
+ *  to the common-runtimes default. An explicitly empty list denies all. */
+export function getMcpAllowlist(): { commands: string[]; isDefault: boolean } {
+  const parsed = parseMcpAllowlist(getSetting(MCP_ALLOWED_COMMANDS_SETTING));
+  if (parsed === null) return { commands: [...DEFAULT_MCP_COMMANDS], isDefault: true };
+  return { commands: parsed, isDefault: false };
+}
+
+/** Throw unless the command may spawn. Checked at registration AND at
+ *  every spawn, so narrowing the list disarms existing rows too. */
+export function assertMcpCommandAllowed(command: string): void {
+  const { commands } = getMcpAllowlist();
+  if (isMcpCommandAllowed(command, commands)) return;
+  throw new Error(
+    `MCP command '${command.trim().slice(0, 80)}' is not allowlisted. ` +
+    `Allowed: ${commands.length ? commands.join(', ') : '(none)'} — ` +
+    'extend it at PUT /api/settings/mcp-allowed-commands.',
+  );
+}
+
 function validateInput(input: McpServerInput): void {
   if (!MCP_NAME_PATTERN.test(input.name)) {
     throw new Error('Invalid server name: lowercase letters, digits, dashes, underscores.');
   }
   if (input.transport === 'stdio') {
     if (!input.command?.trim()) throw new Error('stdio servers need a command.');
+    assertMcpCommandAllowed(input.command);
   } else if (input.transport === 'http') {
     if (!input.url?.trim()) throw new Error('http servers need a url.');
     try {
@@ -229,6 +251,9 @@ export async function mcpConnection(id: number): Promise<McpClient> {
       }
       const env = secretJson({ encrypted: row.env_encrypted, iv: row.env_iv, authTag: row.env_auth_tag });
       const args = JSON.parse(row.args_json) as string[];
+      // Spawn-time re-check: narrowing the list after registration must
+      // disarm the row, not just block new ones.
+      assertMcpCommandAllowed(row.command);
       auditStdioSpawn(row.name, row.command, args.length);
       return await McpClient.stdio(row.command, args, env);
     } catch (err) {
@@ -353,6 +378,7 @@ export async function testMcpServer(id: number): Promise<{ tools: McpToolDef[]; 
     } else {
       const env = secretJson({ encrypted: row.env_encrypted, iv: row.env_iv, authTag: row.env_auth_tag });
       const args = JSON.parse(row.args_json) as string[];
+      assertMcpCommandAllowed(row.command);
       auditStdioSpawn(row.name, row.command, args.length);
       client = await McpClient.stdio(row.command, args, env);
     }

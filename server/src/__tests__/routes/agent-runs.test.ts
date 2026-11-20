@@ -399,7 +399,7 @@ describe('agent runs', () => {
     expect((await call('POST', '/api/agents/runs', { goal: 'x', tools: ['mcp:ghost:echo'] })).status).toBe(400);
     expect((await call('POST', '/api/agents/runs', { goal: 'x', tools: ['mcp:broken'] })).status).toBe(400);
     const registered = await call('POST', '/api/mcp/servers', {
-      name: 'off', transport: 'stdio', command: 'x', enabled: false,
+      name: 'off', transport: 'stdio', command: 'npx', enabled: false,
     });
     expect(registered.status).toBe(201);
     expect((await call('POST', '/api/agents/runs', { goal: 'x', tools: ['mcp:off:echo'] })).status).toBe(400);

@@ -164,3 +164,39 @@ describe('enable_mcp default seed (#925)', () => {
     db.close();
   });
 });
+
+describe('/api/settings/mcp-allowed-commands', () => {
+  let app: Express;
+  let token: string;
+
+  beforeAll(() => {
+    process.env.ENCRYPTION_KEY = '0'.repeat(64);
+    initDb(':memory:');
+    app = createApp();
+    token = mintDashboardToken();
+  });
+
+  it('reports the built-in default on a fresh install', async () => {
+    const { status, body } = await request(app, 'GET', '/api/settings/mcp-allowed-commands', undefined, token);
+    expect(status).toBe(200);
+    expect(body.isDefault).toBe(true);
+    expect(body.commands).toEqual(expect.arrayContaining(['npx', 'node', 'python3']));
+  });
+
+  it('stores, returns, and resets a custom list', async () => {
+    const put = await request(app, 'PUT', '/api/settings/mcp-allowed-commands', { commands: ['uvx'] }, token);
+    expect(put.status).toBe(200);
+    expect(put.body).toEqual({ commands: ['uvx'], isDefault: false });
+    const get = await request(app, 'GET', '/api/settings/mcp-allowed-commands', undefined, token);
+    expect(get.body).toEqual(put.body);
+    const reset = await request(app, 'PUT', '/api/settings/mcp-allowed-commands', { commands: null }, token);
+    expect(reset.status).toBe(200);
+    expect(reset.body.isDefault).toBe(true);
+  });
+
+  it('rejects malformed lists', async () => {
+    expect((await request(app, 'PUT', '/api/settings/mcp-allowed-commands', { commands: 'npx' }, token)).status).toBe(400);
+    expect((await request(app, 'PUT', '/api/settings/mcp-allowed-commands', { commands: [''] }, token)).status).toBe(400);
+    expect((await request(app, 'PUT', '/api/settings/mcp-allowed-commands', { commands: new Array(51).fill('x') }, token)).status).toBe(400);
+  });
+});

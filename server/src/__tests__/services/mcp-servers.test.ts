@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { initDb, getDb } from '../../db/index.js';
+import { initDb, getDb, setSetting } from '../../db/index.js';
+import { MCP_ALLOWED_COMMANDS_SETTING } from '../../lib/mcp-allowlist.js';
 import {
   __dropAllConnections,
   callMcpTool,
@@ -70,7 +71,7 @@ describe('MCP servers', () => {
     const row = getDb().prepare('SELECT env_encrypted FROM mcp_servers WHERE id = ?').get(id) as { env_encrypted: string };
     expect(row.env_encrypted).not.toContain('s3cret');
 
-    expect(() => createMcpServer({ name: 'fs', transport: 'stdio', command: 'y' })).toThrow('already exists');
+    expect(() => createMcpServer({ name: 'fs', transport: 'stdio', command: 'npx' })).toThrow('already exists');
     expect(() => createMcpServer({ name: 'Bad Name', transport: 'stdio', command: 'y' })).toThrow('Invalid server name');
     expect(() => createMcpServer({ name: 'x', transport: 'stdio' })).toThrow('need a command');
     expect(() => createMcpServer({ name: 'x', transport: 'http' })).toThrow('need a url');
@@ -121,7 +122,24 @@ describe('MCP servers', () => {
     expect(seen.join('\n')).not.toContain(FAKE_SERVER);
   });
 
+  it('rejects non-allowlisted commands at registration', () => {
+    expect(() => createMcpServer({ name: 'evil', transport: 'stdio', command: '/bin/sh' }))
+      .toThrow('not allowlisted');
+    expect(() => createMcpServer({ name: 'ok', transport: 'stdio', command: 'npx', args: ['-y', 'x'] }))
+      .not.toThrow();
+  });
+
+  it('spawn re-check disarms rows after the list narrows', async () => {
+    const id = createMcpServer({
+      name: 'narrowed', transport: 'stdio', command: process.execPath, args: ['-e', FAKE_SERVER],
+    });
+    await expect(testMcpServer(id)).resolves.toBeTruthy();
+    setSetting(MCP_ALLOWED_COMMANDS_SETTING, JSON.stringify([]));
+    await expect(testMcpServer(id)).rejects.toThrow('not allowlisted');
+  });
+
   it('records failures on dead servers without throwing the list', async () => {
+    setSetting(MCP_ALLOWED_COMMANDS_SETTING, JSON.stringify(['mcp-xyz']));
     const id = createMcpServer({ name: 'dead', transport: 'stdio', command: '/nonexistent/mcp-xyz' });
     await expect(testMcpServer(id)).rejects.toThrow();
     expect(getMcpServer(id)!.last_error).toBeTruthy();

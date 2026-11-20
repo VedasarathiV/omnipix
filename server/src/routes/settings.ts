@@ -35,6 +35,8 @@ import {
 } from '../services/compression/config.js';
 import { getHeadroomThresholds, setHeadroomThresholds, getTaskWeightShare, setTaskWeightShare, getMinReliabilityFloor, setMinReliabilityFloor, isProviderMomentAttributionEnabled, setProviderMomentAttribution } from '../services/router.js';
 import { MCP_ENABLED_SETTING, isMcpServerEnabled } from './mcp.js';
+import { getMcpAllowlist } from '../services/mcp-servers.js';
+import { MCP_ALLOWED_COMMANDS_SETTING } from '../lib/mcp-allowlist.js';
 import { z } from 'zod';
 import { getAppVersion } from '../lib/app-version.js';
 import { getVoiceSettings, setVoiceSettings, voiceSettingsSchema } from '../services/voice-settings.js';
@@ -162,6 +164,31 @@ settingsRouter.put('/enable-mcp', (req: Request, res: Response) => {
   }
   setSetting(MCP_ENABLED_SETTING, parsed.data.enabled ? '1' : '0');
   res.json({ enabled: parsed.data.enabled });
+});
+
+settingsRouter.get('/mcp-allowed-commands', (_req: Request, res: Response) => {
+  const { commands, isDefault } = getMcpAllowlist();
+  res.json({ commands, isDefault });
+});
+
+const mcpAllowlistSchema = z.object({
+  // null resets to the built-in runtime default; [] denies all stdio spawns.
+  commands: z.array(z.string().trim().min(1).max(128)).max(50).nullable(),
+});
+
+settingsRouter.put('/mcp-allowed-commands', (req: Request, res: Response) => {
+  const parsed = mcpAllowlistSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: { message: 'Invalid allowlist: send { commands: string[] | null } (max 50 entries).', type: 'invalid_request_error' } });
+    return;
+  }
+  if (parsed.data.commands === null) {
+    getDb().prepare('DELETE FROM settings WHERE key = ?').run(MCP_ALLOWED_COMMANDS_SETTING);
+  } else {
+    setSetting(MCP_ALLOWED_COMMANDS_SETTING, JSON.stringify(parsed.data.commands));
+  }
+  const { commands, isDefault } = getMcpAllowlist();
+  res.json({ commands, isDefault });
 });
 
 // Get the Claude Code model map (opus/sonnet/haiku/default → 'auto' | model_id).
