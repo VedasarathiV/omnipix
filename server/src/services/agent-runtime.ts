@@ -289,6 +289,26 @@ function emit(runId: number, event: { type: string; step?: AgentStep; tool?: str
   }
 }
 
+/**
+ * Server-side execution trace, mirroring traceRouteEvent's one-line shape.
+ * Steps already persist to agent_steps and SSE; this is the operator's
+ * grep-able record of what ran, in order, with outcomes and durations.
+ * Tool names only — arguments routinely carry secrets and paths, and the
+ * step rows already hold whatever the dashboard needs.
+ */
+export function traceAgentEvent(
+  runId: number,
+  event: 'tool-start' | 'tool-ok' | 'tool-denied' | 'tool-error' | 'run-finish',
+  opts: { seq?: number; tool?: string; status?: string; durationMs?: number } = {},
+): void {
+  const parts = ['[Agent]', new Date().toISOString().slice(11, 19), event, `run=${runId}`];
+  if (opts.seq != null) parts.push(`step=${opts.seq}`);
+  if (opts.tool) parts.push(`tool=${opts.tool}`);
+  if (opts.status) parts.push(`status=${opts.status}`);
+  if (opts.durationMs != null) parts.push(`dur=${opts.durationMs}ms`);
+  console.log(parts.join(' '));
+}
+
 function finishRun(runId: number, patch: Partial<Pick<AgentRun, 'status' | 'final_answer' | 'error' | 'steps_used' | 'prompt_tokens' | 'completion_tokens'>>) {
   const db = getDb();
   const sets: string[] = ['finished_at = strftime(\'%Y-%m-%dT%H:%M:%fZ\',\'now\')'];
@@ -301,6 +321,7 @@ function finishRun(runId: number, patch: Partial<Pick<AgentRun, 'status' | 'fina
   if (patch.status && patch.status !== 'running' && patch.status !== 'awaiting_approval') {
     const row = db.prepare('SELECT goal FROM agent_runs WHERE id = ?').get(runId) as { goal: string } | undefined;
     emitWebhook('run.finished', { runId, status: patch.status, goal: (row?.goal ?? '').slice(0, 500) });
+    traceAgentEvent(runId, 'run-finish', { status: patch.status });
   }
 }
 
@@ -868,6 +889,9 @@ async function runLoop(runId: number, opts: AgentRunOptions): Promise<AgentRun> 
       release();
       return getAgentRun(runId)!;
     }
+    // Stale-op guard: a stop that landed during the model call wins over
+    // whatever it returned — never execute its tools or accept its answer.
+    if (signal.aborted) return finishStopped();
     const calls: ChatToolCall[] = outcome.toolCalls ?? [];
     if (outcome.text) step('thought', null, { text: outcome.text });
     if (!calls.length) {
@@ -899,6 +923,9 @@ async function runLoop(runId: number, opts: AgentRunOptions): Promise<AgentRun> 
       tool_calls: calls.map(c => ({ id: c.id, type: 'function' as const, function: { name: c.function.name, arguments: c.function.arguments } })),
     } as ChatMessage);
     for (const call of calls) {
+      // Stale-op guard: a stop that landed mid-turn (during an earlier tool
+      // in this same batch) must prevent every later tool from executing.
+      if (signal.aborted) return finishStopped();
       const tool = agentToolByName(call.function.name);
       let args: Record<string, unknown> = {};
       try {
@@ -908,6 +935,9 @@ async function runLoop(runId: number, opts: AgentRunOptions): Promise<AgentRun> 
       }
       const callStep = step('tool_call', call.function.name, { arguments: args });
       let result: string;
+      let toolOutcome: 'tool-ok' | 'tool-denied' | 'tool-error' = 'tool-ok';
+      const toolStarted = Date.now();
+      traceAgentEvent(runId, 'tool-start', { seq: callStep.seq, tool: call.function.name });
       const decision = tool ? evaluateToolCall(call.function.name) : 'deny';
       // Deterministic hooks run before human approval: a veto spares the
       // operator, and a post-hook observes every settled execution.
@@ -915,10 +945,12 @@ async function runLoop(runId: number, opts: AgentRunOptions): Promise<AgentRun> 
         ? { allowed: false as const }
         : await runPreToolHooks(runId, call.function.name, args, step, signal);
       if (decision === 'deny') {
+        toolOutcome = tool ? 'tool-denied' : 'tool-error';
         result = tool
           ? `denied by policy: ${call.function.name} is not allowed in this run.`
           : `unknown tool: ${call.function.name}. Available: ${requestedTools.join(', ')}`;
       } else if (!gate.allowed) {
+        toolOutcome = 'tool-denied';
         result = gate.reason ?? `denied by hook: ${call.function.name} was vetoed. Work around it or ask the user.`;
         // Unattended runs skip the inbox (the row is flagged auto_approve);
         // pre-tool hooks above still gated this call.
@@ -940,6 +972,7 @@ async function runLoop(runId: number, opts: AgentRunOptions): Promise<AgentRun> 
           return finishStopped();
         }
         if (!approved) {
+          toolOutcome = 'tool-denied';
           result = `denied by operator: ${call.function.name} was not approved. Work around it or ask the user.`;
         } else {
           try {
@@ -948,6 +981,7 @@ async function runLoop(runId: number, opts: AgentRunOptions): Promise<AgentRun> 
             markDirty(call.function.name, args);
             await runPostToolHooks(runId, call.function.name, args, { ok: true, result }, step, signal);
           } catch (err: unknown) {
+            toolOutcome = 'tool-error';
             result = `tool error: ${err instanceof Error ? err.message : String(err)}`;
             await runPostToolHooks(runId, call.function.name, args, { ok: false, result }, step, signal);
           }
@@ -959,10 +993,12 @@ async function runLoop(runId: number, opts: AgentRunOptions): Promise<AgentRun> 
           markDirty(call.function.name, args);
           await runPostToolHooks(runId, call.function.name, args, { ok: true, result }, step, signal);
         } catch (err: unknown) {
+          toolOutcome = 'tool-error';
           result = `tool error: ${err instanceof Error ? err.message : String(err)}`;
           await runPostToolHooks(runId, call.function.name, args, { ok: false, result }, step, signal);
         }
       }
+      traceAgentEvent(runId, toolOutcome, { seq: callStep.seq, tool: call.function.name, durationMs: Date.now() - toolStarted });
       step('tool_result', call.function.name, { result: result.slice(0, 8000) });
       // Spotlighted: the stored step keeps raw text for display, but the
       // model-bound copy is marked untrusted data (injection boundary).

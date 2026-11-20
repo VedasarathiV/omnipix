@@ -66,8 +66,19 @@
 - 8 tests; live attachment check outside vitest.
 - Full suite: **478 files, 5990 passed**; tsc + eslint clean.
 
+## 2026-11-20 — Sprint 4 (agent runtime, this session)
+
+- Stale-op guards: abort observed after model calls + before each tool in
+  a turn; mid-call stops execute zero tools and reject answers.
+- `traceAgentEvent()` execution tracing (tool start/ok/denied/error +
+  run-finish; names only, no args).
+- Kept state vocabulary (stopped = operator cancel); documented mapping.
+- 3 lifecycle tests; full suite 479 files / 5992 passed (1 unrelated
+  beforeEach quiesce-timeout flake under load; file green standalone).
+- tsc + eslint clean.
+
 ## Next unfinished task
 
-**Sprint 4 (agent runtime)**: lifecycle states, cancellation/stale-op
-safety, tracing. Then Sprint 5 Studio honesty, Sprint 6 e2e. Approvals
-still queued: SEC-03 unified-key hashing, SEC-05 full MCP allowlist.
+**Sprint 5 (Studio honesty)**: onboarding flow, real copy/attach/save,
+chips/slash payloads. Then Sprint 6 e2e. Approvals still queued: SEC-03
+unified-key hashing, SEC-05 full MCP allowlist.
