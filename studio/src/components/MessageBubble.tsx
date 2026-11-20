@@ -2,24 +2,9 @@ import { useState } from 'react';
 import { Check, Copy, GitBranch, Pencil, Trash2, WrapText } from 'lucide-react';
 import type { ChatMessage } from '../types';
 import { useStudio } from '../state/store';
+import { renderMessageContent } from '../lib/compose';
 
-/** Render a conversation message part: plain strings as-is, array content
- *  (vision turns) as its text parts plus an image marker per image part. */
-export function renderMessageContent(content: unknown): string {
-  if (typeof content === 'string') return content;
-  if (!Array.isArray(content)) return '';
-  const out: string[] = [];
-  for (const part of content) {
-    if (typeof part === 'string') {
-      out.push(part);
-    } else if (part && typeof part === 'object') {
-      const p = part as { type?: string; text?: string };
-      if (p.type === 'text' && typeof p.text === 'string') out.push(p.text);
-      else if (p.type === 'image_url') out.push('[image attached]');
-    }
-  }
-  return out.join('\n');
-}
+export { renderMessageContent };
 
 export function MessageBubble({
   message,

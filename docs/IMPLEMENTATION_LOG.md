@@ -98,8 +98,22 @@
   (tour/copy/delete/branch/edit/attach//clear against live scratch stack);
   server suite 479/5993 green (1 unrelated load flake, green on re-run).
 
-## Next unfinished task
+## 2026-11-20 — Sprint 6 (QA, this session — track complete)
 
-**Sprint 6 (QA)**: studio test runner + unit tests, e2e journey suite,
-load smoke. Approvals still queued: SEC-03 unified-key hashing, SEC-05
-full MCP allowlist.
+- Studio vitest 5 runner (`npm test`) + `lib/compose.ts` pure helpers
+  extracted from InputBar/MessageBubble (slash parse, keywords,
+  chip context, content render) + 5 unit tests.
+- `studio/e2e/journey.mjs` (`npm run test:e2e`): self-contained CDP
+  journey, 20/20 green incl. live Ollama chat with chip context.
+  Caught + fixed 2 real bugs: chip title-fallback query (AND semantics),
+  mode reset on reload (script now sets Ask explicitly).
+- `server/src/scripts/load-smoke.ts`: 200 reqs, 0 failures,
+  p50 112ms / p99 187ms.
+- Verified: studio tsc+build+unit green; server 479/5993; e2e green.
+
+## Track status: COMPLETE (Phases 1–12, Sprints 1–6)
+
+Queued approvals never taken up (need explicit user approval):
+SEC-03 unified-key hashing, SEC-05 full MCP allowlist. Deferred with
+rationale: DB-03 new FKs (needs per-install orphan audit), Windows
+desktop parity, premium backend reality check.

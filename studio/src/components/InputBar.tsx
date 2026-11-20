@@ -4,19 +4,19 @@ import { AtSign, Image as ImageIcon, LayoutTemplate, Mic, Paperclip, Send, Slash
 import { useStudio } from '../state/store';
 import { ModelPicker } from './ModelPicker';
 import { apiFetch, streamChat } from '../lib/api';
+import {
+  buildChipContext,
+  distinctiveWords,
+  parseSlashCommand,
+  SLASH_COMMANDS,
+  type ResolvedChip,
+} from '../lib/compose';
 import { readSampling } from './SettingsModal';
 import { startDictationRecording, transcribeAudio, type DictationRecorder } from '../lib/voice';
 import { useConversation, useDocs, useUnifiedKey, useVoiceSettings, type AgentRun, type Conversation, type DocRow } from '../lib/queries';
 
-// Every entry does exactly what its description says: /clear and /plan act
-// locally, the rest expand into full prompts that are then sent.
-const SLASH = [
-  { cmd: '/plan', desc: 'Switch to Plan mode', action: 'mode' },
-  { cmd: '/test', desc: 'Run the test suite', expand: 'Run the test suite and report failures with file:line.' },
-  { cmd: '/fix', desc: 'Fix the last failure', expand: 'Fix the last failure. Reproduce it first if needed, then verify the fix.' },
-  { cmd: '/commit', desc: 'Suggest a commit message', expand: 'Suggest a commit message for the current changes.' },
-  { cmd: '/clear', desc: 'Clear this chat', action: 'clear' },
-] as const;
+// Slash menu entries come from lib/compose (single source with the parser).
+const SLASH = SLASH_COMMANDS;
 
 
 const TEMPLATES = [
@@ -30,19 +30,6 @@ const ATTACH_TEXT_MAX_BYTES = 100 * 1024;
 const ATTACH_IMAGE_MAX_BYTES = 5 * 1024 * 1024;
 const IMAGE_MIMES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'];
 const CHUNKS_PER_CHIP = 3;
-const STOPWORDS = new Set('the,a,an,and,or,for,with,from,that,this,what,when,how,why,can,you,your,have,has,are,was,were,will,would,should,could,please,into,over'.split(','));
-
-function distinctiveWords(text: string, max: number): string[] {
-  const words = text.toLowerCase().replace(/[^a-z0-9\s-]/g, ' ').split(/\s+/)
-    .filter(w => w.length > 3 && !STOPWORDS.has(w) && !/^\d+$/.test(w));
-  return [...new Set(words)].slice(0, max);
-}
-
-interface ResolvedChip {
-  url: string;
-  title: string;
-  chunks: Array<{ section: string; content: string }>;
-}
 
 export function InputBar() {
   const {
@@ -130,16 +117,16 @@ export function InputBar() {
   /** Resolve attached docs to their top chunks for the given goal text. */
   async function resolveChips(urls: string[], goal: string): Promise<ResolvedChip[]> {
     const out: ResolvedChip[] = [];
-    const queryWords = distinctiveWords(goal, 6);
+    const goalQuery = distinctiveWords(goal, 6).join(' ');
     for (const url of urls) {
       const doc = docFor(url);
       if (!doc) continue;
-      // Goal-matched chunks first; fall back to title-matched so a chip
-      // always resolves to real content when the doc has any.
-      const queries = [queryWords.join(' '), ...distinctiveWords(doc.title, 4).map(w => w)];
+      // Goal-matched chunks first, then title-matched, then each title
+      // word alone — the search ANDs every word, so multi-word queries
+      // narrow fast and single words are the widest honest net.
+      const titleWords = distinctiveWords(doc.title, 4);
       let chunks: Array<{ section: string; content: string }> = [];
-      for (const q of [queries.join(' ') || doc.title, doc.title]) {
-        if (!q.trim()) continue;
+      for (const q of [goalQuery, titleWords.join(' '), ...titleWords]) {
         try {
           const res = await apiFetch<{ chunks: Array<{ section: string; content: string }> }>(
             `/api/memories/docs/search?project=${encodeURIComponent(doc.project_key)}&q=${encodeURIComponent(q)}&url=${encodeURIComponent(url)}&limit=${CHUNKS_PER_CHIP}`,
@@ -155,13 +142,7 @@ export function InputBar() {
   }
 
   function withChipContext(goal: string, resolved: ResolvedChip[]): string {
-    if (!resolved.length) return goal;
-    const blocks = resolved.map(r => {
-      if (!r.chunks.length) return `--- context: ${r.title} (${r.url}) — no matching chunks found ---`;
-      const body = r.chunks.map(c => (c.section ? `## ${c.section}\n` : '') + c.content).join('\n\n');
-      return `--- context from ${r.title} (${r.url}) ---\n${body}`;
-    });
-    return `${blocks.join('\n\n')}\n\n--- user request ---\n${goal}`;
+    return buildChipContext(goal, resolved);
   }
 
   function handleAttachClick() {
@@ -208,34 +189,29 @@ export function InputBar() {
     let goal = text.trim();
     if ((!goal && !image) || sending) return;
     // Slash commands: /clear and /plan act, the rest expand to real prompts.
-    if (goal.startsWith('/')) {
-      const [cmd, ...rest] = goal.split(/\s+/);
-      const tail = rest.join(' ').trim();
-      if (cmd === '/clear') {
-        setConversationId(null);
-        setActiveRunId(null);
+    const slash = parseSlashCommand(goal);
+    if (slash.kind === 'clear') {
+      setConversationId(null);
+      setActiveRunId(null);
+      setText('');
+      setChips([]);
+      setImage(null);
+      setMenu(null);
+      setHistIdx(-1);
+      pushToast('ok', 'Started a new chat');
+      return;
+    }
+    if (slash.kind === 'plan') {
+      setMode('plan');
+      if (!slash.rest) {
         setText('');
-        setChips([]);
-        setImage(null);
         setMenu(null);
-        setHistIdx(-1);
-        pushToast('ok', 'Started a new chat');
+        pushToast('info', 'Plan mode on — describe the change to draft a plan');
         return;
       }
-      if (cmd === '/plan') {
-        setMode('plan');
-        if (!tail) {
-          setText('');
-          setMenu(null);
-          pushToast('info', 'Plan mode on — describe the change to draft a plan');
-          return;
-        }
-        goal = tail;
-      } else {
-        const entry = SLASH.find(s => (s as { cmd?: string }).cmd === cmd);
-        const expansion = entry && 'expand' in entry ? (entry.expand as string) : null;
-        if (expansion) goal = tail ? `${expansion} ${tail}` : expansion;
-      }
+      goal = slash.rest;
+    } else if (slash.kind === 'expand') {
+      goal = slash.text;
     }
     setSending(true);
     try {
