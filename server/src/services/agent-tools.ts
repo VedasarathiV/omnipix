@@ -12,6 +12,7 @@ import { proposeMemory } from './learning-loop.js';
 import { resolveFusionCandidate } from './router.js';
 import { execShell, grepSearch, resolveInRoot, runWorkspace } from '../lib/workspace.js';
 import { isBlockedFetchUrl } from '../lib/fetch-guard.js';
+import { fetchGuarded } from '../lib/guarded-fetch.js';
 import type { ChatToolDefinition } from '@omnipix/shared/types.js';
 import type { AgentRun } from './agent-runtime.js';
 
@@ -107,21 +108,16 @@ const FETCH_MAX_BYTES = 100_000;
 const FETCH_TIMEOUT_MS = 15_000;
 
 async function fetchUrlText(raw: string, signal?: AbortSignal): Promise<string> {
-  const blocked = isBlockedFetchUrl(raw);
-  if (blocked) throw new Error(blocked);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   const onAbort = () => controller.abort();
   signal?.addEventListener('abort', onAbort, { once: true });
   try {
-    const res = await fetch(raw, {
+    // DNS-aware guard on every redirect hop, before each request is made.
+    const res = await fetchGuarded(raw, {
       signal: controller.signal,
-      redirect: 'follow',
       headers: { 'user-agent': 'omnipix-agent/1.0', accept: 'text/html,text/plain,*/*' },
     });
-    // Re-check after redirects: a public URL must not bounce into the VPC.
-    const finalBlocked = isBlockedFetchUrl(res.url || raw);
-    if (finalBlocked) throw new Error(`redirect target blocked: ${finalBlocked}`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const contentType = res.headers.get('content-type') ?? '';
     if (!/text\/|json|xml/i.test(contentType)) throw new Error(`refusing non-text content (${contentType || 'unknown'})`);

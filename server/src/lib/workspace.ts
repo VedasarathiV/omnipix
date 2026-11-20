@@ -110,8 +110,10 @@ export function resolveInRoot(root: string, rel: string): string {
 // lock, timeout, and approval tier do the real work; these catch the
 // obviously destructive one-liners before they run.
 const DENIED_PATTERNS: Array<{ pattern: RegExp; reason: string }> = [
-  { pattern: /rm\s+(-[a-z]*r[a-z]*\s+.*\/(\s|$)|.*\/\s*$)/i, reason: 'recursive remove touching /' },
-  { pattern: /:\(\)\s*{\s*:\s*\|\s*:\s*&?\s*}\s*;?\s*:/, reason: 'fork bomb' },
+  { pattern: /\brm\s+((-[a-zA-Z]*[rR][a-zA-Z]*|--recursive)\s+.*(~|\$HOME|\$\{HOME\}|\/\*?(\s|$))|.*\/\s*$)/i, reason: 'recursive remove touching /, home, or globs' },
+  { pattern: /:\(\)\s*\{[^}]*:\s*\|\s*:[^}]*\}\s*;?\s*:/, reason: 'fork bomb' },
+  { pattern: /\bfind\s+\/\S*\s+[^|;&]*-delete\b/, reason: 'find / -delete' },
+  { pattern: /\bfind\b[^|;&]*-exec[^|;&]*\brm\s+-[a-zA-Z]*[rR]/i, reason: 'find -exec recursive remove' },
   { pattern: /\b(mkfs|dd\s+.*of=|diskutil\s+erase|format\s+[a-z]:)/i, reason: 'disk formatting' },
   { pattern: /\b(shutdown|reboot|halt|poweroff)\b/i, reason: 'power control' },
   { pattern: /(curl|wget)\s+[^|]+\|\s*(sh|bash|zsh|pwsh|powershell)/i, reason: 'piping downloads into a shell' },

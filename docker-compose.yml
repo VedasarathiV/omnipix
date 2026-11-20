@@ -9,6 +9,10 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3001
+      # The server defaults to loopback; inside the container it must listen
+      # on all interfaces or published ports can't reach it. Host-side
+      # exposure is still controlled by HOST_BIND below (loopback default).
+      HOST: "::"
       # Settings → Check for updates → "Update now". Only active when the
       # `autoupdate` profile below runs and WATCHTOWER_TOKEN is set in .env.
       OMNIPIX_SELF_UPDATE_URL: http://watchtower:8080

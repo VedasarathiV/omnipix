@@ -144,6 +144,23 @@ const LEVEL_FOR_METHOD: Record<ConsoleMethod, ServerLogLevel> = {
 };
 
 let installed = false;
+let bufferSuppressed = false;
+
+/**
+ * Run fn with console output still reaching the terminal but NOT recorded
+ * into the queryable server-log buffer. For one-time setup/reset codes: the
+ * operator reads them from their own terminal, while any dashboard session
+ * holder could otherwise read them back via /api/logs. Nest-safe.
+ */
+export function withoutLogBuffer<T>(fn: () => T): T {
+  const prev = bufferSuppressed;
+  bufferSuppressed = true;
+  try {
+    return fn();
+  } finally {
+    bufferSuppressed = prev;
+  }
+}
 
 /**
  * Wrap the console writers so no provider credential reaches stdout. Idempotent,
@@ -166,8 +183,9 @@ export function installLogRedaction(): () => void {
         // The dashboard's log viewer taps in HERE, on the redacted args and
         // before the write, so there is still exactly one console patch in the
         // process and the buffer can never hold a credential the terminal did
-        // not. recordConsoleLine never throws.
-        recordConsoleLine(level, redacted);
+        // not. recordConsoleLine never throws. withoutLogBuffer() scopes
+        // (one-time codes) skip the buffer but still write the terminal.
+        if (!bufferSuppressed) recordConsoleLine(level, redacted);
         original(...redacted);
       } catch {
         // Never let redaction swallow a log line.

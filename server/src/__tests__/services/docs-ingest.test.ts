@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { initDb, getDb } from '../../db/index.js';
+import { setGuardedFetchResolve } from '../../lib/guarded-fetch.js';
 import {
   chunkText,
   deleteDoc,
@@ -44,10 +45,13 @@ describe('docs ingest', () => {
   beforeEach(() => {
     process.env.ENCRYPTION_KEY = '0'.repeat(64);
     initDb(':memory:');
+    // No real DNS in tests: fake hosts resolve to a public documentation IP.
+    setGuardedFetchResolve(async () => ['93.184.216.34']);
   });
 
   afterEach(() => {
     globalThis.fetch = nativeFetch;
+    setGuardedFetchResolve(null);
     vi.unstubAllGlobals();
   });
 

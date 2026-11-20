@@ -78,10 +78,12 @@ export interface Config {
 export function loadConfig(): Config {
   return {
     port: process.env.PORT ?? 3001,
-    // Dual-stack ('::') by default so the dashboard is reachable over both IPv4
-    // and IPv6 (e.g. IPv6-enabled Docker networks — #180). Hosts with IPv6
-    // disabled fall back to IPv4-only below; HOST overrides the default outright.
-    host: process.env.HOST ?? '::',
+    // Loopback by default: OmniPix is a single-user local app, so remote
+    // access must be an explicit decision (HOST=:: or 0.0.0.0). The Docker
+    // image sets HOST=:: itself — the container must listen on all
+    // interfaces for port publishing to work, while the published port stays
+    // loopback-bound on the host (see docker-compose.yml HOST_BIND).
+    host: process.env.HOST ?? '127.0.0.1',
     dbPath: process.env.OMNIPIX_DB_PATH?.trim() || null,
     dashboardOrigins: (process.env.DASHBOARD_ORIGINS ?? '')
       .split(',')

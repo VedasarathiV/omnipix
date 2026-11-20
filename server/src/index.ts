@@ -141,17 +141,11 @@ async function main() {
   const servers = [server];
   installGracefulShutdown({ servers: () => servers.filter(s => s.listening), closeDb: () => getDb().close?.() });
   server.on('error', (err: NodeJS.ErrnoException) => {
-    // The default '::' bind fails where IPv6 is disabled (kernel
-    // ipv6.disable=1 and the like) — retry IPv4-only rather than dying.
-    // Anything else (EADDRINUSE, an explicit HOST that can't bind) keeps the
-    // fail-fast posture documented in main().catch below.
-    if (!process.env.HOST && (err.code === 'EAFNOSUPPORT' || err.code === 'EADDRNOTAVAIL')) {
-      console.warn('[server] IPv6 unavailable on this host — falling back to 0.0.0.0 (IPv4-only)');
-      const fallback = app.listen(Number(PORT), '0.0.0.0', onReady('0.0.0.0'));
-      tuneKeepAlive(fallback);
-      servers.push(fallback);
-      return;
-    }
+    // Fail fast on any bind error. (The old code retried 0.0.0.0 when the
+    // default '::' bind failed on IPv6-less hosts; the default is loopback
+    // now, so that fallback is both dead and — worse — would silently widen
+    // exposure past what the operator chose. An explicit HOST that can't
+    // bind has always been fatal, and still is.)
     console.error('\n[server] Failed to start:\n  ' + (err?.message ?? err) + '\n');
     process.exit(1);
   });

@@ -1,5 +1,8 @@
 import { describe, it, expect, afterEach } from 'vitest';
-import { redactSecrets, installLogRedaction } from '../../lib/log-redaction.js';
+import { redactSecrets, installLogRedaction, withoutLogBuffer } from '../../lib/log-redaction.js';
+import { clearLogs, queryLogs } from '../../lib/server-logs.js';
+import { generateSetupCode } from '../../lib/setup-code.js';
+import { generateResetCode } from '../../lib/reset-code.js';
 
 /**
  * Fixtures are assembled at runtime rather than written out as literals.
@@ -214,5 +217,58 @@ describe('installLogRedaction', () => {
     console.log('plain line');
     console.log = origLog;
     expect(String(seen[0]![0])).toBe('plain line');
+  });
+});
+
+describe('withoutLogBuffer', () => {
+  let restore: (() => void) | null = null;
+
+  afterEach(() => {
+    restore?.();
+    restore = null;
+  });
+
+  it('writes the terminal but skips the queryable buffer, then restores', () => {
+    const seen: unknown[][] = [];
+    const origLog = console.log;
+    console.log = (...args: unknown[]) => { seen.push(args); };
+    restore = installLogRedaction();
+    clearLogs();
+
+    console.log('buffered-marker-line');
+    withoutLogBuffer(() => console.log('suppressed-marker-line'));
+    console.log('buffered-again-line');
+
+    expect(queryLogs({ q: 'marker-line' }).map(e => e.message)).toEqual(
+      expect.arrayContaining([expect.stringContaining('buffered-marker-line')]),
+    );
+    expect(queryLogs({ q: 'suppressed-marker-line' })).toHaveLength(0);
+    expect(queryLogs({ q: 'buffered-again-line' })).toHaveLength(1);
+    // Terminal still received all three lines.
+    expect(seen.flat().join(' ')).toContain('suppressed-marker-line');
+
+    restore();
+    console.log = origLog;
+    restore = null;
+  });
+
+  it('keeps one-time setup and reset codes out of the buffer', () => {
+    const origLog = console.log;
+    console.log = () => undefined;
+    restore = installLogRedaction();
+    clearLogs();
+
+    const setup = generateSetupCode();
+    const reset = generateResetCode('op@example.com');
+
+    expect(setup).toHaveLength(10);
+    expect(queryLogs({ q: setup })).toHaveLength(0);
+    expect(queryLogs({ q: reset })).toHaveLength(0);
+    expect(queryLogs({ q: 'op@example.com' })).toHaveLength(0);
+    expect(queryLogs({ q: 'setup code' })).toHaveLength(0);
+
+    restore();
+    console.log = origLog;
+    restore = null;
   });
 });

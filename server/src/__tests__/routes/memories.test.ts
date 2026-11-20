@@ -3,6 +3,7 @@ import type { Express } from 'express';
 import { createApp } from '../../app.js';
 import { initDb, getDb } from '../../db/index.js';
 import { mintDashboardToken, isGatedApiPath } from '../helpers/auth.js';
+import { setGuardedFetchResolve } from '../../lib/guarded-fetch.js';
 
 let app: Express;
 let dashToken: string;
@@ -30,10 +31,13 @@ describe('memories', () => {
     initDb(':memory:');
     app = createApp();
     dashToken = mintDashboardToken();
+    // No real DNS in tests: fake hosts resolve to a public documentation IP.
+    setGuardedFetchResolve(async () => ['93.184.216.34']);
   });
 
   afterEach(() => {
     globalThis.fetch = nativeFetch;
+    setGuardedFetchResolve(null);
     vi.unstubAllGlobals();
   });
 

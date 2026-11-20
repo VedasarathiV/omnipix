@@ -1,4 +1,5 @@
 import { createOneTimeCode } from './one-time-code.js';
+import { withoutLogBuffer } from './log-redaction.js';
 
 // One-time password-reset code.
 //
@@ -13,16 +14,19 @@ let mintedAtMs = 0;
 
 // Mint a fresh reset code and log it prominently, with the account email: the
 // operator who forgot the password may have forgotten which email signs in
-// too (#1477), and whoever can read this log can already reset the account.
+// too (#1477). Terminal only — never the queryable log buffer, where any
+// dashboard session could read the code back via /api/logs.
 // Returns the code.
 export function generateResetCode(accountEmail?: string | null): string {
   const code = _code.generate();
   mintedAtMs = Date.now();
-  console.log('');
-  console.log('  Password-reset code: ' + code);
-  if (accountEmail) console.log('  Account email: ' + accountEmail);
-  console.log('  Enter this code on the reset form to set a new password.');
-  console.log('');
+  withoutLogBuffer(() => {
+    console.log('');
+    console.log('  Password-reset code: ' + code);
+    if (accountEmail) console.log('  Account email: ' + accountEmail);
+    console.log('  Enter this code on the reset form to set a new password.');
+    console.log('');
+  });
   return code;
 }
 

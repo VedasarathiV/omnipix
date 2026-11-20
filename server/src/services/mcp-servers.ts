@@ -159,6 +159,15 @@ function getMcpServerRow(id: number): StoredRow | undefined {
   return getDb().prepare('SELECT * FROM mcp_servers WHERE id = ?').get(id) as StoredRow | undefined;
 }
 
+/**
+ * Audit trail for local process spawns. Warn level so it lands in the
+ * persisted log tier, not just the ring. Args are counted, never printed
+ * (they routinely carry tokens); env is never logged.
+ */
+function auditStdioSpawn(name: string, command: string, argCount: number): void {
+  console.warn(`[mcp] spawning stdio server '${name}': ${command} (${argCount} args)`);
+}
+
 export function getMcpServer(id: number): McpServerRow | null {
   const row = getMcpServerRow(id);
   if (!row) return null;
@@ -219,7 +228,9 @@ export async function mcpConnection(id: number): Promise<McpClient> {
         return await McpClient.http(row.url, { headers });
       }
       const env = secretJson({ encrypted: row.env_encrypted, iv: row.env_iv, authTag: row.env_auth_tag });
-      return await McpClient.stdio(row.command, JSON.parse(row.args_json) as string[], env);
+      const args = JSON.parse(row.args_json) as string[];
+      auditStdioSpawn(row.name, row.command, args.length);
+      return await McpClient.stdio(row.command, args, env);
     } catch (err) {
       recordFailure(id, err);
       throw err;
@@ -341,7 +352,9 @@ export async function testMcpServer(id: number): Promise<{ tools: McpToolDef[]; 
       client = await McpClient.http(row.url, { headers });
     } else {
       const env = secretJson({ encrypted: row.env_encrypted, iv: row.env_iv, authTag: row.env_auth_tag });
-      client = await McpClient.stdio(row.command, JSON.parse(row.args_json) as string[], env);
+      const args = JSON.parse(row.args_json) as string[];
+      auditStdioSpawn(row.name, row.command, args.length);
+      client = await McpClient.stdio(row.command, args, env);
     }
   } catch (err) {
     recordFailure(id, err);

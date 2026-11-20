@@ -1,5 +1,5 @@
 import { getDb } from '../db/index.js';
-import { isBlockedFetchUrl } from '../lib/fetch-guard.js';
+import { fetchGuarded } from '../lib/guarded-fetch.js';
 
 // Docs ingest (gap 8): fetch a URL, chunk it structurally, and store the
 // chunks scoped to a project key. Retrieval is keyword-first (AND over query
@@ -147,21 +147,17 @@ export function chunkText(text: string): TextChunk[] {
 }
 
 async function fetchCapped(url: string, signal?: AbortSignal): Promise<{ text: string; contentType: string; finalUrl: string }> {
-  const blocked = isBlockedFetchUrl(url);
-  if (blocked) throw new Error(blocked);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), INGEST_TIMEOUT_MS);
   const onAbort = (): void => controller.abort();
   signal?.addEventListener('abort', onAbort, { once: true });
   try {
-    const res = await fetch(url, {
+    // DNS-aware guard on every redirect hop, before each request is made.
+    const res = await fetchGuarded(url, {
       signal: controller.signal,
-      redirect: 'follow',
       headers: { 'user-agent': 'omnipix-ingest/1.0', accept: 'text/html,text/plain,application/json,*/*' },
     });
     const finalUrl = res.url || url;
-    const finalBlocked = isBlockedFetchUrl(finalUrl);
-    if (finalBlocked) throw new Error(`redirect target blocked: ${finalBlocked}`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const contentType = res.headers.get('content-type') ?? '';
     if (!/text\/|json|xml/i.test(contentType)) {

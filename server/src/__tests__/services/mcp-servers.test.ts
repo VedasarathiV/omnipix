@@ -100,6 +100,27 @@ describe('MCP servers', () => {
     expect(getMcpServer(id)).toMatchObject({ last_error: null, tool_count: 1 });
   });
 
+  it('audit-logs stdio spawns without args or env secrets', async () => {
+    const seen: string[] = [];
+    const origWarn = console.warn;
+    console.warn = (...args: unknown[]) => { seen.push(args.map(String).join(' ')); };
+    try {
+      const id = createMcpServer({
+        name: 'audited', transport: 'stdio', command: process.execPath,
+        args: ['-e', FAKE_SERVER], env: { MCP_TOKEN: 'supersecret-token-value' },
+      });
+      await testMcpServer(id);
+    } finally {
+      console.warn = origWarn;
+    }
+    const line = seen.find(s => s.includes("[mcp] spawning stdio server 'audited'"));
+    expect(line).toBeTruthy();
+    expect(line!).toContain(process.execPath);
+    expect(line!).toContain('(2 args)');
+    expect(seen.join('\n')).not.toContain('supersecret-token-value');
+    expect(seen.join('\n')).not.toContain(FAKE_SERVER);
+  });
+
   it('records failures on dead servers without throwing the list', async () => {
     const id = createMcpServer({ name: 'dead', transport: 'stdio', command: '/nonexistent/mcp-xyz' });
     await expect(testMcpServer(id)).rejects.toThrow();
