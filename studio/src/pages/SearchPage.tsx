@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ExternalLink, FileText, Globe, MessageSquare, Search } from 'lucide-react';
 import { apiFetch } from '../lib/api';
 import { useConversations, useUnifiedKey } from '../lib/queries';
@@ -165,8 +165,33 @@ function WebSearch() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [result, setResult] = useState<WebResult | null>(null);
+  const [engines, setEngines] = useState<Array<{ engineId: string }> | null>(null);
+  const [enabling, setEnabling] = useState(false);
   const { data: keyData } = useUnifiedKey();
-  const { setRail } = useStudio();
+  const { setRail, pushToast } = useStudio();
+
+  useEffect(() => {
+    let live = true;
+    apiFetch<Array<{ engineId: string }>>('/api/search/engines')
+      .then(list => { if (live) setEngines(list); })
+      .catch(() => { if (live) setEngines([]); });
+    return () => { live = false; };
+  }, []);
+
+  async function enableKeyless() {
+    if (enabling) return;
+    setEnabling(true);
+    try {
+      const out = await apiFetch<{ engines: string[] }>('/api/search/engines/keyless', { method: 'POST' });
+      setEngines(out.engines.map(engineId => ({ engineId })));
+      setError('');
+      pushToast('ok', `Keyless search on — ${out.engines.length} engines ready.`);
+    } catch (err) {
+      pushToast('error', err instanceof Error ? err.message : 'Could not enable keyless search');
+    } finally {
+      setEnabling(false);
+    }
+  }
 
   async function search() {
     const q = query.trim();
@@ -262,8 +287,22 @@ function WebSearch() {
           {result.results.length} result{result.results.length === 1 ? '' : 's'} · {result.provider} · {result.engine}
         </p>
       )}
-      {!result && !error && (
-        <p className="py-4 text-center text-xs text-ink-faint">Runs on the gateway search chain — enable engines under Models → Search.</p>
+      {engines && engines.length === 0 && !result && (
+        <div className="mt-3 rounded-xl border border-line bg-base-1 px-4 py-3 text-center">
+          <p className="text-[13px]">No search engine installed yet.</p>
+          <button
+            type="button"
+            onClick={() => void enableKeyless()}
+            disabled={enabling}
+            className="mt-2 rounded-lg bg-accent px-3 py-1.5 text-xs font-semibold text-base-0 outline-none hover:opacity-90 focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-40"
+          >
+            {enabling ? 'Enabling…' : 'Enable keyless search'}
+          </button>
+          <p className="mt-1.5 text-[11px] text-ink-faint">Free anonymous engines — no API key needed. Or add keys under Providers.</p>
+        </div>
+      )}
+      {engines && engines.length > 0 && !result && !error && (
+        <p className="py-4 text-center text-xs text-ink-faint">Runs on the gateway search chain — manage engines under Models → Search.</p>
       )}
     </div>
   );

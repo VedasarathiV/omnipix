@@ -14,6 +14,10 @@ Agent superpowers + distribution readiness.
 
 ### Search
 - New Search web tab with keyless live search (proven against real queries).
+- One-tap "Enable keyless search" (POST /api/search/engines/keyless): fresh
+  installs 503d every search because the bundled catalog ships zero engines;
+  the opt-in inserts anonymous Parallel/Keenable engines + sentinel keys and
+  catalog syncs keep them. User-initiated, so premium/free tiering is untouched.
 - Provider search fan-out with tiered catalog; no seeded engines.
 
 ### Chat + workspace

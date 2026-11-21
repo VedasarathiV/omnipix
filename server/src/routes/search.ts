@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import type { Request, Response } from 'express';
 import { z } from 'zod';
-import { listSearchEngines, updateSearchEngine, runSearch, searchStatus, SearchError } from '../services/search.js';
+import { enableKeylessSearch, listSearchEngines, updateSearchEngine, runSearch, searchStatus, SearchError } from '../services/search.js';
 import { getSyncState } from '../services/catalog-sync.js';
 
 // Dashboard: the Models → Search page (#1174). Engines come from the catalog's
@@ -19,6 +19,13 @@ searchRouter.get('/status', (_req: Request, res: Response) => {
 
 searchRouter.get('/engines', (_req: Request, res: Response) => {
   res.json(listSearchEngines());
+});
+
+// One-tap keyless search for installs whose catalog carries no engines
+// (every standalone install): inserts the anonymous-capable engine rows and
+// sentinel keys, persists the opt-in so catalog syncs keep them.
+searchRouter.post('/engines/keyless', (_req: Request, res: Response) => {
+  res.json(enableKeylessSearch());
 });
 
 searchRouter.post('/engines/:id/test', async (req: Request, res: Response) => {

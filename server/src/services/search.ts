@@ -13,7 +13,8 @@ import { LINKUP_BASE_URL } from '../providers/linkup.js';
 import { PARALLEL_BASE_URL, PARALLEL_MCP_URL } from '../providers/parallel.js';
 import { KEENABLE_APP_TITLE, KEENABLE_BASE_URL } from '../providers/keenable.js';
 import { OUTCRAWL_BASE_URL } from '../providers/outcrawl.js';
-import { isAnonymousCredential } from '../lib/credential.js';
+import { isAnonymousCredential, NO_KEY_SENTINEL } from '../lib/credential.js';
+import { encrypt } from '../lib/crypto.js';
 import { randomUUID } from 'node:crypto';
 import { secondsUntilNextMonth } from './key-budget.js';
 import { noteBudgetAlerts } from './budget-alerts.js';
@@ -837,6 +838,65 @@ export function listSearchEngines(): SearchEngineView[] {
       searchesThisMonth: monthCounts.get(engineKey(row)) ?? 0,
     };
   });
+}
+
+/**
+ * Keyless search: the catalog ships no engines and standalone installs have
+ * no feed, so a fresh install 503s every web search. The operator can opt in
+ * once (POST /api/search/engines/keyless, offered on the Search page when no
+ * engine exists); this inserts the anonymous-capable engine rows plus the
+ * `no-key` sentinel keys the parallel/keenable adapters already understand.
+ * User-initiated, so it never fights the catalog's premium/free tiering: the
+ * 30-day gate governs what the catalog pushes, not what the operator adds.
+ * Idempotent — safe to re-run after a catalog prune (catalog-sync does).
+ */
+export const KEYLESS_SEARCH_SETTING = 'keyless_search_enabled';
+
+const KEYLESS_ENGINES = [
+  { platform: 'parallel', engineId: 'parallel-search', displayName: 'Parallel Search', priority: 4, quotaLabel: 'Free, no key needed' },
+  { platform: 'keenable', engineId: 'keenable-search', displayName: 'Keenable Search', priority: 5, quotaLabel: 'Free, no key needed' },
+] as const;
+
+export function keylessSearchEnabled(): boolean {
+  return getSetting(KEYLESS_SEARCH_SETTING) === '1';
+}
+
+/** Insert any missing keyless engine rows and sentinel keys. Returns the engine ids now present. */
+export function ensureKeylessEngines(): string[] {
+  const db = getDb();
+  const present: string[] = [];
+  for (const engine of KEYLESS_ENGINES) {
+    const row = db.prepare(
+      'SELECT id FROM media_models WHERE modality = ? AND platform = ? AND model_id = ?',
+    ).get(SEARCH_MODALITY, engine.platform, engine.engineId);
+    if (!row) {
+      db.prepare(`
+        INSERT INTO media_models (platform, model_id, display_name, modality, priority, enabled, quota_label, meta_json)
+        VALUES (?, ?, ?, ?, ?, 1, ?, '{}')
+      `).run(engine.platform, engine.engineId, engine.displayName, SEARCH_MODALITY, engine.priority, engine.quotaLabel);
+    }
+    // A real key the operator saved beats the sentinel — only add anonymous
+    // access when the platform has no enabled key at all.
+    const key = db.prepare(
+      'SELECT id FROM api_keys WHERE platform = ? AND enabled = 1',
+    ).get(engine.platform);
+    if (!key) {
+      const { encrypted, iv, authTag } = encrypt(NO_KEY_SENTINEL);
+      db.prepare(`
+        INSERT INTO api_keys (platform, label, encrypted_key, iv, auth_tag, status, enabled)
+        VALUES (?, 'Keyless search', ?, ?, ?, 'unknown', 1)
+      `).run(engine.platform, encrypted, iv, authTag);
+    }
+    present.push(engine.engineId);
+  }
+  return present;
+}
+
+/** Persist the opt-in and ensure the rows. Returns the engines plus live readiness. */
+export function enableKeylessSearch(): { engines: string[]; status: SearchStatus } {
+  setSetting(KEYLESS_SEARCH_SETTING, '1');
+  const engines = ensureKeylessEngines();
+  return { engines, status: searchStatus() };
 }
 
 /** Turn an engine on/off and/or move it to `priority` (0 = first/default).

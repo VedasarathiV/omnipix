@@ -3,7 +3,7 @@ import type { Db } from '../db/types.js';
 import { getDb, getSetting, setSetting } from '../db/index.js';
 import { hasProvider } from '../providers/index.js';
 import { MEDIA_PLATFORMS, TRANSCRIPTION_PLATFORMS, VIDEO_PLATFORMS } from './media.js';
-import { SEARCH_ENGINE_PLATFORMS, SEARCH_MODALITY } from './search.js';
+import { ensureKeylessEngines, keylessSearchEnabled, SEARCH_ENGINE_PLATFORMS, SEARCH_MODALITY } from './search.js';
 import { DECISION_MODALITY, CATALOG_DECISION_PLATFORMS } from './decision.js';
 import { EMBEDDING_PLATFORMS } from './embeddings.js';
 import type { Platform } from '@omnipix/shared/types.js';
@@ -997,6 +997,12 @@ function applyCatalogInner(db: Db, catalog: Catalog): NonNullable<SyncResult['co
           counts.removed++;
         }
       }
+    }
+    // The keyless opt-in is the operator's own choice, not catalog content:
+    // re-ensure it after the prune above so a catalog update never silently
+    // un-searches the install. No-op unless the operator opted in.
+    if (keylessSearchEnabled()) {
+      ensureKeylessEngines();
     }
 
     // Prune decision models only when the catalog carries the decisionModels
