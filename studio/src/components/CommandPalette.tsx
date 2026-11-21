@@ -13,7 +13,7 @@ interface Entry {
 }
 
 export function CommandPalette() {
-  const { paletteOpen, setPaletteOpen, setRail, setModel, setSettingsOpen, pushToast, setConversationId, setActiveRunId, setMode, setEditDraft } = useStudio();
+  const { paletteOpen, setPaletteOpen, setRail, setModel, setSettingsOpen, pushToast, setConversationId, setActiveRunId, setMode, setEditDraft, setWelcomeOpen } = useStudio();
   const { data: runsData } = useRuns();
   const { data: conversations = [] } = useConversations();
   const { data: models = [] } = useModels();
@@ -66,6 +66,7 @@ export function CommandPalette() {
     { group: 'Go', label: 'Open docs', hint: '⌘8', icon: FileText, run: () => setRail('docs') },
     { group: 'Go', label: 'New chat', hint: '⌘N', icon: MessageSquare, run: () => { setConversationId(null); setActiveRunId(null); setRail('chat'); } },
     { group: 'Go', label: 'Open settings', hint: '⌘,', icon: Search, run: () => setSettingsOpen(true) },
+    { group: 'Go', label: 'Welcome checklist', hint: '', icon: Search, run: () => setWelcomeOpen(true) },
     ...(commandsData?.commands ?? []).slice(0, 12).map(c => ({
       group: 'Commands', label: `/${c.name} — ${c.description}`, hint: 'Insert', icon: Slash,
       run: () => insertSlash(c.name),

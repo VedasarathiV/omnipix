@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Play, X } from 'lucide-react';
 import { useStudio } from '../state/store';
 import { apiFetch } from '../lib/api';
-import { useModels, useSkills, type AgentRun } from '../lib/queries';
+import { useAgentPresets, useModels, useSkills, type AgentRun } from '../lib/queries';
 
 const ALL_TOOLS = ['read_file', 'grep_search', 'write_file', 'edit_file', 'shell_exec', 'run_check', 'git_status', 'git_diff', 'git_commit', 'delegate', 'web_search', 'fetch_url', 'todo_write'];
 
@@ -13,12 +13,23 @@ export function AgentEditor() {
   const queryClient = useQueryClient();
   const { data: models = [] } = useModels();
   const { data: skillsData } = useSkills();
+  const { data: presetsData } = useAgentPresets();
   const [goal, setGoal] = useState('');
   const [tools, setTools] = useState<string[]>(['read_file', 'grep_search', 'write_file', 'edit_file', 'shell_exec']);
   const [skills, setSkills] = useState<string[]>([]);
   const [model, setModel] = useState('auto');
   const [planMode, setPlanMode] = useState(false);
   if (!agentEditor) return null;
+
+  const presets = presetsData?.presets ?? [];
+  function applyPreset(name: string) {
+    const preset = presets.find(p => p.name === name);
+    if (!preset) return;
+    if (preset.tools?.length) setTools(preset.tools.filter(t => ALL_TOOLS.includes(t)));
+    if (preset.skills?.length) setSkills(preset.skills);
+    if (preset.model) setModel(preset.model);
+    setPlanMode(!!preset.planMode);
+  }
 
   const enabled = models.filter(m => m.enabled);
   const skillNames = (skillsData?.skills ?? []).filter(s => s.enabled).map(s => s.name);
@@ -68,6 +79,20 @@ export function AgentEditor() {
           </button>
         </div>
         <div className="space-y-4 px-5 py-4">
+          {presets.length > 0 && (
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-xs font-medium">Preset <span className="font-normal text-ink-faint">(fills tools, skills, model)</span></p>
+              <select
+                defaultValue=""
+                onChange={e => { if (e.target.value) applyPreset(e.target.value); e.target.value = ''; }}
+                aria-label="Agent preset"
+                className="rounded-lg border border-line bg-base-1 px-2 py-1.5 text-xs outline-none focus-visible:ring-2 focus-visible:ring-accent"
+              >
+                <option value="">Choose…</option>
+                {presets.map(p => <option key={p.name} value={p.name}>{p.name} — {p.description.slice(0, 40)}</option>)}
+              </select>
+            </div>
+          )}
           <div>
             <p className="mb-1.5 text-xs font-medium">Goal</p>
             <textarea

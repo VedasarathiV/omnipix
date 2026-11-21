@@ -118,6 +118,18 @@ export function scanAgentFiles(configDirs: string[]): FileAgent[] {
   return out;
 }
 
+/** Serialize an agent preset to its markdown file form. */
+export function serializeAgentFile(agent: {
+  description: string; skills?: string[]; tools?: string[]; model?: string; planMode?: boolean; notes?: string;
+}): string {
+  const lines = [`description: ${agent.description.trim()}`];
+  if (agent.skills?.length) lines.push(`skills: ${agent.skills.join(', ')}`);
+  if (agent.tools?.length) lines.push(`tools: ${agent.tools.join(', ')}`);
+  if (agent.model) lines.push(`model: ${agent.model}`);
+  if (agent.planMode !== undefined) lines.push(`planMode: ${agent.planMode ? 'true' : 'false'}`);
+  return `---\n${lines.join('\n')}\n---\n${(agent.notes ?? '').trim()}\n`;
+}
+
 /** Resolve a preset by name. Later config dirs win clashes. Null when unknown. */
 export function resolveFileAgent(name: string, configDirs: string[] = defaultConfigDirs()): FileAgent | null {
   if (!NAME_RE.test(name)) return null;

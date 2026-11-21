@@ -2,8 +2,9 @@ import { Router } from 'express';
 import type { Request, Response } from 'express';
 import { z } from 'zod';
 import { getDb } from '../db/index.js';
+import { fetchGuarded } from '../lib/guarded-fetch.js';
 import { listSkills } from '../services/agent-runtime.js';
-import { parseSkillFile, serializeSkill } from '../services/skill-files.js';
+import { parseSkillFile, serializeSkill, type ParsedSkill } from '../services/skill-files.js';
 
 export const skillsRouter = Router();
 
@@ -123,25 +124,21 @@ const importSkillSchema = z.object({
   content: z.string().min(1).max(140000),
 });
 
-skillsRouter.post('/import', (req: Request, res: Response) => {
-  const parsed = importSkillSchema.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: { message: parsed.error.issues.map(e => e.message).join(', ') } });
-    return;
+class SkillConflict extends Error {
+  constructor(name: string) {
+    super(`Skill already exists: ${name}`);
   }
-  let skill;
-  try {
-    skill = parseSkillFile(parsed.data.content);
-  } catch (err) {
-    res.status(400).json({ error: { message: err instanceof Error ? err.message : String(err) } });
-    return;
-  }
+}
+
+/**
+ * Shared by /import and /import-url: validate a parsed skill, apply the
+ * agency dedupe, and insert. Throws Error on invalid input (400) and
+ * SkillConflict on duplicate names (409).
+ */
+function insertParsedSkill(skill: ParsedSkill): { dedupedAgainst: string | null } {
   if (skill.bundle !== undefined) {
     const bundleError = validateBundleMembers(skill.name, skill.bundle);
-    if (bundleError) {
-      res.status(400).json({ error: { message: bundleError } });
-      return;
-    }
+    if (bundleError) throw new Error(bundleError);
   }
   // Dedupe: an imported `agency-<name>` that duplicates a builtin `<name>` is
   // stored disabled, so the router sees one canonical skill per role. The
@@ -163,11 +160,84 @@ skillsRouter.post('/import', (req: Request, res: Response) => {
       .run(skill.name, skill.description, skill.instructions, enabled,
         skill.bundle ? JSON.stringify(skill.bundle) : null);
   } catch {
-    res.status(409).json({ error: { message: `Skill already exists: ${skill.name}` } });
-    return;
+    throw new SkillConflict(skill.name);
   }
+  return { dedupedAgainst };
+}
+
+function importResult(res: Response, skill: ParsedSkill, dedupedAgainst: string | null): void {
   res.status(201).json({
     skill: listSkills().find(s => s.name === skill.name),
     ...(dedupedAgainst ? { dedupedAgainst } : {}),
   });
+}
+
+function importError(res: Response, err: unknown): void {
+  if (err instanceof SkillConflict) {
+    res.status(409).json({ error: { message: err.message } });
+    return;
+  }
+  res.status(400).json({ error: { message: err instanceof Error ? err.message : String(err) } });
+}
+
+skillsRouter.post('/import', (req: Request, res: Response) => {
+  const parsed = importSkillSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: { message: parsed.error.issues.map(e => e.message).join(', ') } });
+    return;
+  }
+  let skill: ParsedSkill;
+  try {
+    skill = parseSkillFile(parsed.data.content);
+  } catch (err) {
+    res.status(400).json({ error: { message: err instanceof Error ? err.message : String(err) } });
+    return;
+  }
+  try {
+    importResult(res, skill, insertParsedSkill(skill).dedupedAgainst);
+  } catch (err) {
+    importError(res, err);
+  }
+});
+
+const importUrlSchema = z.object({
+  url: z.string().trim().min(1).max(2000),
+});
+
+skillsRouter.post('/import-url', async (req: Request, res: Response) => {
+  const parsed = importUrlSchema.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: { message: parsed.error.issues.map(e => e.message).join(', ') } });
+    return;
+  }
+  let text: string;
+  try {
+    const fetched = await fetchGuarded(parsed.data.url, {
+      headers: { 'user-agent': 'omnipix-skills/1.0', accept: 'text/*,*/*' },
+    });
+    if (!fetched.ok) {
+      res.status(400).json({ error: { message: `Skill URL fetch failed (HTTP ${fetched.status})` } });
+      return;
+    }
+    text = await fetched.text();
+  } catch (err) {
+    res.status(400).json({ error: { message: err instanceof Error ? err.message : String(err) } });
+    return;
+  }
+  if (text.length > 140000) {
+    res.status(400).json({ error: { message: 'Skill file is too large (140KB max)' } });
+    return;
+  }
+  let skill: ParsedSkill;
+  try {
+    skill = parseSkillFile(text);
+  } catch (err) {
+    res.status(400).json({ error: { message: err instanceof Error ? err.message : String(err) } });
+    return;
+  }
+  try {
+    importResult(res, skill, insertParsedSkill(skill).dedupedAgainst);
+  } catch (err) {
+    importError(res, err);
+  }
 });

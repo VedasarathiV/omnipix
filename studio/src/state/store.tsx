@@ -28,6 +28,8 @@ interface StudioState {
   setPaletteOpen: (open: boolean) => void;
   settingsOpen: boolean;
   setSettingsOpen: (open: boolean) => void;
+  welcomeOpen: boolean;
+  setWelcomeOpen: (open: boolean) => void;
   acceptedFiles: Set<string>;
   acceptFile: (path: string, accept: boolean) => void;
   acceptAll: (paths: string[]) => void;
@@ -121,6 +123,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
   const [sidebarTab, setSidebarTab] = useState<'chats' | 'files'>('chats');
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [welcomeOpen, setWelcomeOpen] = useState(false);
   const [acceptedFiles, setAcceptedFiles] = useState<Set<string>>(new Set());
   const [toasts, setToasts] = useState<Toast[]>([]);
   const [agentEditor, setAgentEditor] = useState<string | null>(null);
@@ -175,7 +178,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     rail, setRail, mode, setMode, model, setModel,
     rightOpen, setRightOpen, rightTab, setRightTab,
     sidebarOpen, setSidebarOpen, sidebarTab, setSidebarTab,
-    paletteOpen, setPaletteOpen, settingsOpen, setSettingsOpen,
+    paletteOpen, setPaletteOpen, settingsOpen, setSettingsOpen, welcomeOpen, setWelcomeOpen,
     acceptedFiles, acceptFile, acceptAll,
     toasts, pushToast, dismissToast,
     agentEditor, setAgentEditor,
@@ -185,7 +188,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     selectedFile, setSelectedFile,
   }), [
     rail, mode, model, rightOpen, rightTab, sidebarOpen, sidebarTab,
-    paletteOpen, settingsOpen, acceptedFiles, toasts,
+    paletteOpen, settingsOpen, welcomeOpen, acceptedFiles, toasts,
     agentEditor, conversationId, activeRunId, streamingReply, dictation, editDraft, selectedFile,
     acceptFile, acceptAll, pushToast, dismissToast,
   ]);

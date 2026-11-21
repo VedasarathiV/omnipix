@@ -1,7 +1,8 @@
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { Express } from 'express';
 import { createApp } from '../../app.js';
 import { initDb } from '../../db/index.js';
+import { setGuardedFetchResolve } from '../../lib/guarded-fetch.js';
 import { mintDashboardToken, isGatedApiPath } from '../helpers/auth.js';
 
 let app: Express;
@@ -183,5 +184,79 @@ describe('skills', () => {
     });
     expect(imported.status).toBe(201);
     expect(imported.body.skill).toMatchObject({ name: 'quiet-one', enabled: 0 });
+  });
+
+  it('still dedupes agency packs after the import refactor', async () => {
+    const imported = await call('POST', '/api/skills/import', {
+      content: '---\nname: agency-planner\ndescription: Pack planner.\n---\nPack body.',
+    });
+    expect(imported.status).toBe(201);
+    expect(imported.body.skill).toMatchObject({ name: 'agency-planner', enabled: 0 });
+    expect(imported.body.dedupedAgainst).toBe('planner');
+  });
+});
+
+describe('skills import-url', () => {
+  const nativeFetch = globalThis.fetch;
+
+  beforeEach(() => {
+    process.env.ENCRYPTION_KEY = '0'.repeat(64);
+    initDb(':memory:');
+    app = createApp();
+    dashToken = mintDashboardToken();
+    setGuardedFetchResolve(async () => ['93.184.216.34']);
+  });
+
+  afterEach(() => {
+    globalThis.fetch = nativeFetch;
+    setGuardedFetchResolve(null);
+  });
+
+  const SKILL_MD = '---\nname: url-skill\ndescription: From URL.\n---\nFetched body.';
+
+  // Stub remote skill hosts; the harness's own loopback calls pass through.
+  function stubSkillHosts(handler: (url: string) => Response) {
+    globalThis.fetch = (async (input: unknown, init?: unknown) => {
+      const url = String(input);
+      if (url.includes('skills.test')) return handler(url);
+      return nativeFetch(input as string, init as RequestInit);
+    }) as typeof fetch;
+  }
+
+  it('fetches, parses, and installs a skill file', async () => {
+    stubSkillHosts(() => new Response(SKILL_MD, { status: 200 }));
+    const res = await call('POST', '/api/skills/import-url', { url: 'https://skills.test/pack/SKILL.md' });
+    expect(res.status).toBe(201);
+    expect(res.body.skill).toMatchObject({ name: 'url-skill', description: 'From URL.' });
+    const dupe = await call('POST', '/api/skills/import-url', { url: 'https://skills.test/pack/SKILL.md' });
+    expect(dupe.status).toBe(409);
+  });
+
+  it('rejects HTTP failures, oversize bodies, and bad skills', async () => {
+    stubSkillHosts(url => {
+      if (url.includes('missing')) return new Response('nope', { status: 404 });
+      if (url.includes('big')) return new Response('x'.repeat(140001), { status: 200 });
+      return new Response('not a skill file', { status: 200 });
+    });
+    const failed = await call('POST', '/api/skills/import-url', { url: 'https://skills.test/missing.md' });
+    expect(failed.status).toBe(400);
+    expect(failed.body.error.message).toContain('HTTP 404');
+    const big = await call('POST', '/api/skills/import-url', { url: 'https://skills.test/big.md' });
+    expect(big.status).toBe(400);
+    expect(big.body.error.message).toContain('too large');
+    const bad = await call('POST', '/api/skills/import-url', { url: 'https://skills.test/bad.md' });
+    expect(bad.status).toBe(400);
+    expect(bad.body.error.message).toContain('frontmatter fence');
+  });
+
+  it('refuses blocked URLs without fetching', async () => {
+    let fetched = false;
+    stubSkillHosts(() => {
+      fetched = true;
+      return new Response(SKILL_MD, { status: 200 });
+    });
+    const res = await call('POST', '/api/skills/import-url', { url: 'http://127.0.0.1/evil.md' });
+    expect(res.status).toBe(400);
+    expect(fetched).toBe(false);
   });
 });

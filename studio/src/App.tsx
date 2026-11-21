@@ -18,6 +18,7 @@ import { Splash } from './components/Splash';
 import { Toasts } from './components/Toasts';
 import { FloatingMic } from './components/FloatingMic';
 import { Onboarding } from './components/Onboarding';
+import { WelcomeModal } from './components/WelcomeModal';
 import { MobileBar } from './components/MobileBar';
 import type { MobilePane } from './components/MobileBar';
 import { AgentsPage } from './pages/AgentsPage';
@@ -109,6 +110,7 @@ export function App() {
         <SettingsModal />
         <AgentEditor />
         <Onboarding />
+        <WelcomeModal />
         <Splash />
         <Toasts />
       </StudioProvider>

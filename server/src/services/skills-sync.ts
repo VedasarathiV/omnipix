@@ -37,21 +37,32 @@ export function defaultSkillScanDirs(cwd = process.cwd(), home = homedir()): str
   return dirs;
 }
 
+/** User-global config home for authored files (overridable in tests). */
+export function authoringConfigDir(home = homedir()): string {
+  const override = (process.env.OMNIPIX_CONFIG_DIR ?? '').trim();
+  if (override) return override;
+  return join(home, '.config', 'omnipix');
+}
+
 /**
  * Config dirs: the parents of the skill scan dirs. Command and agent
  * markdown lives beside skills (`<config>/{command,commands}/**\/*.md`,
- * `<config>/{agent,agents}/**\/*.md`), opencode layout parity.
+ * `<config>/{agent,agents}/**\/*.md`), opencode layout parity. The
+ * authoring home always rides along last (highest precedence) so files
+ * the dashboard writes are immediately visible to resolution.
  */
 export function defaultConfigDirs(cwd = process.cwd(), home = homedir()): string[] {
   const seen = new Set<string>();
   const out: string[] = [];
-  for (const dir of defaultSkillScanDirs(cwd, home)) {
-    const parent = dirname(resolve(dir));
-    if (!seen.has(parent)) {
-      seen.add(parent);
-      out.push(parent);
+  const push = (dir: string): void => {
+    const abs = resolve(dir);
+    if (!seen.has(abs)) {
+      seen.add(abs);
+      out.push(abs);
     }
-  }
+  };
+  for (const dir of defaultSkillScanDirs(cwd, home)) push(dirname(dir));
+  push(authoringConfigDir(home));
   return out;
 }
 

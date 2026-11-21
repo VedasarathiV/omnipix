@@ -134,6 +134,13 @@ export function expandCommandTemplate(template: string, input: string): string {
   return expanded.trim();
 }
 
+/** Serialize a command definition to its markdown file form. */
+export function serializeCommandFile(cmd: { description: string; agent?: string; model?: string; template: string }): string {
+  const agent = cmd.agent ? `agent: ${cmd.agent}\n` : '';
+  const model = cmd.model ? `model: ${cmd.model}\n` : '';
+  return `---\ndescription: ${cmd.description.trim()}\n${agent}${model}---\n${cmd.template.trim()}\n`;
+}
+
 /** Leading `/name[/sub] args` invocation (multi-segment names allowed). */
 const COMMAND_RE = /^\/([a-z0-9][a-z0-9-]*(?:\/[a-z0-9][a-z0-9-]*)*)(?=[ \t]+|$)/;
 
