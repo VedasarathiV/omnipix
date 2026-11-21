@@ -89,7 +89,10 @@ install_cli() {
   check_node || return 1
   need npm "it ships with Node.js" || return 1
   sync_repo || return 1
-  (cd "$DIR/repo/cli" && npm install -g .)
+  # The bin target is dist/index.js and `npm install -g .` does not build it
+  # (prepublishOnly runs on publish, not local install) — without this step
+  # npm silently skips the bin link and the install below fails its PATH check.
+  (cd "$DIR/repo/cli" && npm run build && npm install -g .)
   command -v omnipix >/dev/null 2>&1 || {
     echo "error: install finished but 'omnipix' is not on PATH (check your npm prefix)" >&2
     return 1
