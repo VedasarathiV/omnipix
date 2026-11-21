@@ -30,7 +30,7 @@ export function Sidebar() {
           title="Collapse sidebar"
           aria-label="Collapse sidebar"
           onClick={() => setSidebarOpen(false)}
-          className="rounded-md p-1.5 text-ink-dim outline-none hover:bg-base-2 hover:text-ink focus-visible:ring-2 focus-visible:ring-accent"
+          className="hidden rounded-md p-1.5 text-ink-dim outline-none hover:bg-base-2 hover:text-ink focus-visible:ring-2 focus-visible:ring-accent md:block"
         >
           <PanelLeftClose className="size-4" strokeWidth={1.5} />
         </button>
@@ -41,7 +41,7 @@ export function Sidebar() {
         ) : (
           <div className="h-full overflow-y-auto p-1.5">
             {conversations.length === 0 && (
-              <p className="px-2.5 py-4 text-center text-xs text-ink-faint">No chats yet — start one below.</p>
+              <p className="px-2.5 py-4 text-center text-xs text-ink-faint">No chats yet — press + above or type below in chat.</p>
             )}
             {conversations.map(chat => (
               <button

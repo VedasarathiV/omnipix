@@ -6,7 +6,7 @@ import { StatusDot, statusLabel } from './StatusDot';
 // IDE-style status bar: always-visible live state — model, run, keys,
 // notifications. Every item is real data; the bell jumps to notifications.
 export function StatusBar() {
-  const { model, mode, activeRunId, setRail } = useStudio();
+  const { model, mode, activeRunId, setRail, setPaletteOpen } = useStudio();
   const { data: run } = useRun(activeRunId, true);
   const { data: notifications } = useNotifications();
   const { data: keys = [] } = useKeys();
@@ -20,20 +20,35 @@ export function StatusBar() {
 
   return (
     <footer className="flex h-7 shrink-0 items-center gap-3 border-t border-line bg-base-1 px-3 font-mono text-[11px] text-ink-dim">
-      <span className="flex items-center gap-1.5" title="Active model">
+      <button
+        type="button"
+        onClick={() => setPaletteOpen(true)}
+        title="Change model (opens palette)"
+        className="flex items-center gap-1.5 rounded-md px-1.5 py-0.5 outline-none hover:bg-base-2 focus-visible:ring-2 focus-visible:ring-accent"
+      >
         <Cpu className="size-3.5" strokeWidth={1.5} />
         {model === 'auto' ? 'Auto' : model}
         <span className="text-ink-faint">· {mode}</span>
-      </span>
-      <span className="flex items-center gap-1.5" title={activeRunId === null ? 'No active run' : `Run #${activeRunId}`}>
+      </button>
+      <button
+        type="button"
+        onClick={() => setRail('chat')}
+        title={activeRunId === null ? 'No active run (open chat)' : `Run #${activeRunId} (open chat)`}
+        className="flex items-center gap-1.5 rounded-md px-1.5 py-0.5 outline-none hover:bg-base-2 focus-visible:ring-2 focus-visible:ring-accent"
+      >
         <StatusDot status={live} />
         {activeRunId === null ? 'no run' : `#${activeRunId} ${statusLabel(live)}`}
-      </span>
+      </button>
       <span className="flex-1" />
-      <span className="flex items-center gap-1.5" title="Enabled provider keys">
+      <button
+        type="button"
+        onClick={() => setRail('keys')}
+        title="Open provider keys"
+        className="flex items-center gap-1.5 rounded-md px-1.5 py-0.5 outline-none hover:bg-base-2 focus-visible:ring-2 focus-visible:ring-accent"
+      >
         <KeyRound className="size-3.5" strokeWidth={1.5} />
         {configured} key{configured === 1 ? '' : 's'}
-      </span>
+      </button>
       <button
         type="button"
         onClick={() => setRail('notifications')}

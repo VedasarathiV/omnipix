@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { ChevronDown, ChevronRight, File, Folder, FolderOpen, Search } from 'lucide-react';
 import { useStudio } from '../state/store';
 import { useRunDiff, useRunFiles } from '../lib/queries';
@@ -99,9 +99,15 @@ function TreeNode({ node, depth, query, statusByPath }: {
   statusByPath: Map<string, string>;
 }) {
   const [open, setOpen] = useState(depth < 1);
+  const [forceShut, setForceShut] = useState(false);
   const { setRightTab, setRightOpen, setSelectedFile } = useStudio();
+  useEffect(() => {
+    if (!query) setForceShut(false);
+  }, [query]);
   if (!matches(node, query)) return null;
-  const expanded = open || query.length > 0;
+  // Filtering auto-expands matches, but an explicit chevron click wins;
+  // clearing the filter restores the manual open state.
+  const expanded = query.length > 0 ? !forceShut : open;
   const status = statusByPath.get(node.path);
 
   if (!node.dir) {
@@ -123,7 +129,7 @@ function TreeNode({ node, depth, query, statusByPath }: {
     <div>
       <button
         type="button"
-        onClick={() => setOpen(o => !o)}
+        onClick={() => { if (query.length > 0) setForceShut(s => !s); else setOpen(o => !o); }}
         aria-expanded={expanded}
         style={{ paddingLeft: `${depth * 12 + 8}px` }}
         className="flex w-full items-center gap-1.5 rounded-md py-1 pr-2 text-left text-xs outline-none hover:bg-base-2 focus-visible:ring-2 focus-visible:ring-accent"

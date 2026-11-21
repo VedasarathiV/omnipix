@@ -8,7 +8,11 @@ const RAIL_ORDER: RailId[] = ['chat', 'agents', 'skills', 'keys', 'models', 'eva
 
 /** Global keyboard map. Inputs keep their own keys; Escape stops the live run. */
 export function useShortcuts() {
-  const { setPaletteOpen, setSettingsOpen, setRail, setMode, mode, paletteOpen, settingsOpen, activeRunId, pushToast } = useStudio();
+  const {
+    setPaletteOpen, setSettingsOpen, setRail, setMode, mode, paletteOpen, settingsOpen,
+    activeRunId, pushToast, sidebarOpen, setSidebarOpen, rightOpen, setRightOpen,
+    setConversationId, setActiveRunId,
+  } = useStudio();
   const queryClient = useQueryClient();
 
   useEffect(() => {
@@ -23,6 +27,28 @@ export function useShortcuts() {
       if (mod && e.key === ',') {
         e.preventDefault();
         setSettingsOpen(!settingsOpen);
+        return;
+      }
+      if (mod && e.key.toLowerCase() === 'n') {
+        e.preventDefault();
+        setConversationId(null);
+        setActiveRunId(null);
+        setRail('chat');
+        return;
+      }
+      if (mod && !e.altKey && e.key.toLowerCase() === 'm') {
+        e.preventDefault();
+        setPaletteOpen(true);
+        return;
+      }
+      if (mod && !e.altKey && e.key.toLowerCase() === 'b') {
+        e.preventDefault();
+        setSidebarOpen(!sidebarOpen);
+        return;
+      }
+      if (mod && e.altKey && e.key.toLowerCase() === 'b') {
+        e.preventDefault();
+        setRightOpen(!rightOpen);
         return;
       }
       if (typing) return;
@@ -55,5 +81,5 @@ export function useShortcuts() {
     }
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [paletteOpen, settingsOpen, mode, activeRunId, setPaletteOpen, setSettingsOpen, setRail, setMode, pushToast, queryClient]);
+  }, [paletteOpen, settingsOpen, mode, activeRunId, sidebarOpen, rightOpen, setPaletteOpen, setSettingsOpen, setRail, setMode, pushToast, queryClient, setSidebarOpen, setRightOpen, setConversationId, setActiveRunId]);
 }

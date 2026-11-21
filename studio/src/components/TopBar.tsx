@@ -1,6 +1,6 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Check, ChevronDown, FolderGit2, GitBranch } from 'lucide-react';
+import { Check, ChevronDown, FolderGit2, GitBranch, PanelLeft, PanelRight } from 'lucide-react';
 import { StatusDot, statusLabel } from './StatusDot';
 import { ModelPicker } from './ModelPicker';
 import { useStudio } from '../state/store';
@@ -16,12 +16,21 @@ const MODES: Array<{ id: AgentMode; label: string; hint: string }> = [
 ];
 
 export function TopBar() {
-  const { mode, setMode, activeRunId, setActiveRunId, setConversationId, pushToast, streamingReply } = useStudio();
+  const { mode, setMode, activeRunId, setActiveRunId, setConversationId, pushToast, streamingReply, sidebarOpen, setSidebarOpen, rightOpen, setRightOpen } = useStudio();
   const queryClient = useQueryClient();
   const { data: runsData } = useRuns();
   const { data: groupsData } = useGroups();
   const { data: run } = useRun(activeRunId, true);
   const [wsOpen, setWsOpen] = useState(false);
+
+  useEffect(() => {
+    if (!wsOpen) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setWsOpen(false);
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [wsOpen]);
   const runs = (runsData?.runs ?? []).slice(0, 6);
   const groups = (groupsData?.groups ?? []).filter(g => g.status === 'running').slice(0, 3);
   const active = runs.find(r => r.id === activeRunId) ?? null;
@@ -49,11 +58,33 @@ export function TopBar() {
 
   return (
     <header className="traffic-pad titlebar-drag flex h-12 shrink-0 items-center gap-2 overflow-x-auto border-b border-line bg-base-1 px-3">
+      <div className="titlebar-nodrag hidden items-center gap-1 md:flex">
+        <button
+          type="button"
+          title={sidebarOpen ? 'Hide sidebar (⌘B)' : 'Show sidebar (⌘B)'}
+          aria-label={sidebarOpen ? 'Hide sidebar' : 'Show sidebar'}
+          aria-pressed={sidebarOpen}
+          onClick={() => setSidebarOpen(!sidebarOpen)}
+          className="rounded-md p-1.5 text-ink-dim outline-none hover:bg-base-2 hover:text-ink focus-visible:ring-2 focus-visible:ring-accent"
+        >
+          <PanelLeft className="size-4" strokeWidth={1.5} />
+        </button>
+        <button
+          type="button"
+          title={rightOpen ? 'Hide inspector (⌘⌥B)' : 'Show inspector (⌘⌥B)'}
+          aria-label={rightOpen ? 'Hide inspector' : 'Show inspector'}
+          aria-pressed={rightOpen}
+          onClick={() => setRightOpen(!rightOpen)}
+          className="rounded-md p-1.5 text-ink-dim outline-none hover:bg-base-2 hover:text-ink focus-visible:ring-2 focus-visible:ring-accent"
+        >
+          <PanelRight className="size-4" strokeWidth={1.5} />
+        </button>
+      </div>
       <div className="titlebar-nodrag relative">
         <button
           type="button"
           onClick={() => setWsOpen(open => !open)}
-          title="Switch work context (⌘K)"
+          title="Switch work context"
           className="flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm font-medium outline-none hover:bg-base-2 focus-visible:ring-2 focus-visible:ring-accent"
         >
           <FolderGit2 className="size-4 text-ink-dim" strokeWidth={1.5} />
@@ -67,7 +98,9 @@ export function TopBar() {
           <ChevronDown className="size-4 text-ink-faint" strokeWidth={1.5} />
         </button>
         {wsOpen && (
-          <div className="absolute left-0 top-full z-30 mt-1 w-72 rounded-xl border border-line bg-base-1 p-1 shadow-xl">
+          <>
+            <div className="fixed inset-0 z-20" onClick={() => setWsOpen(false)} />
+            <div className="absolute left-0 top-full z-30 mt-1 w-72 rounded-xl border border-line bg-base-1 p-1 shadow-xl">
             {runs.length === 0 && (
               <p className="px-2 py-3 text-center text-xs text-ink-faint">No runs yet — send an Agent message.</p>
             )}
@@ -100,7 +133,8 @@ export function TopBar() {
                 ))}
               </>
             )}
-          </div>
+            </div>
+          </>
         )}
       </div>
 

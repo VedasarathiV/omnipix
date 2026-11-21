@@ -62,8 +62,8 @@ export function CommandPalette() {
     { group: 'Mode', label: 'Ask mode', hint: '⌘.', icon: Bot, run: () => setMode('ask') },
     { group: 'Mode', label: 'Plan mode', hint: '⌘.', icon: Bot, run: () => setMode('plan') },
     { group: 'Mode', label: 'Agent mode', hint: '⌘.', icon: Bot, run: () => setMode('agent') },
-    { group: 'Go', label: 'Search everything', hint: '⌘6', icon: Search, run: () => setRail('search') },
-    { group: 'Go', label: 'Open docs', hint: '⌘7', icon: FileText, run: () => setRail('docs') },
+    { group: 'Go', label: 'Search everything', hint: '⌘7', icon: Search, run: () => setRail('search') },
+    { group: 'Go', label: 'Open docs', hint: '⌘8', icon: FileText, run: () => setRail('docs') },
     { group: 'Go', label: 'New chat', hint: '⌘N', icon: MessageSquare, run: () => { setConversationId(null); setActiveRunId(null); setRail('chat'); } },
     { group: 'Go', label: 'Open settings', hint: '⌘,', icon: Search, run: () => setSettingsOpen(true) },
     ...(commandsData?.commands ?? []).slice(0, 12).map(c => ({

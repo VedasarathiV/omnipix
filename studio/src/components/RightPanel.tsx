@@ -46,7 +46,7 @@ export function RightPanel() {
           title="Collapse panel"
           aria-label="Collapse panel"
           onClick={() => setRightOpen(false)}
-          className="rounded-md p-1.5 text-ink-dim outline-none hover:bg-base-2 hover:text-ink focus-visible:ring-2 focus-visible:ring-accent"
+          className="hidden rounded-md p-1.5 text-ink-dim outline-none hover:bg-base-2 hover:text-ink focus-visible:ring-2 focus-visible:ring-accent md:block"
         >
           <PanelRightClose className="size-4" strokeWidth={1.5} />
         </button>

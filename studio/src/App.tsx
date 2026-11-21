@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { StudioProvider, useStudio } from './state/store';
 import { AuthGate } from './components/AuthGate';
@@ -29,6 +29,16 @@ import { DocsPage } from './pages/DocsPage';
 import { VoicePage } from './pages/VoicePage';
 import { NotificationsPanel } from './components/NotificationsPanel';
 
+/** `#/settings` (native menu, deep links) opens the modal, not a dup page. */
+function SettingsRedirect() {
+  const { setSettingsOpen, setRail } = useStudio();
+  useEffect(() => {
+    setSettingsOpen(true);
+    setRail('chat');
+  }, [setSettingsOpen, setRail]);
+  return null;
+}
+
 function MainPane() {
   const { rail } = useStudio();
   if (rail === 'chat') {
@@ -51,7 +61,7 @@ function MainPane() {
       {rail === 'docs' && <DocsPage />}
       {rail === 'voice' && <VoicePage />}
       {rail === 'notifications' && <NotificationsPanel />}
-      {rail === 'settings' && <ProvidersPage />}
+      {rail === 'settings' && <SettingsRedirect />}
     </div>
   );
 }
