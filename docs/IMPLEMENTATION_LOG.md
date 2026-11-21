@@ -234,3 +234,19 @@ browser-verified:
   siblings (voice + eval suites) with regression tests (6/6 probe).
 - **B6 folder open**: jailed /api/fs list/read/write, Files tab
   workspace/folder switcher, folder edit+save (5/5 probe).
+
+## 2026-11-21 — Superpowers pack + Search web tab (this session)
+
+- **Superpowers**: vendored 15 SKILL.md verbatim from
+  obra/superpowers (MIT © 2025 Jesse Vincent) under
+  skills/superpowers/ plus the two companion shell-script dirs the
+  prose runs; brainstorming visual-companion server deliberately
+  excluded (vendor telemetry; local-first rule). 4 pack tests.
+- **Search web tab**: Library/Web switcher; Web runs POST
+  /v1/search on the gateway chain with optional AI answer,
+  results + provider footnote, honest no-engine error with keys
+  link. 3/3 browser probe (request fires; fresh-install error
+  path shown).
+- External verdicts: tortoise-tts is TTS-only (wrong tool for
+  transcription) + stale + NVIDIA-gated — not adopted; Perplexica
+  fork is a separate app (use upstream if ever) — not adopted.

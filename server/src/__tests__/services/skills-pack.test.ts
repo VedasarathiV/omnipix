@@ -1,4 +1,4 @@
-import { readdirSync } from 'node:fs';
+import { existsSync, readdirSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
@@ -14,7 +14,9 @@ describe('skills pack', () => {
   const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..', '..', '..', 'skills');
 
   it('ships exactly the documented skills, all parsing', () => {
-    const files = scanSkillFiles([root]);
+    // Depth 1: top-level pack only (nested packs like superpowers/ have
+    // their own validators).
+    const files = scanSkillFiles([root], 1);
     const names = files.map(f => parseSkillFile(readFileSync(f, 'utf8')).name);
     expect(names.sort()).toEqual([
       'code-review-checklist', 'competitor-analysis', 'doc-writer',
@@ -39,10 +41,10 @@ describe('skills pack', () => {
 
   it('every skill lives in its own directory with a README-covered name', () => {
     const dirs = readdirSync(root, { withFileTypes: true })
-      .filter(e => e.isDirectory())
+      .filter(e => e.isDirectory() && existsSync(join(root, e.name, 'SKILL.md')))
       .map(e => e.name)
       .sort();
-    const files = scanSkillFiles([root]);
+    const files = scanSkillFiles([root], 1);
     const names = files.map(f => parseSkillFile(readFileSync(f, 'utf8')).name).sort();
     expect(dirs).toEqual(names);
   });

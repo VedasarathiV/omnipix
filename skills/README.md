@@ -1,6 +1,8 @@
-# OmniPix community skills pack
+# OmniPix community skills packs
 
-14 ready-to-install skills, adapted from the
+## Pack 1: agent ports (14 skills)
+
+Adapted from the
 [500 AI Agents Projects](https://github.com/ashishpatel26/500-ai-agents-projects)
 collection (prompts rewritten for OmniPix tools; see each source below).
 
@@ -47,3 +49,29 @@ omnipix skills import-dir ./skills --url http://localhost:3001 --token <dashboar
 
 `code-review-checklist` is named to avoid the builtin `code-reviewer`
 (file skills never override builtins).
+
+## Pack 2: superpowers methodology (15 skills, verbatim)
+
+Vendored from [obra/superpowers](https://github.com/obra/superpowers)
+(MIT License, © 2025 Jesse Vincent): brainstorming,
+diagnosing-superpowers, dispatching-parallel-agents, executing-plans,
+finishing-a-development-branch, receiving-code-review,
+requesting-code-review, subagent-driven-development,
+systematic-debugging, test-driven-development, using-git-worktrees,
+using-superpowers, verification-before-completion, writing-plans,
+writing-skills.
+
+- SKILL.md files are byte-identical to upstream; companion shell
+  scripts ship alongside the two skills that run them
+  (`executing-plans`, `subagent-driven-development`).
+- The `brainstorming` visual-companion server is intentionally NOT
+  vendored (it phones home with telemetry; OmniPix is local-first).
+  That skill's optional visual branch simply doesn't apply here.
+- "Subagent" steps map to OmniPix's `delegate` tool; git worktree
+  steps run through `shell_exec` behind approvals.
+
+Install a pack the same way:
+
+```bash
+cp -R skills/superpowers/* ~/.config/omnipix/skills/
+```
