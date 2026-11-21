@@ -180,21 +180,49 @@ export function InputBar() {
       setImage({ name: file.name, dataUrl });
       return;
     }
+    // PDFs extract server-side, then flow through the same inline path.
+    let fileName = file.name;
+    if (file.type === 'application/pdf' || file.name.toLowerCase().endsWith('.pdf')) {
+      if (file.size > 5 * 1024 * 1024) {
+        pushToast('error', `PDF too large (${Math.round(file.size / 1024 / 1024)} MB; 5 MB max).`);
+        return;
+      }
+      try {
+        const bytes = new Uint8Array(await file.arrayBuffer());
+        let binary = '';
+        for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i]);
+        const parsed = await apiFetch<{ text: string; pages?: number }>(
+          '/api/uploads/parse-pdf',
+          { method: 'POST', body: JSON.stringify({ filename: file.name, dataBase64: btoa(binary) }) },
+        );
+        fileName = `${file.name}${parsed.pages ? ` (${parsed.pages}p)` : ''}`;
+        inlineText(fileName, parsed.text);
+        return;
+      } catch (err) {
+        pushToast('error', err instanceof Error ? err.message : 'PDF parse failed');
+        return;
+      }
+    }
     const content = await file.text().catch(() => null);
     if (content === null || content.includes('\0')) {
-      pushToast('error', 'Only text files and images attach — that file looks binary.');
+      pushToast('error', 'Only text files, PDFs, and images attach — that file looks binary.');
       return;
     }
-    // Over-cap text truncates with a loud notice instead of refusing: the
-    // model still sees the head of the file and knows it is partial.
+    inlineText(fileName, content, Math.round(file.size / 1024));
+  }
+
+  /** Shared inline path: over-cap text truncates with a loud notice instead
+   *  of refusing, so the model sees the head and knows it is partial. */
+  function inlineText(displayName: string, content: string, totalKb?: number) {
     const body = content.trim();
+    const total = totalKb ?? Math.max(1, Math.round(body.length / 1024));
     const clipped = body.length > ATTACH_TEXT_MAX_BYTES
-      ? `${body.slice(0, ATTACH_TEXT_MAX_BYTES)}\n[... truncated: showing first 100 KB of ${Math.max(101, Math.round(file.size / 1024))} KB]`
+      ? `${body.slice(0, ATTACH_TEXT_MAX_BYTES)}\n[... truncated: showing first 100 KB of ${Math.max(101, total)} KB]`
       : body;
     if (clipped !== body) {
-      pushToast('info', `Attached first 100 KB of ${file.name} (${Math.max(101, Math.round(file.size / 1024))} KB total).`);
+      pushToast('info', `Attached first 100 KB of ${displayName} (${Math.max(101, total)} KB total).`);
     }
-    setText(current => `${current}${current && !current.endsWith('\n') ? '\n' : ''}\n--- attached file: ${file.name} ---\n${clipped}\n`);
+    setText(current => `${current}${current && !current.endsWith('\n') ? '\n' : ''}\n--- attached file: ${displayName} ---\n${clipped}\n`);
     boxRef.current?.focus();
   }
 
