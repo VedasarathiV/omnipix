@@ -184,3 +184,24 @@ backend reality check.
   entries (placeholder over-promises today), slimmer entry,
   discoverable keymap. Not built; queued as U1–U2.
 - Suites: server 6053, cli 246 — all green.
+
+## 2026-11-21 — U1–U2 core + upload/logo fixes (this session)
+
+- **Upload**: images in agent/plan mode auto-switch to Ask with an
+  info toast (was an error wall — the reported "can't upload");
+  over-100KB text truncates with a loud notice instead of refusing;
+  binaries/PDFs still honestly rejected (no PDF parser anywhere).
+  Browser-verified across 5 attach cases.
+- **Logo**: theme-aware mark (accent ring, fg core — was hardcoded
+  emerald + invisible-in-light-mode white); spin → 1.6s pulse;
+  splash screenshot-verified.
+- **U1–U2**: GET /api/commands + GET /api/agents/presets (authed,
+  live disk scans); / menu merges builtins + file commands +
+  enabled skills; Ask mode expands /commands and inlines /skills
+  client-side (agent/plan expand server-side); palette goes fuzzy
+  (fuzzyScore + test) with Skills/Commands insert entries.
+  5/5 browser probe green (menu, palette, expansion end-to-end).
+- Journey updated for the image auto-switch; E2E 20/20 green.
+- Web verdict (asked): agent runs browse via fetch_url (keyless,
+  live-verified) + web_search (keyless Parallel/Keenable engines);
+  Ask mode cannot (no tools by design); api-anything not needed.

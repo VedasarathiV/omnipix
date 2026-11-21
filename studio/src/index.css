@@ -82,7 +82,7 @@ body {
   }
   .splash-ring,
   .splash-text,
-  .logo-spin,
+  .logo-pulse,
   .splash-bar > span {
     animation: none !important;
   }
@@ -147,17 +147,20 @@ body {
   animation: splash-load 1.1s ease-in-out infinite;
 }
 
-@keyframes logo-spin {
-  from {
-    transform: rotate(0deg);
+@keyframes logo-pulse {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
   }
-  to {
-    transform: rotate(360deg);
+  50% {
+    transform: scale(1.07);
+    opacity: 0.82;
   }
 }
 
-.logo-spin {
-  animation: logo-spin 2.2s linear infinite;
+.logo-pulse {
+  animation: logo-pulse 1.6s ease-in-out infinite;
   transform-origin: center;
 }
 

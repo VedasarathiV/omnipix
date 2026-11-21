@@ -171,6 +171,37 @@ export function useSkills() {
   });
 }
 
+export interface CommandRow {
+  name: string;
+  description: string;
+  agent: string | null;
+  model: string | null;
+  template: string;
+}
+
+export function useCommands() {
+  return useQuery<{ commands: CommandRow[] }>({
+    queryKey: ['commands'],
+    queryFn: () => apiFetch('/api/commands'),
+  });
+}
+
+export interface AgentPresetRow {
+  name: string;
+  description: string;
+  skills: string[];
+  tools: string[];
+  model: string | null;
+  planMode: boolean;
+}
+
+export function useAgentPresets() {
+  return useQuery<{ presets: AgentPresetRow[] }>({
+    queryKey: ['agent-presets'],
+    queryFn: () => apiFetch('/api/agents/presets'),
+  });
+}
+
 export interface McpServerRow {
   id: number;
   name: string;

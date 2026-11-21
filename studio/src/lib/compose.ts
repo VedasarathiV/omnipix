@@ -22,6 +22,64 @@ export type SlashAction =
   | { kind: 'expand'; text: string }
   | { kind: 'none' };
 
+/** Leading /name[/sub] candidate (server resolves; misses fall through). */
+export function parseCommandName(text: string): { name: string; input: string } | null {
+  const match = /^\/([a-z0-9][a-z0-9-]*(?:\/[a-z0-9][a-z0-9-]*)*)(?=[ \t]+|$)/.exec(text.trimStart());
+  if (!match) return null;
+  return { name: match[1], input: text.trimStart().slice(match[0].length).trimStart() };
+}
+
+/**
+ * Expand a file-command template (mirrors the server rules): $N takes the
+ * Nth word with the last placeholder greedy, $ARGUMENTS takes all input,
+ * and input with no placeholders appends.
+ */
+export function expandFileTemplate(template: string, input: string): string {
+  const args = input.trim() ? input.trim().split(/\s+/) : [];
+  const placeholders = [...template.matchAll(/\$(\d+)/g)].map(m => Number(m[1]));
+  const last = placeholders.length ? Math.max(...placeholders) : 0;
+  const expanded = template.replace(/\$ARGUMENTS|\$(\d+)/g, (match, index: string | undefined) => {
+    if (match === '$ARGUMENTS') return input.trim();
+    const position = Number(index);
+    if (position < 1 || position > args.length) return '';
+    if (position === last) return args.slice(position - 1).join(' ');
+    return args[position - 1];
+  });
+  if (!placeholders.length && !template.includes('$ARGUMENTS') && input.trim()) {
+    return `${expanded}\n\n${input.trim()}`.trim();
+  }
+  return expanded.trim();
+}
+
+/** Strip SKILL.md frontmatter, leaving instructions (Ask-mode /skill inline). */
+export function stripSkillFrontmatter(content: string): string {
+  const text = content.replace(/\r\n/g, '\n');
+  if (!text.startsWith('---\n')) return text.trim();
+  const end = text.indexOf('\n---', 4);
+  if (end === -1) return text.trim();
+  return text.slice(end + 4).replace(/^\n/, '').trim();
+}
+
+/**
+ * Subsequence fuzzy score for palettes: substring hits score 1000+,
+ * subsequence hits 0..100 by tightness, and only a true miss is -1.
+ */
+export function fuzzyScore(query: string, text: string): number {
+  const q = query.toLowerCase().trim();
+  if (!q) return 0;
+  const t = text.toLowerCase();
+  if (t.includes(q)) return 1000 - t.indexOf(q);
+  let gaps = 0;
+  let ti = 0;
+  for (const ch of q) {
+    const found = t.indexOf(ch, ti);
+    if (found === -1) return -1;
+    gaps += (found - ti);
+    ti = found + 1;
+  }
+  return Math.max(0, 100 - gaps);
+}
+
 /** Parse a leading /command. Unknown commands are sent as plain text. */
 export function parseSlashCommand(text: string): SlashAction {
   if (!text.startsWith('/')) return { kind: 'none' };

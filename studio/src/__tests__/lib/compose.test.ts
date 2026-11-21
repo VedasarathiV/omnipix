@@ -2,9 +2,13 @@ import { describe, expect, it } from 'vitest';
 import {
   buildChipContext,
   distinctiveWords,
+  expandFileTemplate,
+  fuzzyScore,
+  parseCommandName,
   parseSlashCommand,
   renderMessageContent,
   SLASH_COMMANDS,
+  stripSkillFrontmatter,
 } from '../../lib/compose.js';
 
 describe('parseSlashCommand', () => {
@@ -69,5 +73,41 @@ describe('renderMessageContent', () => {
     expect(renderMessageContent([{ type: 'text' }])).toBe('');
     expect(renderMessageContent(null)).toBe('');
     expect(renderMessageContent(42)).toBe('');
+  });
+});
+
+describe('parseCommandName', () => {
+  it('parses leading /names with subpaths, rejects the rest', () => {
+    expect(parseCommandName('/review src/x.ts')).toEqual({ name: 'review', input: 'src/x.ts' });
+    expect(parseCommandName('/deploy/staging')).toEqual({ name: 'deploy/staging', input: '' });
+    expect(parseCommandName('plain text')).toBeNull();
+    expect(parseCommandName('/Has Caps')).toBeNull();
+  });
+});
+
+describe('expandFileTemplate', () => {
+  it('mirrors the server rules', () => {
+    expect(expandFileTemplate('Fix $1 in $2', 'auth login flow')).toBe('Fix auth in login flow');
+    expect(expandFileTemplate('Review:\n$ARGUMENTS', 'a and b')).toBe('Review:\na and b');
+    expect(expandFileTemplate('Do it.', 'with care')).toBe('Do it.\n\nwith care');
+    expect(expandFileTemplate('A $1 B $2', 'only')).toBe('A only B');
+  });
+});
+
+describe('stripSkillFrontmatter', () => {
+  it('leaves instructions, tolerates junk', () => {
+    expect(stripSkillFrontmatter('---\nname: a\ndescription: D.\n---\nDo it.\n')).toBe('Do it.');
+    expect(stripSkillFrontmatter('plain body')).toBe('plain body');
+    expect(stripSkillFrontmatter('---\nunclosed')).toBe('---\nunclosed');
+  });
+});
+
+describe('fuzzyScore', () => {
+  it('prefers substring hits, then tight subsequences, -1 on miss', () => {
+    expect(fuzzyScore('', 'anything')).toBe(0);
+    expect(fuzzyScore('chat', 'New chat')).toBeGreaterThan(fuzzyScore('cht', 'New chat'));
+    expect(fuzzyScore('cht', 'New chat')).toBeGreaterThan(-1);
+    expect(fuzzyScore('cht', 'New chat')).toBeGreaterThan(fuzzyScore('cht', 'Check health telemetry'));
+    expect(fuzzyScore('zzz', 'New chat')).toBe(-1);
   });
 });

@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import { Bot, FileText, FolderGit2, MessageSquare, Search, Trophy } from 'lucide-react';
+import { Bot, FileText, FolderGit2, MessageSquare, Search, Slash, Trophy } from 'lucide-react';
 import { useStudio } from '../state/store';
-import { useConversations, useEvalSuites, useModels, useRuns } from '../lib/queries';
+import { fuzzyScore } from '../lib/compose';
+import { useCommands, useConversations, useEvalSuites, useModels, useRuns, useSkills } from '../lib/queries';
 
 interface Entry {
   group: string;
@@ -12,10 +13,18 @@ interface Entry {
 }
 
 export function CommandPalette() {
-  const { paletteOpen, setPaletteOpen, setRail, setModel, setSettingsOpen, pushToast, setConversationId, setActiveRunId, setMode } = useStudio();
+  const { paletteOpen, setPaletteOpen, setRail, setModel, setSettingsOpen, pushToast, setConversationId, setActiveRunId, setMode, setEditDraft } = useStudio();
   const { data: runsData } = useRuns();
   const { data: conversations = [] } = useConversations();
   const { data: models = [] } = useModels();
+  const { data: skillsData } = useSkills();
+  const { data: commandsData } = useCommands();
+  const insertSlash = (name: string) => {
+    // Draft-only: the current chat/run stays put, only the box changes.
+    setPaletteOpen(false);
+    setRail('chat');
+    setEditDraft({ text: `/${name} `, seq: Date.now() });
+  };
   const runs = runsData?.runs ?? [];
   const { data: suitesData } = useEvalSuites();
   const [query, setQuery] = useState('');
@@ -57,10 +66,22 @@ export function CommandPalette() {
     { group: 'Go', label: 'Open docs', hint: '⌘7', icon: FileText, run: () => setRail('docs') },
     { group: 'Go', label: 'New chat', hint: '⌘N', icon: MessageSquare, run: () => { setConversationId(null); setActiveRunId(null); setRail('chat'); } },
     { group: 'Go', label: 'Open settings', hint: '⌘,', icon: Search, run: () => setSettingsOpen(true) },
+    ...(commandsData?.commands ?? []).slice(0, 12).map(c => ({
+      group: 'Commands', label: `/${c.name} — ${c.description}`, hint: 'Insert', icon: Slash,
+      run: () => insertSlash(c.name),
+    })),
+    ...(skillsData?.skills ?? []).filter(s => s.enabled).slice(0, 12).map(s => ({
+      group: 'Skills', label: `/${s.name} — ${s.description}`, hint: 'Insert', icon: Bot,
+      run: () => insertSlash(s.name),
+    })),
   ];
 
-  const q = query.toLowerCase();
-  const filtered = entries.filter(e => !q || e.label.toLowerCase().includes(q) || e.group.toLowerCase().includes(q));
+  const q = query.trim();
+  const filtered = entries
+    .map(e => ({ e, score: fuzzyScore(q, `${e.group} ${e.label}`) }))
+    .filter(x => x.score >= 0)
+    .sort((a, b) => b.score - a.score)
+    .map(x => x.e);
   const current = filtered[Math.min(index, Math.max(0, filtered.length - 1))];
 
   return (

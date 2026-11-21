@@ -235,7 +235,7 @@ await rpc(ws, 'DOM.setFileInputFiles', { nodeId: fileNode.nodeId, files: [join(s
 await sleep(1000);
 const imgShown = await evaluate(ws, `document.body.innerText.includes('px.png')`);
 check('image attach shows in Ask mode', imgShown === true);
-// Agent mode must refuse images loudly, not drop them.
+// Agent mode auto-switches to Ask on image attach, loudly, never dropping it.
 await evaluate(ws, `(() => {
   const sel = document.querySelector('select[aria-label="Input mode"]');
   sel.value = 'agent';
@@ -244,8 +244,8 @@ await evaluate(ws, `(() => {
 await sleep(500);
 await rpc(ws, 'DOM.setFileInputFiles', { nodeId: fileNode.nodeId, files: [join(scratch, 'px.png')] });
 await sleep(800);
-const agentRefused = await evaluate(ws, `document.body.innerText.includes('Ask mode')`);
-check('agent mode refuses images loudly', agentRefused === true);
+const agentSwitched = await evaluate(ws, `document.body.innerText.includes('Switched to Ask mode') && document.body.innerText.includes('px.png')`);
+check('agent mode switches to Ask on image attach', agentSwitched === true);
 await evaluate(ws, `(() => {
   const sel = document.querySelector('select[aria-label="Input mode"]');
   sel.value = 'ask';

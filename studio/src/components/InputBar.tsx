@@ -7,13 +7,16 @@ import { apiFetch, streamChat } from '../lib/api';
 import {
   buildChipContext,
   distinctiveWords,
+  expandFileTemplate,
+  parseCommandName,
   parseSlashCommand,
   SLASH_COMMANDS,
+  stripSkillFrontmatter,
   type ResolvedChip,
 } from '../lib/compose';
 import { readSampling } from './SettingsModal';
 import { startDictationRecording, transcribeAudio, type DictationRecorder } from '../lib/voice';
-import { useConversation, useDocs, useUnifiedKey, useVoiceSettings, type AgentRun, type Conversation, type DocRow } from '../lib/queries';
+import { useCommands, useConversation, useDocs, useSkills, useUnifiedKey, useVoiceSettings, type AgentRun, type Conversation, type DocRow } from '../lib/queries';
 
 // Slash menu entries come from lib/compose (single source with the parser).
 const SLASH = SLASH_COMMANDS;
@@ -41,6 +44,10 @@ export function InputBar() {
   const { data: conversation } = useConversation(conversationId);
   const { data: docsData } = useDocs();
   const { data: voiceSettings } = useVoiceSettings();
+  const { data: commandsData } = useCommands();
+  const { data: skillsData } = useSkills();
+  const fileCommands = commandsData?.commands ?? [];
+  const enabledSkills = (skillsData?.skills ?? []).filter(s => s.enabled);
   const [recorder, setRecorder] = useState<DictationRecorder | null>(null);
   const [transcribing, setTranscribing] = useState(false);
   const lastDictationSeq = useRef(-1);
@@ -153,8 +160,8 @@ export function InputBar() {
   async function handleAttachFile(file: File) {
     if (IMAGE_MIMES.includes(file.type)) {
       if (mode !== 'ask') {
-        pushToast('error', 'Images attach in Ask mode — agent runs take text only.');
-        return;
+        setMode('ask');
+        pushToast('info', 'Switched to Ask mode — images send in Ask mode.');
       }
       if (file.size > ATTACH_IMAGE_MAX_BYTES) {
         pushToast('error', `Image too large (${Math.round(file.size / 1024 / 1024)} MB; 5 MB max).`);
@@ -173,22 +180,44 @@ export function InputBar() {
       setImage({ name: file.name, dataUrl });
       return;
     }
-    if (file.size > ATTACH_TEXT_MAX_BYTES) {
-      pushToast('error', `File too large (${Math.round(file.size / 1024)} KB; 100 KB of text max).`);
-      return;
-    }
     const content = await file.text().catch(() => null);
     if (content === null || content.includes('\0')) {
       pushToast('error', 'Only text files and images attach — that file looks binary.');
       return;
     }
-    setText(current => `${current}${current && !current.endsWith('\n') ? '\n' : ''}\n--- attached file: ${file.name} ---\n${content.trim()}\n`);
+    // Over-cap text truncates with a loud notice instead of refusing: the
+    // model still sees the head of the file and knows it is partial.
+    const body = content.trim();
+    const clipped = body.length > ATTACH_TEXT_MAX_BYTES
+      ? `${body.slice(0, ATTACH_TEXT_MAX_BYTES)}\n[... truncated: showing first 100 KB of ${Math.max(101, Math.round(file.size / 1024))} KB]`
+      : body;
+    if (clipped !== body) {
+      pushToast('info', `Attached first 100 KB of ${file.name} (${Math.max(101, Math.round(file.size / 1024))} KB total).`);
+    }
+    setText(current => `${current}${current && !current.endsWith('\n') ? '\n' : ''}\n--- attached file: ${file.name} ---\n${clipped}\n`);
     boxRef.current?.focus();
   }
 
   async function send() {
     let goal = text.trim();
     if ((!goal && !image) || sending) return;
+    // Ask mode has no server expansion (plain chat): expand file commands
+    // and inline /skills locally. Agent/plan go raw; the server expands.
+    // Builtins (/clear, /plan, /test…) always win over same-named files.
+    if (mode === 'ask' && parseSlashCommand(goal).kind === 'none') {
+      const candidate = parseCommandName(goal);
+      const file = candidate && fileCommands.find(c => c.name === candidate.name);
+      if (candidate && file) {
+        goal = expandFileTemplate(file.template, candidate.input);
+      } else if (candidate && enabledSkills.some(s => s.name === candidate.name)) {
+        try {
+          const exported = await apiFetch<{ content: string }>(`/api/skills/${candidate.name}/export`);
+          goal = `--- skill: ${candidate.name} ---\n${stripSkillFrontmatter(exported.content)}\n\n--- user request ---\n${candidate.input || goal}`;
+        } catch {
+          // Unresolvable skill must not block the send; raw text still goes.
+        }
+      }
+    }
     // Slash commands: /clear and /plan act, the rest expand to real prompts.
     const slash = parseSlashCommand(goal);
     if (slash.kind === 'clear') {
@@ -360,6 +389,26 @@ export function InputBar() {
                 <Slash className="size-3.5 text-accent" strokeWidth={1.5} />
                 <span className="font-mono">{s.cmd}</span>
                 <span className="truncate text-xs text-ink-dim">{s.desc}</span>
+              </button>
+            ))}
+            {fileCommands.length > 0 && (
+              <p className="px-2 pt-2 pb-1 text-[10px] font-semibold tracking-wider text-ink-faint uppercase">Commands</p>
+            )}
+            {fileCommands.map(c => (
+              <button key={`cmd-${c.name}`} type="button" onClick={() => { setText(`/${c.name} `); setMenu(null); boxRef.current?.focus(); }} className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[13px] outline-none hover:bg-base-2">
+                <Slash className="size-3.5 text-ink-dim" strokeWidth={1.5} />
+                <span className="font-mono">/{c.name}</span>
+                <span className="truncate text-xs text-ink-dim">{c.description}</span>
+              </button>
+            ))}
+            {enabledSkills.length > 0 && (
+              <p className="px-2 pt-2 pb-1 text-[10px] font-semibold tracking-wider text-ink-faint uppercase">Skills</p>
+            )}
+            {enabledSkills.map(s => (
+              <button key={`skill-${s.name}`} type="button" onClick={() => { setText(`/${s.name} `); setMenu(null); boxRef.current?.focus(); }} className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[13px] outline-none hover:bg-base-2">
+                <Slash className="size-3.5 text-ink-dim" strokeWidth={1.5} />
+                <span className="font-mono">/{s.name}</span>
+                <span className="truncate text-xs text-ink-dim">{s.description}</span>
               </button>
             ))}
           </Menu>

@@ -19,6 +19,8 @@ import { reconcileOrphanedApprovals } from './lib/agent-policy.js';
 import { reconcileOrphanedGroups } from './services/agent-orchestrator.js';
 import { reconcileOrphanedRuns } from './services/agent-runtime.js';
 import { skillsRouter } from './routes/skills.js';
+import { commandsRouter } from './routes/commands.js';
+import { agentPresetsRouter } from './routes/agent-presets.js';
 import { memoriesRouter } from './routes/memories.js';
 import { automationsRouter } from './routes/automations.js';
 import { terminalRouter } from './routes/terminal.js';
@@ -329,6 +331,8 @@ export function createApp(config?: Config) {
   app.use('/api/agents', requireAuth, agentHooksRouter);
   app.use('/api/agents', requireAuth, securityScansRouter);
   app.use('/api/skills', requireAuth, skillsRouter);
+  app.use('/api/commands', requireAuth, commandsRouter);
+  app.use('/api/agents', requireAuth, agentPresetsRouter);
   app.use('/api/memories', requireAuth, memoriesRouter);
   app.use('/api/automations', requireAuth, automationsRouter);
   app.use('/api/terminal', requireAuth, terminalRouter);
