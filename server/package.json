@@ -1,6 +1,6 @@
 {
   "name": "@omnipix/server",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "scripts": {
@@ -25,11 +25,15 @@
     "ajv": "^8.20.0",
     "compression": "^1.8.0",
     "cors": "^2.8.5",
+    "docx": "^9.16.0",
     "dotenv": "^17.4.2",
+    "exceljs": "^4.4.0",
     "express": "^5.1.0",
     "helmet": "^8.1.0",
     "multer": "^2.2.0",
+    "officeparser": "^7.8.0",
     "pdf-parse": "^2.4.5",
+    "pptxgenjs": "^4.0.1",
     "sharp": "^0.35.3",
     "socks-proxy-agent": "^10.0.0",
     "undici": "^6.21.0",

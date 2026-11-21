@@ -43,9 +43,9 @@ describe('fetch_url guards', () => {
 });
 
 describe('tool registry', () => {
-  it('exposes the read, workspace, blackboard, memory, git, delegate, and docs tools with function definitions', () => {
+  it('exposes the read, workspace, blackboard, memory, git, delegate, docs, browser, and office tools with function definitions', () => {
     expect(AGENT_TOOLS.map(t => t.name).sort()).toEqual(
-      ['blackboard_read', 'blackboard_write', 'calculator', 'current_time', 'delegate', 'edit_file', 'fetch_url', 'find_skill', 'git_branch', 'git_clone', 'git_commit', 'git_diff', 'git_log', 'git_status', 'grep_search', 'memory_read', 'memory_write', 'read_file', 'recall_docs', 'recall_memory', 'remember', 'run_check', 'shell_exec', 'todo_write', 'web_search', 'write_file'],
+      ['blackboard_read', 'blackboard_write', 'browser_click', 'browser_navigate', 'browser_screenshot', 'browser_snapshot', 'browser_type', 'calculator', 'current_time', 'delegate', 'edit_file', 'fetch_url', 'find_skill', 'git_branch', 'git_clone', 'git_commit', 'git_diff', 'git_log', 'git_status', 'grep_search', 'memory_read', 'memory_write', 'read_file', 'read_office', 'recall_docs', 'recall_memory', 'remember', 'run_check', 'shell_exec', 'todo_write', 'web_search', 'write_docx', 'write_file', 'write_pptx', 'write_xlsx'],
     );
     for (const tool of AGENT_TOOLS) {
       expect(tool.definition.type).toBe('function');

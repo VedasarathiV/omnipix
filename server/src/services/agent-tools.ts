@@ -978,6 +978,193 @@ const DELEGATE_TOOLS: AgentTool[] = [
 
 for (const tool of DELEGATE_TOOLS) AGENT_TOOLS.push(tool);
 
+const BROWSER_TOOLS: AgentTool[] = [
+  {
+    name: 'browser_navigate',
+    definition: toolDefinition(
+      'browser_navigate',
+      'Load a page in the managed headless browser. Public and localhost URLs allowed; private ranges refused.',
+      { url: { type: 'string', description: 'Full http(s) URL to load.' } },
+      ['url'],
+    ),
+    execute: async args => {
+      const { browserNavigate } = await import('./browser.js');
+      return browserNavigate(strArg(args, 'url'));
+    },
+  },
+  {
+    name: 'browser_snapshot',
+    definition: toolDefinition(
+      'browser_snapshot',
+      'List the current page as numbered [ref] elements for browser_click/browser_type. Take a fresh snapshot after every navigation or interaction.',
+      {},
+      [],
+    ),
+    execute: async () => {
+      const { browserSnapshot } = await import('./browser.js');
+      return browserSnapshot();
+    },
+  },
+  {
+    name: 'browser_click',
+    definition: toolDefinition(
+      'browser_click',
+      'Click a snapshot element by ref number. Refs expire after every interaction — snapshot again first.',
+      { ref: { type: 'number', description: 'Element ref from the latest snapshot.' } },
+      ['ref'],
+    ),
+    execute: async args => {
+      const { browserClick } = await import('./browser.js');
+      const ref = args.ref;
+      if (typeof ref !== 'number' || !Number.isInteger(ref) || ref < 1) throw new Error('ref must be a positive integer from the snapshot');
+      return browserClick(ref);
+    },
+    preview: async args => `Click element ${String(args.ref ?? '?')} in the managed browser.`,
+  },
+  {
+    name: 'browser_type',
+    definition: toolDefinition(
+      'browser_type',
+      'Focus a snapshot element, type text into it, and optionally press Enter (for search boxes and forms).',
+      {
+        ref: { type: 'number', description: 'Element ref from the latest snapshot.' },
+        text: { type: 'string', description: 'Text to type.' },
+        submit: { type: 'boolean', description: 'Press Enter after typing. Default false.' },
+      },
+      ['ref', 'text'],
+    ),
+    execute: async args => {
+      const { browserType } = await import('./browser.js');
+      const ref = args.ref;
+      if (typeof ref !== 'number' || !Number.isInteger(ref) || ref < 1) throw new Error('ref must be a positive integer from the snapshot');
+      return browserType(ref, strArg(args, 'text'), args.submit === true);
+    },
+    preview: async args => `Type into element ${String(args.ref ?? '?')}${args.submit === true ? ' and press Enter' : ''}.`,
+  },
+  {
+    name: 'browser_screenshot',
+    definition: toolDefinition(
+      'browser_screenshot',
+      'Capture the current page as a PNG saved to the run workspace. Returns its path.',
+      {},
+      [],
+    ),
+    execute: async (_args, ctx) => {
+      const { browserScreenshot } = await import('./browser.js');
+      const { workspaceDir } = await import('./run-workspace.js');
+      const { mkdirSync, writeFileSync } = await import('node:fs');
+      const { join } = await import('node:path');
+      const { pngBase64 } = await browserScreenshot();
+      const dir = workspaceDir(ctx.runId);
+      mkdirSync(dir, { recursive: true });
+      const name = `screenshot-${Date.now()}.png`;
+      writeFileSync(join(dir, name), Buffer.from(pngBase64, 'base64'));
+      return `Saved ${name} to the workspace.`;
+    },
+  },
+];
+
+for (const tool of BROWSER_TOOLS) AGENT_TOOLS.push(tool);
+
+const OFFICE_TOOLS: AgentTool[] = [
+  {
+    name: 'read_office',
+    definition: toolDefinition(
+      'read_office',
+      'Read a Word/Excel/PowerPoint file from the run workspace as plain text. Supports .docx .pptx .xlsx .odt .odp .ods up to 10MB.',
+      { path: { type: 'string', description: 'Workspace-relative path to the office file.' } },
+      ['path'],
+    ),
+    execute: async (args, ctx) => {
+      const { readOffice } = await import('./office.js');
+      const abs = resolveInRoot(runWorkspace(ctx.runId), strArg(args, 'path'));
+      const text = await readOffice(abs);
+      return text.slice(0, 12000);
+    },
+  },
+  {
+    name: 'write_docx',
+    definition: toolDefinition(
+      'write_docx',
+      'Write a Word document (.docx) into the run workspace from blocks of headings, paragraphs, and bullets.',
+      {
+        path: { type: 'string', description: 'Workspace-relative path ending in .docx.' },
+        blocks: {
+          type: 'array',
+          description: 'Document blocks in order: {style: h1|h2|p|bullet, text}. 1..500 blocks.',
+          items: { type: 'object' },
+        },
+      },
+      ['path', 'blocks'],
+    ),
+    execute: async (args, ctx) => {
+      const { writeDocx } = await import('./office.js');
+      const rel = strArg(args, 'path');
+      if (!rel.toLowerCase().endsWith('.docx')) throw new Error('write_docx path must end in .docx');
+      if (!Array.isArray(args.blocks)) throw new Error('write_docx needs a blocks array');
+      const abs = resolveInRoot(runWorkspace(ctx.runId), rel);
+      const bytes = await writeDocx(abs, args.blocks as never);
+      return `Wrote ${rel} (${bytes} bytes).`;
+    },
+    preview: async args => `Write Word document ${String(args.path ?? '?')} (${Array.isArray(args.blocks) ? args.blocks.length : 0} blocks).`,
+  },
+  {
+    name: 'write_xlsx',
+    definition: toolDefinition(
+      'write_xlsx',
+      'Write an Excel workbook (.xlsx) into the run workspace from sheets of string rows.',
+      {
+        path: { type: 'string', description: 'Workspace-relative path ending in .xlsx.' },
+        sheets: {
+          type: 'array',
+          description: 'Sheets in order: {name, rows: string[][]}. 1..20 sheets, up to 5000 rows each.',
+          items: { type: 'object' },
+        },
+      },
+      ['path', 'sheets'],
+    ),
+    execute: async (args, ctx) => {
+      const { writeXlsx } = await import('./office.js');
+      const rel = strArg(args, 'path');
+      if (!rel.toLowerCase().endsWith('.xlsx')) throw new Error('write_xlsx path must end in .xlsx');
+      if (!Array.isArray(args.sheets)) throw new Error('write_xlsx needs a sheets array');
+      const abs = resolveInRoot(runWorkspace(ctx.runId), rel);
+      const bytes = await writeXlsx(abs, args.sheets as never);
+      return `Wrote ${rel} (${bytes} bytes).`;
+    },
+    preview: async args => `Write Excel workbook ${String(args.path ?? '?')} (${Array.isArray(args.sheets) ? args.sheets.length : 0} sheets).`,
+  },
+  {
+    name: 'write_pptx',
+    definition: toolDefinition(
+      'write_pptx',
+      'Write a PowerPoint deck (.pptx) into the run workspace: a title slide plus one slide per entry.',
+      {
+        path: { type: 'string', description: 'Workspace-relative path ending in .pptx.' },
+        title: { type: 'string', description: 'Deck title for the first slide.' },
+        slides: {
+          type: 'array',
+          description: 'Slides in order: {title, bullets: string[]}. 1..100 slides.',
+          items: { type: 'object' },
+        },
+      },
+      ['path', 'title', 'slides'],
+    ),
+    execute: async (args, ctx) => {
+      const { writePptx } = await import('./office.js');
+      const rel = strArg(args, 'path');
+      if (!rel.toLowerCase().endsWith('.pptx')) throw new Error('write_pptx path must end in .pptx');
+      if (!Array.isArray(args.slides)) throw new Error('write_pptx needs a slides array');
+      const abs = resolveInRoot(runWorkspace(ctx.runId), rel);
+      const bytes = await writePptx(abs, strArg(args, 'title'), args.slides as never);
+      return `Wrote ${rel} (${bytes} bytes).`;
+    },
+    preview: async args => `Write PowerPoint deck ${String(args.path ?? '?')} (${Array.isArray(args.slides) ? args.slides.length : 0} slides).`,
+  },
+];
+
+for (const tool of OFFICE_TOOLS) AGENT_TOOLS.push(tool);
+
 /** This run's project key ('' when the run targets no project). */
 function runProjectKey(runId: number): string {
   const row = getDb().prepare('SELECT project_key FROM agent_runs WHERE id = ?').get(runId) as { project_key?: string } | undefined;

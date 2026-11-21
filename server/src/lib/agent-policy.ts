@@ -55,9 +55,13 @@ const READ_TOOLS = new Set([
   'recall_docs',
   'find_skill',
   'todo_write',
+  'browser_navigate',
+  'browser_snapshot',
+  'browser_screenshot',
+  'read_office',
 ]);
 
-const WRITE_TOOLS = new Set(['write_file', 'edit_file', 'remember', 'git_branch', 'git_commit']);
+const WRITE_TOOLS = new Set(['write_file', 'edit_file', 'remember', 'git_branch', 'git_commit', 'browser_click', 'browser_type', 'write_docx', 'write_xlsx', 'write_pptx']);
 const SHELL_TOOLS = new Set(['shell_exec', 'run_check', 'git_clone']);
 
 // Test seam + future strictness knob: per-tool risk overrides. A stricter
@@ -228,6 +232,28 @@ export function summarizeToolCall(tool: string, args: Record<string, unknown>): 
       const url = str(args.url);
       return url ? `Clone ${url}` : 'Clone a repository';
     }
+    case 'browser_navigate': {
+      const url = str(args.url);
+      return url ? `Browse to ${url}` : 'Browse to a URL';
+    }
+    case 'browser_snapshot':
+      return 'Snapshot the browser page';
+    case 'browser_click': {
+      const ref = args.ref;
+      return typeof ref === 'number' ? `Click element ${ref}` : 'Click a page element';
+    }
+    case 'browser_type':
+      return 'Type into a page element';
+    case 'browser_screenshot':
+      return 'Screenshot the browser page';
+    case 'read_office':
+      return str(args.path) ? `Read office file ${str(args.path)}` : 'Read an office file';
+    case 'write_docx':
+      return str(args.path) ? `Write Word document ${str(args.path)}` : 'Write a Word document';
+    case 'write_xlsx':
+      return str(args.path) ? `Write Excel workbook ${str(args.path)}` : 'Write an Excel workbook';
+    case 'write_pptx':
+      return str(args.path) ? `Write PowerPoint deck ${str(args.path)}` : 'Write a PowerPoint deck';
     default: {
       if (tool.startsWith('mcp:')) {
         const rest = tool.slice('mcp:'.length);

@@ -40,6 +40,8 @@ export const AGENT_TOOL_NAMES = [
   'blackboard_read', 'blackboard_write', 'remember', 'recall_memory',
   'git_status', 'git_diff', 'git_log', 'git_branch', 'git_commit', 'git_clone',
   'delegate', 'recall_docs', 'find_skill', 'todo_write',
+  'browser_navigate', 'browser_snapshot', 'browser_click', 'browser_type', 'browser_screenshot',
+  'read_office', 'write_docx', 'write_xlsx', 'write_pptx',
 ];
 
 export interface AgentRunOptions {
