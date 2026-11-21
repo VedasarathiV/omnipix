@@ -1,6 +1,7 @@
 import { FileDiff, Files, PanelRightClose, Play, ScrollText, SquareTerminal } from 'lucide-react';
 import type { RightTab } from '../types';
 import { ChangesPanel } from './ChangesPanel';
+import { FileTree } from './FileTree';
 import { FileViewer } from './FileViewer';
 import { LogsPanel, PreviewPanel, TerminalPanel } from './TerminalPreview';
 import { useStudio } from '../state/store';
@@ -15,7 +16,7 @@ const TABS: Array<{ id: RightTab; label: string; icon: typeof FileDiff }> = [
 ];
 
 export function RightPanel() {
-  const { rightTab, setRightTab, setRightOpen, activeRunId } = useStudio();
+  const { rightTab, setRightTab, setRightOpen, activeRunId, selectedFile } = useStudio();
   const { data: diff } = useRunDiff(activeRunId, null);
   const changeCount = diff?.files.length ?? 0;
   return (
@@ -53,7 +54,18 @@ export function RightPanel() {
       </div>
       <div className="min-h-0 flex-1">
         {rightTab === 'changes' && <ChangesPanel />}
-        {rightTab === 'files' && <FileViewer />}
+        {rightTab === 'files' && (selectedFile ? <FileViewer /> : (
+          <div className="flex h-full flex-col">
+            <p className="shrink-0 px-3 pt-3 pb-1 text-[11px] text-ink-faint">
+              {activeRunId === null
+                ? 'Start an agent run, then pick one of its files here.'
+                : 'Pick a file to view it.'}
+            </p>
+            <div className="min-h-0 flex-1 overflow-y-auto px-1.5 pb-2">
+              <FileTree />
+            </div>
+          </div>
+        ))}
         {rightTab === 'terminal' && <TerminalPanel />}
         {rightTab === 'preview' && <PreviewPanel />}
         {rightTab === 'logs' && <LogsPanel />}

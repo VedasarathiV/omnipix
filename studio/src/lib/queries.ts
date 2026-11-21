@@ -519,10 +519,13 @@ export interface LogEntry {
   message: string;
 }
 
-export function useLogs() {
+export function useLogs(levels?: string, q?: string) {
+  const params = new URLSearchParams({ limit: '200' });
+  if (levels) params.set('levels', levels);
+  if (q) params.set('q', q);
   return useQuery<{ entries: LogEntry[] }>({
-    queryKey: ['logs'],
-    queryFn: () => apiFetch('/api/logs?limit=100'),
+    queryKey: ['logs', levels ?? '', q ?? ''],
+    queryFn: () => apiFetch(`/api/logs?${params.toString()}`),
     refetchInterval: 5000,
   });
 }
