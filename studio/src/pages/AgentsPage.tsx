@@ -7,8 +7,9 @@ import { ApprovalPrompt } from '../components/ApprovalPrompt';
 import { useStudio } from '../state/store';
 import { apiFetch } from '../lib/api';
 import { useApprovals, useAutomations, useGroups, useMemories, useRunbooks, useRuns, type AgentRun } from '../lib/queries';
+import { AgentSetupTab } from '../components/AgentSetup';
 
-const TABS = ['Runs', 'Teams', 'Approvals', 'Hooks', 'Automations', 'Assistant'] as const;
+const TABS = ['Runs', 'Teams', 'Approvals', 'Hooks', 'Automations', 'Assistant', 'Setup'] as const;
 
 export function AgentsPage() {
   const [tab, setTab] = useState<(typeof TABS)[number]>('Runs');
@@ -39,6 +40,7 @@ export function AgentsPage() {
       {tab === 'Hooks' && <HooksTab />}
       {tab === 'Automations' && <AutomationsTab />}
       {tab === 'Assistant' && <AssistantTab />}
+      {tab === 'Setup' && <AgentSetupTab />}
     </div>
   );
 }

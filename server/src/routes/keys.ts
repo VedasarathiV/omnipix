@@ -7,6 +7,7 @@ import { getDb } from '../db/index.js';
 import { resolveProvider, getAllProviders } from '../providers/index.js';
 import { OpenAICompatProvider, isAnonymousCredential } from '../providers/openai-compat.js';
 import { getSyncState } from '../services/catalog-sync.js';
+import { availableKeylessProviders, dismissAvailableKeylessProviders, enableAvailableKeylessProviders } from '../services/keyless-defaults.js';
 import { encrypt, decrypt, maskKey } from '../lib/crypto.js';
 import { parseKeysFromFile, stripJsoncComments, stripTrailingCommas } from '../lib/key-parser.js';
 import { assessProviderUrl } from '../lib/url-guard.js';
@@ -38,6 +39,7 @@ import type { Platform } from '@omnipix/shared/types.js';
 import { parseModelScope } from '../lib/model-scope.js';
 import { KEY_PROXY_URL_ERROR, KEY_PROXY_URL_MAX, decryptProxyUrl, encryptProxyUrl, isValidKeyProxyUrl, maskProxyUrl } from '../lib/key-proxy.js';
 import { isLoopbackRequest } from '../lib/loopback.js';
+import { speechFlowCredentials } from '../providers/speechflow.js';
 
 export const keysRouter = Router();
 
@@ -80,6 +82,8 @@ const PLATFORMS = [
   'typecast',
   'cartesia',
   'silvr',
+  'speechflow',
+  'meldport',
   'freetts',
   'freeinference',
   'freemodel',
@@ -772,6 +776,21 @@ keysRouter.get('/export', (req: Request, res: Response) => {
   res.json(jsonExport);
 });
 
+// No-key providers this install's catalog offers but it has not added.
+// Registered above /:id so the literal paths win over the param route.
+keysRouter.get('/keyless-available', (_req: Request, res: Response) => {
+  res.json({ providers: availableKeylessProviders() });
+});
+
+keysRouter.post('/keyless-available/enable', (_req: Request, res: Response) => {
+  res.json({ enabled: enableAvailableKeylessProviders() });
+});
+
+keysRouter.post('/keyless-available/dismiss', (_req: Request, res: Response) => {
+  dismissAvailableKeylessProviders();
+  res.json({ ok: true });
+});
+
 // Fetch one key (masked, same shape as the list rows)
 keysRouter.get('/:id', (req: Request, res: Response) => {
   const id = Number(req.params.id);
@@ -837,6 +856,10 @@ keysRouter.post('/', (req: Request, res: Response) => {
   const isKeyless = resolveProvider(platform)?.keyless === true;
   const rawKey = parsed.data.key?.trim() ?? '';
 
+  if (platform === 'speechflow' && !speechFlowCredentials(rawKey)) {
+    res.status(400).json({ error: { message: 'SpeechFlow requires keyId:keySecret' } });
+    return;
+  }
   if (!isKeyless && !rawKey) {
     res.status(400).json({ error: { message: 'key is required' } });
     return;
@@ -1987,6 +2010,10 @@ keysRouter.patch('/:id', (req: Request, res: Response) => {
     // Key-optional platforms (Kilo, OVH, AI Horde) accept a real key here like
     // any other provider: it replaces the anonymous sentinel (#1331).
 
+    if (stored.platform === 'speechflow' && !speechFlowCredentials(key)) {
+      res.status(400).json({ error: { message: 'SpeechFlow requires keyId:keySecret' } });
+      return;
+    }
     if (stored.platform === 'cloudflare') {
       const separator = key.indexOf(':');
       if (separator < 1 || !key.slice(0, separator).trim() || !key.slice(separator + 1).trim()) {

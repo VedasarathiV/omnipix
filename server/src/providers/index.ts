@@ -13,6 +13,8 @@ import { OutcrawlProvider } from './outcrawl.js';
 import { KeylessDecisionProvider } from './decision-only.js';
 import { CloudflareProvider } from './cloudflare.js';
 import { AIHordeProvider } from './aihorde.js';
+import { MeldportProvider } from './meldport.js';
+import { SpeechFlowProvider } from './speechflow.js';
 import { ModelScopeProvider } from './modelscope.js';
 import { PollinationsProvider } from './pollinations.js';
 import { ZhipuProvider } from './zhipu.js';
@@ -670,6 +672,8 @@ register(new OpenAICompatProvider({
 // auto-configures and works anonymously (key 0000000000, lowest queue
 // priority); a registered aihorde.net key raises priority. See issue #345.
 register(new AIHordeProvider());
+register(new MeldportProvider());
+register(new SpeechFlowProvider());
 
 // Placeholder so getProvider('custom')/hasProvider('custom')/getAllProviders()
 // behave — but the real instance is built per-key by resolveProvider(), since

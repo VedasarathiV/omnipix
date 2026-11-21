@@ -8,6 +8,7 @@ import { buildTray, refreshTrayLocale } from './tray.js';
 import { trayIsInMenuBar } from './tray-visibility.js';
 import { shouldOpenDashboardOnLaunch } from './tray-platform.js';
 import { getDashboardWindow, openDashboard } from './window.js';
+import { registerAgentSetup } from './agent-setup.js';
 import { registerDictationHotkey } from './dictation-hotkey.js';
 import { todayStats, hourlyRequests, successRateToday } from './stats.js';
 import { normalizeLocale, nativeStrings, type NativeLocale } from './i18n.js';
@@ -323,6 +324,7 @@ if (!app.requestSingleInstanceLock()) {
       resolvedPort = port;
       saveConfig({ ...cfg, port });
       sessionToken = ensureSessionToken();
+      registerAgentSetup({ port: () => resolvedPort, key: getUnifiedApiKey, dashboard: getDashboardWindow });
       // The server is already up, so a tray that fails to build must not take
       // the app down with it: fall back to the dashboard window (#1353).
       let tray: Tray | null = null;

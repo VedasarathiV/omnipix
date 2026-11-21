@@ -304,6 +304,10 @@ export type Platform =
   // aihorde.net key raises queue priority. Has a dedicated AIHordeProvider that
   // normalizes the proxy's OpenAI divergences. See issue #345.
   | 'aihorde'
+  // Meldport — allowance-funded free chat route (gpt-6-luna:free).
+  | 'meldport'
+  // SpeechFlow — file transcription only (keyId:keySecret credential).
+  | 'speechflow'
   // User-configured OpenAI-compatible endpoint (llama.cpp, LM Studio, vLLM,
   // Ollama, any base_url). The endpoint URL lives on the api_keys row; see #117.
   | 'custom';

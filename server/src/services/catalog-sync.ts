@@ -17,6 +17,7 @@ import {
   reinstateUpstreamRetiredCatalogModel,
 } from './model-state.js';
 import { ensureAllModelsInProfiles } from './profile-models.js';
+import { applyKeylessDefaults } from './keyless-defaults.js';
 
 // Generative-media modalities are routed into the separate media_models table
 // (see services/media.ts), never into the chat `models` table.
@@ -520,6 +521,11 @@ function catalogBringsNewEvidence(catalog: Catalog): boolean {
 }
 
 function applyCatalogInner(db: Db, catalog: Catalog): NonNullable<SyncResult['counts']> {
+  // New installs adopt this catalog's no-key chat providers (once; existing
+  // installs no-op). Runs here so bundled, feed, and cached applies share it.
+  try { applyKeylessDefaults(catalog, db); } catch (err) {
+    console.warn(`[keyless] could not enable no-key providers: ${(err as Error).message}`);
+  }
   const counts = { updated: 0, inserted: 0, removed: 0, skippedUnknownPlatform: 0, quirks: 0 };
   // Read once: the applied-version settings are only written after this
   // transaction returns, so they cannot change underneath the loop.

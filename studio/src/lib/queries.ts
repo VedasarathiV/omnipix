@@ -18,6 +18,13 @@ export function useKeys() {
   return useQuery<KeyRow[]>({ queryKey: ['keys'], queryFn: () => apiFetch('/api/keys') });
 }
 
+export function useKeylessAvailable() {
+  return useQuery<{ providers: Array<{ platform: string; name: string }> }>({
+    queryKey: ['keyless-available'],
+    queryFn: () => apiFetch('/api/keys/keyless-available'),
+  });
+}
+
 export interface ModelRow {
   id: number;
   platform: string;

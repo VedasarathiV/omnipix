@@ -50,6 +50,17 @@ contextBridge.exposeInMainWorld('__OMNIPIX_SESSION__', () => ipcRenderer.invoke(
 // shell, where the manual path field remains the only way in.
 contextBridge.exposeInMainWorld('__OMNIPIX_PICK_FOLDER__', () => ipcRenderer.invoke('omnipix:pick-folder'));
 
+// One-click coding-agent setup for the Agents → Setup tab. Narrow on
+// purpose: the renderer names a catalog id, the main process owns the
+// gateway key, the destination config paths, and terminal launching.
+if (process.platform === 'darwin' || process.platform === 'win32') {
+  contextBridge.exposeInMainWorld('__OMNIPIX_AGENT_SETUP__', {
+    details: (id: string) => ipcRenderer.invoke('omnipix:agent-details', id),
+    connect: (id: string) => ipcRenderer.invoke('omnipix:agent-connect', id),
+    launch: (id: string) => ipcRenderer.invoke('omnipix:agent-launch', id),
+  });
+}
+
 // Push-to-talk dictation: the global hotkey (main process) toggles recording
 // in the dashboard; the renderer reports which accelerator actually stuck so
 // the UI can name it.

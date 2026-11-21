@@ -224,6 +224,15 @@ export function initDb(
   // encryption key exists.
   encryptUnifiedKeyAtRest(db);
 
+  // Keyless-chat seeding (services/keyless-defaults): recorded once; later
+  // boots keep the first answer. A database with no users yet is brand-new
+  // ('pending'); an upgraded install with accounts stays untouched ('skip').
+  const keylessKnown = db.prepare("SELECT value FROM settings WHERE key = 'keyless_defaults'").get();
+  if (!keylessKnown) {
+    const users = (db.prepare('SELECT COUNT(*) AS n FROM users').get() as { n: number }).n;
+    db.prepare('INSERT INTO settings (key, value) VALUES (?, ?)').run('keyless_defaults', users === 0 ? 'pending' : 'skip');
+  }
+
   keyStoreDecryptable = probeStoredSecrets(db);
   if (keyStoreDecryptable === false) {
     console.error(

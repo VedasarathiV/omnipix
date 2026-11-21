@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Cpu, GripVertical, KeyRound, X } from 'lucide-react';
-import { useKeys, useModels, useOllama } from '../lib/queries';
+import { useKeylessAvailable, useKeys, useModels, useOllama } from '../lib/queries';
 import { ProviderIcon } from '../components/ProviderIcon';
 import { apiFetch } from '../lib/api';
 import { useStudio } from '../state/store';
@@ -19,6 +19,29 @@ export function ProvidersPage() {
   const [order, setOrder] = useState<string[] | null>(null);
   const [drag, setDrag] = useState<string | null>(null);
   const [adding, setAdding] = useState<string | null>(null);
+  const { data: keylessData } = useKeylessAvailable();
+  const keyless = keylessData?.providers ?? [];
+
+  async function enableAllKeyless() {
+    try {
+      const out = await apiFetch<{ enabled: string[] }>('/api/keys/keyless-available/enable', { method: 'POST' });
+      pushToast('ok', out.enabled.length ? `Enabled ${out.enabled.length} free provider${out.enabled.length === 1 ? '' : 's'} — no keys needed.` : 'Nothing new to enable.');
+      void queryClient.invalidateQueries({ queryKey: ['keys'] });
+      void queryClient.invalidateQueries({ queryKey: ['keyless-available'] });
+      void queryClient.invalidateQueries({ queryKey: ['models'] });
+    } catch (err) {
+      pushToast('error', err instanceof Error ? err.message : 'Enable failed');
+    }
+  }
+
+  async function dismissKeyless() {
+    try {
+      await apiFetch('/api/keys/keyless-available/dismiss', { method: 'POST' });
+      void queryClient.invalidateQueries({ queryKey: ['keyless-available'] });
+    } catch {
+      // Dismiss is a courtesy; a failure just leaves the notice up.
+    }
+  }
 
   async function testKey(keyId: number, platform: string) {
     try {
@@ -80,6 +103,31 @@ export function ProvidersPage() {
         <span className="font-mono text-xs text-ink-dim">{configured} of {platforms.length} configured</span>
       </div>
       <OllamaCard />
+      {keyless.length > 0 && (
+        <div className="mt-3 flex items-center gap-2 rounded-xl border border-line bg-base-1 px-4 py-3">
+          <KeyRound className="size-4 shrink-0 text-ok" strokeWidth={1.5} />
+          <p className="min-w-0 flex-1 text-[13px]">
+            {keyless.length} free provider{keyless.length === 1 ? '' : 's'} need{keyless.length === 1 ? 's' : ''} no key:{' '}
+            <span className="text-ink-dim">{keyless.map(k => k.name).join(', ')}</span>
+          </p>
+          <button
+            type="button"
+            onClick={() => void enableAllKeyless()}
+            className="shrink-0 rounded-lg bg-accent px-3 py-1.5 text-xs font-semibold text-base-0 outline-none hover:opacity-90 focus-visible:ring-2 focus-visible:ring-accent"
+          >
+            Enable all
+          </button>
+          <button
+            type="button"
+            onClick={() => void dismissKeyless()}
+            title="Dismiss"
+            aria-label="Dismiss free providers"
+            className="shrink-0 rounded-md p-1.5 text-ink-faint outline-none hover:bg-base-2 hover:text-ink focus-visible:ring-2 focus-visible:ring-accent"
+          >
+            <X className="size-4" strokeWidth={1.5} />
+          </button>
+        </div>
+      )}
       <div className="mt-3 grid gap-3 md:grid-cols-2">
         {ids.map(id => {
           const platformModels = models.filter(m => m.platform === id);
