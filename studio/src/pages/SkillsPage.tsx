@@ -223,7 +223,7 @@ function SkillsTab() {
           <div className="flex items-center gap-2 rounded-xl border border-line bg-base-1 px-4 py-3">
             <Blocks className="size-4 shrink-0 text-ink-dim" strokeWidth={1.5} />
             <div className="min-w-0 flex-1">
-              <p className="font-mono text-[13px] font-medium">{s.name}{s.builtin && <span className="ml-1.5 rounded bg-base-2 px-1 py-0.5 text-[10px] text-ink-dim">built-in</span>}</p>
+              <p className="font-mono text-[13px] font-medium">{s.name}{!!s.builtin && <span className="ml-1.5 rounded bg-base-2 px-1 py-0.5 text-[10px] text-ink-dim">built-in</span>}</p>
               <p className="truncate text-xs text-ink-dim">{s.description}</p>
             </div>
             <button type="button" title="Download .md" aria-label={`Export ${s.name}`} onClick={() => void download(s.name)} className="shrink-0 rounded-md px-2 py-1 text-[11px] text-ink-dim outline-none hover:bg-base-2 hover:text-ink focus-visible:ring-2 focus-visible:ring-accent">Export</button>

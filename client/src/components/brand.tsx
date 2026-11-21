@@ -1,18 +1,16 @@
 import { Link } from 'react-router-dom'
 import { useI18n } from '@/i18n'
 
-// The OmniPix mark: orbit ring on brand green. One definition shared by the
-// navbar, the workbench activity bar, and the desktop title strip. Fixed
-// green-600 + white: readable in both themes, independent of --primary.
+// The OmniPix mark, identical to the desktop dock icon and the studio Logo:
+// dark tile, emerald arc with a top-right gap, white core. One geometry
+// everywhere (viewBox scales it); fixed colors, independent of the theme.
 
 export function BrandMark({ size = 18 }: { size?: number }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 64 64" aria-hidden="true" className="shrink-0">
-      <rect width="64" height="64" rx="14" fill="#16a34a" />
-      <circle cx="32" cy="32" r="9.5" fill="#ffffff" />
-      <circle cx="32" cy="32" r="18" fill="none" stroke="#ffffff" strokeOpacity=".6"
-        strokeWidth="4.5" strokeLinecap="round" strokeDasharray="86 27"
-        transform="rotate(-60 32 32)" />
+    <svg width={size} height={size} viewBox="0 0 100 100" aria-hidden="true" className="shrink-0">
+      <rect x="2" y="2" width="96" height="96" rx="22" fill="#0b1110" />
+      <path d="M 77.7 34 A 32 32 0 1 1 66 22.3" fill="none" stroke="#10b981" strokeWidth="8" />
+      <circle cx="50" cy="50" r="16" fill="#ffffff" />
     </svg>
   )
 }

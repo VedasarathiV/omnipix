@@ -5,7 +5,7 @@ import { useStudio } from '../state/store';
 import { apiFetch } from '../lib/api';
 import { useAgentPresets, useModels, useSkills, type AgentRun } from '../lib/queries';
 
-const ALL_TOOLS = ['read_file', 'grep_search', 'write_file', 'edit_file', 'shell_exec', 'run_check', 'git_status', 'git_diff', 'git_commit', 'delegate', 'web_search', 'fetch_url', 'todo_write'];
+const ALL_TOOLS = ['read_file', 'grep_search', 'write_file', 'edit_file', 'shell_exec', 'run_check', 'git_status', 'git_diff', 'git_commit', 'delegate', 'web_search', 'fetch_url', 'todo_write', 'browser_navigate', 'browser_snapshot', 'browser_click', 'browser_type', 'browser_screenshot', 'read_office', 'write_docx', 'write_xlsx', 'write_pptx'];
 
 /** New run launcher: goal + tools + skills + model. Runs are the agents. */
 export function AgentEditor() {
