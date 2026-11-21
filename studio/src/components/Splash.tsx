@@ -25,11 +25,11 @@ export function Splash() {
       aria-hidden="true"
     >
       <div className="splash-ring flex size-24 items-center justify-center">
-        <Logo size={88} spin />
+        <Logo size={88} />
       </div>
       <p className="splash-text text-sm font-semibold tracking-wide">OmniPix Studio</p>
       <div className="splash-bar h-1 w-40 overflow-hidden rounded-full bg-base-2">
-        <span className="block h-full w-1/2 rounded-full bg-accent" />
+        <span className="block h-full w-full" />
       </div>
     </div>
   );

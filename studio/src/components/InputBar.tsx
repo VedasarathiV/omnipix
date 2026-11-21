@@ -105,6 +105,7 @@ export function InputBar() {
   const [chips, setChips] = useState<string[]>([]);
   const [image, setImage] = useState<{ name: string; dataUrl: string } | null>(null);
   const [menu, setMenu] = useState<'slash' | 'mention' | 'templates' | null>(null);
+  const [dragOver, setDragOver] = useState(false);
   const [histIdx, setHistIdx] = useState(-1);
   const [sending, setSending] = useState(false);
   const boxRef = useRef<HTMLTextAreaElement>(null);
@@ -336,7 +337,22 @@ export function InputBar() {
           </button>
         </div>
       )}
-      <div className="relative">
+      <div
+        className="relative"
+        onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={e => {
+          e.preventDefault();
+          setDragOver(false);
+          const file = e.dataTransfer.files?.[0];
+          if (file) void handleAttachFile(file);
+        }}
+      >
+        {dragOver && (
+          <div className="pointer-events-none absolute inset-0 z-30 flex items-center justify-center rounded-xl border-2 border-dashed border-accent bg-base-0/80 text-sm font-medium text-ink-dim">
+            Drop to attach
+          </div>
+        )}
         {menu === 'slash' && (
           <Menu onClose={() => setMenu(null)}>
             {SLASH.map(s => (
@@ -394,7 +410,7 @@ export function InputBar() {
           rows={2}
           placeholder="Ask, plan, or instruct the agent… (@ for files, / for commands)"
           aria-label="Message input"
-          className="w-full resize-none rounded-xl border border-line bg-base-0 px-3 pt-2.5 pb-11 text-sm outline-none placeholder:text-ink-faint focus-visible:ring-2 focus-visible:ring-accent"
+          className="w-full resize-none rounded-xl border border-line bg-base-0 px-3 pt-2.5 pb-11 text-sm outline-none placeholder:text-ink-faint focus:border-ink-faint"
         />
         <input
           ref={fileRef}
