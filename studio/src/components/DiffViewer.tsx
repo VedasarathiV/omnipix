@@ -2,9 +2,10 @@ import { useState } from 'react';
 import { Check, Columns2, Rows3, Undo2 } from 'lucide-react';
 import type { DiffHunk, DiffLine } from '../types';
 import { useStudio } from '../state/store';
+import { loadDiffView } from '../lib/prefs';
 
 export function DiffViewer({ path, hunks, onRevert }: { path: string; hunks: DiffHunk[]; onRevert?: () => void }) {
-  const [split, setSplit] = useState(true);
+  const [split, setSplit] = useState(() => loadDiffView() === 'split');
   const { acceptFile, acceptedFiles } = useStudio();
   const accepted = acceptedFiles.has(path);
 

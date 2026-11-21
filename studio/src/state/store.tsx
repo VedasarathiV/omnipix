@@ -100,7 +100,21 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     writeHash();
   }, [writeHash]);
   const [mode, setMode] = useState<AgentMode>('agent');
-  const [model, setModel] = useState('auto');
+  const [model, setModelState] = useState(() => {
+    try {
+      return window.localStorage.getItem('studio.model') || 'auto';
+    } catch {
+      return 'auto';
+    }
+  });
+  const setModel = useCallback((next: string) => {
+    setModelState(next);
+    try {
+      window.localStorage.setItem('studio.model', next);
+    } catch {
+      // Private mode: preference just doesn't persist.
+    }
+  }, []);
   const [rightOpen, setRightOpen] = useState(true);
   const [rightTab, setRightTab] = useState<RightTab>('changes');
   const [sidebarOpen, setSidebarOpen] = useState(true);

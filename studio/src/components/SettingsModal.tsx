@@ -3,9 +3,11 @@ import { useQueryClient } from '@tanstack/react-query';
 import { X } from 'lucide-react';
 import { useStudio } from '../state/store';
 import { apiFetch } from '../lib/api';
-import { useApprovalRules, useConversation, useModels, useVoiceSettings } from '../lib/queries';
+import { applyTheme, loadThemePref, type ThemePref } from '../lib/theme';
+import { loadDiffView, saveDiffView, type DiffView } from '../lib/prefs';
+import { useApprovalRules, useConversation, useMedia, useModels, useVoiceSettings } from '../lib/queries';
 
-const SECTIONS = ['Model', 'Sampling', 'System prompt', 'Search', 'Voice', 'Permissions', 'Appearance', 'Shortcuts', 'Data'] as const;
+const SECTIONS = ['Model', 'Sampling', 'System prompt', 'Voice', 'Permissions', 'Appearance', 'Shortcuts', 'Data'] as const;
 
 export function SettingsModal() {
   const { settingsOpen, setSettingsOpen } = useStudio();
@@ -50,7 +52,6 @@ export function SettingsModal() {
             {section === 'Model' && <ModelSection />}
             {section === 'Sampling' && <SamplingSection />}
             {section === 'System prompt' && <SystemSection />}
-            {section === 'Search' && <SearchSection />}
             {section === 'Voice' && <VoiceSection />}
             {section === 'Permissions' && <PermissionsSection />}
             {section === 'Appearance' && <AppearanceSection />}
@@ -209,37 +210,12 @@ function SystemSection() {
   );
 }
 
-function storedBool(key: string, fallback: boolean): boolean {
-  try {
-    const raw = localStorage.getItem(key);
-    return raw === null ? fallback : raw === '1';
-  } catch {
-    return fallback;
-  }
-}
-
-function SearchSection() {
-  const [on, setOn] = useState(() => storedBool('playground.webSearch', true));
-  function flip() {
-    const next = !on;
-    setOn(next);
-    try {
-      localStorage.setItem('playground.webSearch', next ? '1' : '0');
-    } catch {
-      // Private mode: preference just doesn't persist.
-    }
-  }
-  return (
-    <div className="divide-y divide-line">
-      <Row label="Web search" hint="Engines sync from the catalog"><Toggle on={on} onFlip={flip} label="Web search" /></Row>
-    </div>
-  );
-}
-
 function VoiceSection() {
   const { data: voice } = useVoiceSettings();
+  const { data: media } = useMedia();
   const { pushToast } = useStudio();
   const queryClient = useQueryClient();
+  const stt = (media?.models ?? []).filter(m => m.modality === 'transcription' && m.enabled);
   async function save(patch: Record<string, unknown>) {
     try {
       await apiFetch('/api/settings/voice', { method: 'PUT', body: JSON.stringify(patch) });
@@ -250,7 +226,17 @@ function VoiceSection() {
   }
   return (
     <div className="divide-y divide-line">
-      <Row label="Dictation model" hint="Speech-to-text for the mic"><span className="font-mono text-xs">{voice?.sttModel ?? 'auto'}</span></Row>
+      <Row label="Dictation model" hint="Speech-to-text for the mic">
+        <select
+          value={voice?.sttModel ?? 'auto'}
+          onChange={e => void save({ sttModel: e.target.value })}
+          aria-label="Dictation model"
+          className="rounded-lg border border-line bg-base-1 px-2 py-1.5 text-xs outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        >
+          <option value="auto">Auto</option>
+          {stt.map(m => <option key={m.id} value={m.modelId}>{m.displayName}</option>)}
+        </select>
+      </Row>
       <Row label="Voice output" hint="Read chat responses aloud">
         <Toggle on={!!voice?.autoSpeakChat} onFlip={() => void save({ autoSpeakChat: !voice?.autoSpeakChat })} label="Voice output" />
       </Row>
@@ -299,13 +285,15 @@ function PermissionsSection() {
 }
 
 function AppearanceSection() {
-  const [theme, setTheme] = useState('dark');
+  const [theme, setTheme] = useState<ThemePref>(loadThemePref);
+  const [diffView, setDiffView] = useState<DiffView>(loadDiffView);
   return (
     <div className="divide-y divide-line">
       <Row label="Theme" hint="Dark first, light supported">
         <select
           value={theme}
-          onChange={e => { setTheme(e.target.value); document.documentElement.classList.toggle('dark', e.target.value !== 'light'); }}
+          onChange={e => { const next = e.target.value as ThemePref; setTheme(next); applyTheme(next); }}
+          aria-label="Theme"
           className="rounded-lg border border-line bg-base-1 px-2 py-1.5 text-xs outline-none focus-visible:ring-2 focus-visible:ring-accent"
         >
           <option value="dark">Dark</option>
@@ -313,7 +301,17 @@ function AppearanceSection() {
           <option value="system">System</option>
         </select>
       </Row>
-      <Row label="Diff view" hint="Default for the changes panel"><span className="text-xs">Split</span></Row>
+      <Row label="Diff view" hint="Default for the changes panel">
+        <select
+          value={diffView}
+          onChange={e => { const next = e.target.value as DiffView; setDiffView(next); saveDiffView(next); }}
+          aria-label="Diff view"
+          className="rounded-lg border border-line bg-base-1 px-2 py-1.5 text-xs outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        >
+          <option value="split">Split</option>
+          <option value="unified">Unified</option>
+        </select>
+      </Row>
     </div>
   );
 }
@@ -340,6 +338,21 @@ function ShortcutsSection() {
 
 function DataSection() {
   const { pushToast } = useStudio();
+  async function downloadDiagnostics() {
+    try {
+      const bundle = await apiFetch<unknown>('/api/diagnostics/bundle');
+      const blob = new Blob([JSON.stringify(bundle, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'omnipix-diagnostics.json';
+      link.click();
+      URL.revokeObjectURL(url);
+      pushToast('ok', 'Diagnostics downloaded');
+    } catch (err) {
+      pushToast('error', err instanceof Error ? err.message : 'Download failed');
+    }
+  }
   async function exportData() {
     try {
       const { backup } = await apiFetch<{ backup: { id: number; filename: string } }>('/api/backups', { method: 'POST' });
@@ -365,7 +378,9 @@ function DataSection() {
       <Row label="Export data" hint="Full encrypted database backup">
         <button type="button" onClick={() => void exportData()} className="rounded-lg border border-line px-3 py-1.5 text-xs outline-none hover:bg-base-2 focus-visible:ring-2 focus-visible:ring-accent">Export</button>
       </Row>
-      <Row label="Diagnostics" hint="Redacted support bundle"><span className="font-mono text-xs text-ink-dim">/api/diagnostics/bundle</span></Row>
+      <Row label="Diagnostics" hint="Redacted support bundle">
+        <button type="button" onClick={() => void downloadDiagnostics()} className="rounded-lg border border-line px-3 py-1.5 text-xs outline-none hover:bg-base-2 focus-visible:ring-2 focus-visible:ring-accent">Download</button>
+      </Row>
       <Row label="Storage" hint="Local-first: everything lives on this machine"><span className="font-mono text-xs text-ok">local</span></Row>
     </div>
   );

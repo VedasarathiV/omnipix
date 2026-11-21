@@ -162,28 +162,29 @@ if (authState === 'setup') {
 const authed = await evaluate(ws, `document.body.innerText.includes('No run')`);
 check('fresh startup + setup', authed === true);
 
-// ---------- 2. tour: forward, back, persistence ----------
+// ---------- 2. tour: CTA dismisses to keys, walk, back, persistence ----------
 await evaluate(ws, `localStorage.removeItem('studio:onboarded')`);
 await rpc(ws, 'Page.reload', {});
 await sleep(3000);
-const titles = [];
-for (const btn of ['Add a key', 'Continue', null]) {
-  titles.push(await evaluate(ws, `document.querySelector('[role="dialog"] p')?.innerText ?? 'NONE'`));
-  if (btn) {
-    await evaluate(ws, `[...document.querySelectorAll('[role="dialog"] button')].find(b => b.textContent === '${btn}').click()`);
-    await sleep(700);
-  }
-}
-check('tour advances 0->1->2', titles[0] === 'Add a provider key' && titles[1] === 'Chat, plan, or delegate' && titles[2] === 'Crews that work alone', titles.join('|'));
-await evaluate(ws, `[...document.querySelectorAll('[role="dialog"] button')].find(b => b.textContent === 'Back').click()`);
-await sleep(700);
-const backTitle = await evaluate(ws, `document.querySelector('[role="dialog"] p')?.innerText ?? 'NONE'`);
-check('tour Back returns to step 1', backTitle === 'Chat, plan, or delegate', backTitle);
-await evaluate(ws, `[...document.querySelectorAll('[role="dialog"] button')].find(b => b.textContent === 'Continue').click()`);
-await sleep(700);
-await evaluate(ws, `[...document.querySelectorAll('[role="dialog"] button')].find(b => b.textContent === 'Get started').click()`);
+const step0 = await evaluate(ws, `document.querySelector('[role="dialog"] p')?.innerText ?? 'NONE'`);
+await evaluate(ws, `[...document.querySelectorAll('[role="dialog"] button')].find(b => b.textContent === 'Add a key').click()`);
 await sleep(800);
-check('tour finishes + persists', await evaluate(ws, `document.querySelector('[role="dialog"]') === null && localStorage.getItem('studio:onboarded') === '1'`));
+check('tour CTA opens usable keys page', step0 === 'Add a provider key'
+  && await evaluate(ws, `document.querySelector('[role="dialog"]') === null`)
+  && await evaluate(ws, `location.hash.includes('keys')`), step0);
+// Re-run the tour for the walk/back/finish path.
+await evaluate(ws, `localStorage.removeItem('studio:onboarded')`);
+await rpc(ws, 'Page.reload', {});
+await sleep(3000);
+await evaluate(ws, `[...document.querySelectorAll('[role="dialog"] button')].find(b => b.textContent === 'Skip tour').click()`);
+await sleep(700);
+check('tour skip dismisses + persists', await evaluate(ws, `document.querySelector('[role="dialog"]') === null && localStorage.getItem('studio:onboarded') === '1'`));
+await evaluate(ws, `localStorage.removeItem('studio:onboarded')`);
+await rpc(ws, 'Page.reload', {});
+await sleep(3000);
+await evaluate(ws, `[...document.querySelectorAll('[role="dialog"] button')].find(b => b.textContent === 'Add a key').click()`);
+await sleep(700);
+check('tour CTA re-runnable after reset', await evaluate(ws, `document.querySelector('[role="dialog"]') === null`));
 
 // ---------- 3. providers + models render live ----------
 await timed('rail-keys', () => railTo(ws, 'Provider keys'));

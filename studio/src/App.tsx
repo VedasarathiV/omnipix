@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { applyTheme, loadThemePref } from './lib/theme';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { StudioProvider, useStudio } from './state/store';
 import { AuthGate } from './components/AuthGate';
@@ -93,6 +94,11 @@ const queryClient = new QueryClient({
 });
 
 export function App() {
+  useEffect(() => {
+    // Re-apply the persisted theme (and start tracking `system`); the
+    // inline boot script already matched the first paint.
+    applyTheme(loadThemePref());
+  }, []);
   return (
     <QueryClientProvider client={queryClient}>
       <StudioProvider>

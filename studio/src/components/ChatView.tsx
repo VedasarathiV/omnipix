@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react';
 import { Sparkles } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
 import { MessageBubble, renderMessageContent } from './MessageBubble';
@@ -8,7 +9,8 @@ import { EmptyState } from './EmptyState';
 import { KeyBanner, OfflineBanner, RunErrorBanner } from './StateBanners';
 import { useStudio } from '../state/store';
 import { apiFetch } from '../lib/api';
-import { useApprovals, useConversation, useRun, type Conversation } from '../lib/queries';
+import { speakText, stopSpeech } from '../lib/voice';
+import { useApprovals, useConversation, useRun, useUnifiedKey, useVoiceSettings, type Conversation } from '../lib/queries';
 
 export function ChatView() {
   const { conversationId, activeRunId, streamingReply, setDictation, setConversationId, setEditDraft, pushToast } = useStudio();
@@ -16,9 +18,31 @@ export function ChatView() {
   const { data: conversation } = useConversation(conversationId);
   const { data: run } = useRun(activeRunId, true);
   const { data: approvalsData } = useApprovals();
+  const { data: voiceSettings } = useVoiceSettings();
+  const { data: keyData } = useUnifiedKey();
   const liveApproval = (approvalsData?.approvals ?? []).find(a => a.status === 'pending' && (activeRunId === null || a.run_id === activeRunId)) ?? null;
 
   const messages = conversation?.messages ?? [];
+
+  // Voice-output toggle: read new assistant replies aloud. One-shot per
+  // message (tracked by conversation + count); failures stay silent so a
+  // missing speech model never interrupts reading.
+  const spokenRef = useRef('');
+  useEffect(() => {
+    if (!voiceSettings?.autoSpeakChat || !keyData?.apiKey) return;
+    const assistants = messages.filter(m => m.role !== 'user');
+    if (!assistants.length) return;
+    const key = `${conversationId}:${assistants.length}`;
+    if (spokenRef.current === key) return;
+    spokenRef.current = key;
+    const text = renderMessageContent(assistants[assistants.length - 1].content);
+    if (!text.trim()) return;
+    void speakText(text, keyData.apiKey, voiceSettings.ttsModel, voiceSettings.ttsVoice || undefined).catch(() => {});
+  }, [messages, conversationId, voiceSettings, keyData]);
+  useEffect(() => {
+    spokenRef.current = '';
+    stopSpeech();
+  }, [conversationId]);
 
   function refreshConversation() {
     void queryClient.invalidateQueries({ queryKey: ['conversations'] });

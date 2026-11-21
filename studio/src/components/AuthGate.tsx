@@ -13,12 +13,28 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     queryFn: () => apiFetch('/api/auth/status'),
     retry: false,
   });
+  const [desktopTried, setDesktopTried] = useState(false);
 
   useEffect(() => {
     const onUnauthorized = () => void refetch();
     window.addEventListener('omnipix:unauthorized', onUnauthorized);
     return () => window.removeEventListener('omnipix:unauthorized', onUnauthorized);
   }, [refetch]);
+
+  // Desktop installs sign in silently over loopback before ever showing
+  // Login; anything else (or a refusal) falls through to the form.
+  useEffect(() => {
+    if (!data || data.authenticated || data.needsSetup || !data.desktop || desktopTried) return;
+    setDesktopTried(true);
+    apiFetch<{ token: string }>('/api/auth/desktop-session', { method: 'POST' })
+      .then(res => {
+        setToken(res.token);
+        void refetch();
+      })
+      .catch(() => {
+        // Refused (not loopback): the Login form below is the fallback.
+      });
+  }, [data, desktopTried, refetch]);
 
   if (isLoading || !data) {
     return (
@@ -29,6 +45,13 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   }
   if (data.authenticated) return <>{children}</>;
   if (data.needsSetup) return <Setup onDone={() => void refetch()} />;
+  if (data.desktop && !desktopTried) {
+    return (
+      <div className="flex h-full items-center justify-center bg-base-0">
+        <Logo size={56} spin />
+      </div>
+    );
+  }
   return <Login onDone={() => void refetch()} />;
 }
 
