@@ -5,12 +5,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/YOUR-GITHUB-USER/omnipix.git",
+    "url": "git+https://github.com/VedasarathiV/omnipix.git",
     "directory": "cli"
   },
-  "homepage": "https://github.com/YOUR-GITHUB-USER/omnipix/tree/main/cli#readme",
+  "homepage": "https://github.com/VedasarathiV/omnipix/tree/main/cli#readme",
   "bugs": {
-    "url": "https://github.com/YOUR-GITHUB-USER/omnipix/issues"
+    "url": "https://github.com/VedasarathiV/omnipix/issues"
   },
   "keywords": [
     "omnipix",

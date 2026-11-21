@@ -79,6 +79,7 @@ import * as approvalRules from '../migrations/20261119_000023_approval_rules.js'
 import * as webhooks from '../migrations/20261119_000024_webhooks.js';
 import * as debates from '../migrations/20261119_000025_debates.js';
 import * as automationWatch from '../migrations/20261119_000026_automation_watch.js';
+import * as skillSource from '../migrations/20261121_000027_skill_source.js';
 
 export interface MigrationModule {
   up(db: Db): void;
@@ -169,6 +170,7 @@ export const APPROVAL_RULES_FILENAME = '20261119_000023_approval_rules.ts';
 export const WEBHOOKS_FILENAME = '20261119_000024_webhooks.ts';
 export const DEBATES_FILENAME = '20261119_000025_debates.ts';
 export const AUTOMATION_WATCH_FILENAME = '20261119_000026_automation_watch.ts';
+export const SKILL_SOURCE_FILENAME = '20261121_000027_skill_source.ts';
 
 export const DEFAULT_MIGRATIONS: readonly DefaultMigration[] = [
   { filename: LEGACY_BASELINE_FILENAME, module: legacyBaseline },
@@ -251,4 +253,5 @@ export const DEFAULT_MIGRATIONS: readonly DefaultMigration[] = [
   { filename: WEBHOOKS_FILENAME, module: webhooks },
   { filename: DEBATES_FILENAME, module: debates },
   { filename: AUTOMATION_WATCH_FILENAME, module: automationWatch },
+  { filename: SKILL_SOURCE_FILENAME, module: skillSource },
 ];

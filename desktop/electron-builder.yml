@@ -13,7 +13,7 @@ files:
 # block at your own repo, e.g.:
 #   publish:
 #     provider: github
-#     owner: YOUR-GITHUB-USER
+#     owner: VedasarathiV
 #     repo: omnipix
 # and set OMNIPIX_RELEASES_URL for the "download manually" links. Keep
 # --publish never in the scripts; attach files to the release yourself.

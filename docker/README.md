@@ -119,7 +119,7 @@ secrets, so protect it like `ENCRYPTION_KEY`.
 Images are published to GitHub Container Registry:
 
 ```bash
-docker pull ghcr.io/YOUR-GITHUB-USER/omnipix:latest
+docker pull ghcr.io/VedasarathiV/omnipix:latest
 ```
 
 The Docker workflow builds pull requests without pushing. After this repository receives the workflow on `main`, pushes to `main` and version tags publish images to GHCR automatically.

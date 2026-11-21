@@ -11,7 +11,7 @@ Aggregate free tiers from dozens of providers, plus custom OpenAI-compatible cha
 > OmniPix is a personal standalone fork of [FreeLLMAPI](https://github.com/tashfeenahmed/freellmapi)
 > (MIT, © 2026 Tashfeen Ahmed — see [LICENSE](./LICENSE)). It runs fully offline-capable:
 > no catalog feed, no premium service, and no update repo are configured out of the box.
-> Search the repo for `YOUR-GITHUB-USER`, `YOUR-EMAIL-HERE`, and `omnipix.co` to find
+> Search the repo for `VedasarathiV`, `YOUR-EMAIL-HERE`, and `omnipix.co` to find
 > every placeholder to make yours (repo links, contacts, storefront domain).
 
 **English** · [Türkçe](README.tr.md) · [简体中文](README.zh-cn.md) · [Русский](README.ru.md) · [O'zbekcha](README.uz.md)
@@ -160,7 +160,7 @@ Prefer to read before you pipe to bash? [The script is here](https://omnipix.co/
 
 Open http://localhost:3001, add your provider keys on the **Keys** page, reorder the **Fallback Chain** to taste, and grab your unified API key from the **Keys** page header. That unified key is what you point your OpenAI SDK at.
 
-On Windows, the easiest path is the desktop **[`.exe` installer from Releases](https://github.com/YOUR-GITHUB-USER/omnipix/releases/latest)** (below). On Android, see the experimental [Termux guide](docs/en/install/02-android-termux.md).
+On Windows, the easiest path is the desktop **[`.exe` installer from Releases](https://github.com/VedasarathiV/omnipix/releases/latest)** (below). On Android, see the experimental [Termux guide](docs/en/install/02-android-termux.md).
 
 Everything else — Docker Compose, local development, declarative startup config, production builds, LAN access, and backups — is in **[docs/en/install/01-install.md](docs/en/install/01-install.md)**.
 
@@ -170,7 +170,7 @@ A native menu-bar app lives in [`desktop/`](./desktop): the entire router + dash
 
 ![OmniPix desktop app](repo-assets/desktop.png)
 
-**[Download from Releases](https://github.com/YOUR-GITHUB-USER/omnipix/releases/latest)** — the macOS `.dmg` and the Windows `.exe` installer are attached to every release. No account or password to set up: the only credential you need is the unified API key from the tray popover. Build-from-source steps and where your data lives: [docs/en/install/01-install.md#desktop-app](docs/en/install/01-install.md#desktop-app).
+**[Download from Releases](https://github.com/VedasarathiV/omnipix/releases/latest)** — the macOS `.dmg` and the Windows `.exe` installer are attached to every release. No account or password to set up: the only credential you need is the unified API key from the tray popover. Build-from-source steps and where your data lives: [docs/en/install/01-install.md#desktop-app](docs/en/install/01-install.md#desktop-app).
 
 For macOS 12 Monterey or later, choose **arm64 (Apple Silicon)** or **x64 (Intel)**. Both Mac builds also include a ZIP download.
 

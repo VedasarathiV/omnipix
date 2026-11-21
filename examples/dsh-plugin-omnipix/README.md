@@ -1,7 +1,7 @@
 # dsh-plugin-omnipix
 
 Route [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) (`dsh`)
-through [OmniPix](https://github.com/YOUR-GITHUB-USER/omnipix) — your local
+through [OmniPix](https://github.com/VedasarathiV/omnipix) — your local
 free-model gateway — instead of a paid meter.
 
 No code: dsh's own `llm-pi-ai` plugin already speaks to hand-declared

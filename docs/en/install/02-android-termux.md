@@ -34,7 +34,7 @@ node --version
 Then clone and start OmniPix:
 
 ```bash
-git clone https://github.com/YOUR-GITHUB-USER/omnipix.git
+git clone https://github.com/VedasarathiV/omnipix.git
 cd omnipix
 npm install --no-audit --no-fund
 npm run dev

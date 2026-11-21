@@ -1,3 +1,5 @@
+import { readdirSync, statSync } from 'node:fs';
+import { join } from 'node:path';
 import type { SkillRow } from './agent-runtime.js';
 
 // Skill files (gap 9): portable SKILL.md with YAML-ish frontmatter, so
@@ -92,4 +94,42 @@ export function parseSkillFile(content: string): ParsedSkill {
     }
   }
   return { name, description, instructions, enabled: enabledRaw !== 'false', bundle };
+}
+
+/** Max SKILL.md scan depth below a scan root (opencode parity: BFS depth 6). */
+export const SKILL_SCAN_MAX_DEPTH = 6;
+
+const SKIP_DIRS = new Set(['.git', 'node_modules']);
+
+/**
+ * Collect SKILL.md files under the given roots. Missing/unreadable roots
+ * are skipped, never thrown — a scan must survive a half-present machine.
+ */
+export function scanSkillFiles(roots: string[], maxDepth = SKILL_SCAN_MAX_DEPTH): string[] {
+  const files: string[] = [];
+  const walk = (dir: string, depth: number): void => {
+    if (depth > maxDepth) return;
+    let entries: string[];
+    try {
+      entries = readdirSync(dir);
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      const full = join(dir, entry);
+      let isDir = false;
+      try {
+        isDir = statSync(full).isDirectory();
+      } catch {
+        continue;
+      }
+      if (isDir) {
+        if (!SKIP_DIRS.has(entry)) walk(full, depth + 1);
+        continue;
+      }
+      if (entry === 'SKILL.md') files.push(full);
+    }
+  };
+  for (const root of roots) walk(root, 0);
+  return files.sort();
 }

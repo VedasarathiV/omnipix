@@ -1,11 +1,11 @@
 # OmniPix Desktop
 
-Lean Electron menu-bar app for [omnipix](https://github.com/YOUR-GITHUB-USER/omnipix):
+Lean Electron menu-bar app for [omnipix](https://github.com/VedasarathiV/omnipix):
 runs the whole router locally on `127.0.0.1:31415`, with a dark-glass tray
 popover (live 24h request chart, quick stats, copy URL/key) and the full
 dashboard in a native-feeling window.
 
-Download an installer from [Releases](https://github.com/YOUR-GITHUB-USER/omnipix/releases/latest),
+Download an installer from [Releases](https://github.com/VedasarathiV/omnipix/releases/latest),
 or build against the server and client sources in this checkout.
 
 On macOS, choose **arm64** for Apple Silicon (M-series) or **x64** for Intel.

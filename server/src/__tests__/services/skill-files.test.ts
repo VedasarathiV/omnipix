@@ -1,5 +1,8 @@
-import { describe, expect, it } from 'vitest';
-import { parseSkillFile, serializeSkill } from '../../services/skill-files.js';
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, describe, expect, it } from 'vitest';
+import { parseSkillFile, scanSkillFiles, serializeSkill } from '../../services/skill-files.js';
 
 describe('skill files', () => {
   it('serializes with frontmatter, omitting enabled when true', () => {
@@ -56,5 +59,44 @@ describe('skill files', () => {
   it('joins folded block-scalar descriptions', () => {
     const file = '---\nname: folded\ndescription: >\n  First line.\n  Second line.\n---\nbody here';
     expect(parseSkillFile(file).description).toBe('First line. Second line.');
+  });
+});
+
+describe('scanSkillFiles', () => {
+  let root = '';
+  afterEach(() => {
+    if (root) rmSync(root, { recursive: true, force: true });
+    root = '';
+  });
+
+  function setup(): string {
+    root = mkdtempSync(join(tmpdir(), 'omnipix-scan-'));
+    writeFileSync(join(root, 'SKILL.md'), '---\nname: top\ndescription: Top.\n---\nbody');
+    mkdirSync(join(root, 'nested', 'deep'), { recursive: true });
+    writeFileSync(join(root, 'nested', 'deep', 'SKILL.md'), '---\nname: deep\ndescription: Deep.\n---\nbody');
+    mkdirSync(join(root, 'node_modules', 'pkg'), { recursive: true });
+    writeFileSync(join(root, 'node_modules', 'pkg', 'SKILL.md'), '---\nname: dep\ndescription: Dep.\n---\nbody');
+    mkdirSync(join(root, '.git'), { recursive: true });
+    writeFileSync(join(root, '.git', 'SKILL.md'), '---\nname: git\ndescription: Git.\n---\nbody');
+    writeFileSync(join(root, 'README.md'), 'not a skill');
+    return root;
+  }
+
+  it('finds nested SKILL.md files and skips deps, git, and non-skills', () => {
+    const dir = setup();
+    const found = scanSkillFiles([dir]);
+    expect(found).toEqual([join(dir, 'SKILL.md'), join(dir, 'nested', 'deep', 'SKILL.md')].sort());
+  });
+
+  it('respects the depth cap', () => {
+    const dir = setup();
+    expect(scanSkillFiles([dir], 0)).toEqual([join(dir, 'SKILL.md')]);
+  });
+
+  it('skips missing roots without throwing', () => {
+    const dir = setup();
+    expect(scanSkillFiles([join(dir, 'nope'), dir])).toEqual(
+      [join(dir, 'SKILL.md'), join(dir, 'nested', 'deep', 'SKILL.md')].sort(),
+    );
   });
 });

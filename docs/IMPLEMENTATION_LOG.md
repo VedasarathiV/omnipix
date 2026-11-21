@@ -132,3 +132,26 @@
 All queued approvals taken up. Deferred with rationale: DB-03 new FKs
 (needs per-install orphan audit), Windows desktop parity, premium
 backend reality check.
+
+## 2026-11-21 — Opencode parity M1 + I1 (this session)
+
+- **M1 file-first skills**: `services/skills-sync.ts` scans
+  `~/.config/omnipix/skills`, `~/.codex/skills` (compat),
+  ancestor `.omnipix/skills`, then `OMNIPIX_SKILLS_DIR` (low→high
+  precedence) via new `scanSkillFiles` (`skill-files.ts`, depth ≤ 6,
+  skips .git/node_modules); boot sync + `fs.watch` refresh (500 ms
+  debounce, automation-watch shape + test hooks), hooked in
+  `index.ts` onReady. Provenance column `skills.source_path`
+  (migration `20261121_000027_skill_source`, registered in
+  `migrate/defaults.ts`): builtins never touched, file-managed rows
+  update on edit and delete when the file goes; dashboard rows
+  untouched; bundle validation + `agency-` dedupe mirror the routes.
+  13 new tests (scan 3, sync 10); live drop→appear probe green.
+- **I1 one-line install**: new `install.sh` (docker default via local
+  `compose up -d --build` — no published image needed; `--cli` via
+  `npm install -g` from the GitHub checkout; node ≥ 22 gate, re-run
+  safe, `--help`); `scripts/install.test.mjs` (6 tests) wired into
+  `test:bootstrap`; `YOUR-GITHUB-USER` → `VedasarathiV` in 34 files
+  (remote is the source of truth); bare `omnipix` already help+exit 0
+  (verified). Still user-side: npm publish, omnipix.co hosting,
+  Docker Hub push, GitHub release.

@@ -6,20 +6,20 @@
 
 Onlarca sağlayıcının ücretsiz kullanım kotalarını ve özel OpenAI uyumlu sohbet, gömme (embedding), görüntü ve ses uç noktalarını tek bir `/v1` API’sinde birleştirin. Anahtarlar şifreli saklanır. Yönlendirici, her istek için kullanılabilir en iyi modeli seçer; bir sağlayıcı hız sınırına ulaştığında sıradakine geçer ve ücretsiz kotaları aşmamak için kullanımı anahtar bazında izler.
 
-[![CI](https://github.com/YOUR-GITHUB-USER/omnipix/actions/workflows/ci.yml/badge.svg)](https://github.com/YOUR-GITHUB-USER/omnipix/actions/workflows/ci.yml)
-[![GitHub stars](https://img.shields.io/github/stars/YOUR-GITHUB-USER/omnipix?style=flat&logo=github&color=yellow)](https://github.com/YOUR-GITHUB-USER/omnipix/stargazers)
+[![CI](https://github.com/VedasarathiV/omnipix/actions/workflows/ci.yml/badge.svg)](https://github.com/VedasarathiV/omnipix/actions/workflows/ci.yml)
+[![GitHub stars](https://img.shields.io/github/stars/VedasarathiV/omnipix?style=flat&logo=github&color=yellow)](https://github.com/VedasarathiV/omnipix/stargazers)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](./LICENSE)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](#contributing)
-[![Docker image](https://img.shields.io/badge/ghcr.io-omnipix-2496ED?logo=docker&logoColor=white)](https://github.com/YOUR-GITHUB-USER/omnipix/pkgs/container/omnipix)
-[![Ask DeepWiki](https://img.shields.io/badge/DeepWiki-Ask-blue)](https://deepwiki.com/YOUR-GITHUB-USER/omnipix)
+[![Docker image](https://img.shields.io/badge/ghcr.io-omnipix-2496ED?logo=docker&logoColor=white)](https://github.com/VedasarathiV/omnipix/pkgs/container/omnipix)
+[![Ask DeepWiki](https://img.shields.io/badge/DeepWiki-Ask-blue)](https://deepwiki.com/VedasarathiV/omnipix)
 
 **[omnipix.co](https://omnipix.co/?utm_source=github&utm_medium=readme&utm_campaign=repository&utm_content=readme_top)** · tüm kataloğa göz atın: 736 model ailesi, 1.313 ücretsiz uç nokta
 
 [English](README.md) · **Türkçe** · [简体中文](README.zh-cn.md) · [Русский](README.ru.md) · [O'zbekcha](README.uz.md)
 
 <p align="center">
-  <a href="https://github.com/YOUR-GITHUB-USER/omnipix/releases/latest"><img src="repo-assets/badges/macos-tr.svg" height="48" alt="macOS için indir"></a>
-  <a href="https://github.com/YOUR-GITHUB-USER/omnipix/releases/latest"><img src="repo-assets/badges/windows-tr.svg" height="48" alt="Windows için indir"></a>
+  <a href="https://github.com/VedasarathiV/omnipix/releases/latest"><img src="repo-assets/badges/macos-tr.svg" height="48" alt="macOS için indir"></a>
+  <a href="https://github.com/VedasarathiV/omnipix/releases/latest"><img src="repo-assets/badges/windows-tr.svg" height="48" alt="Windows için indir"></a>
   <a href="docs/en/install/01-install.md#docker-compose"><img src="repo-assets/badges/docker-tr.svg" height="48" alt="Docker ile kendi ortamınızda çalıştırın"></a>
   <a href="https://play.google.com/store/apps/details?id=co.omnipix.app"><img src="repo-assets/badges/play-store-tr.svg" height="48" alt="Google Play’den edinin"></a>
   <a href="https://apps.apple.com/app/id6804648934"><img src="repo-assets/badges/app-store-tr.svg" height="48" alt="App Store’dan indirin"></a>
@@ -184,7 +184,7 @@ Bash’e aktarmadan önce okumak ister misiniz? [Betik burada](https://omnipix.c
 
 http://localhost:3001 adresini açın, **Anahtarlar (Keys)** sayfasına sağlayıcı anahtarlarınızı ekleyin, **Yedek Model Zinciri (Fallback Chain)** sırasını istediğiniz gibi düzenleyin ve **Anahtarlar** sayfasının üst kısmından birleşik API anahtarınızı alın. OpenAI SDK’nızda bu birleşik anahtarı kullanın.
 
-Windows’ta en kolay yol, aşağıda açıklanan **[Releases bölümündeki `.exe` masaüstü yükleyicisidir](https://github.com/YOUR-GITHUB-USER/omnipix/releases/latest)**. Android için deneysel [Termux rehberine](docs/en/install/02-android-termux.md) bakın.
+Windows’ta en kolay yol, aşağıda açıklanan **[Releases bölümündeki `.exe` masaüstü yükleyicisidir](https://github.com/VedasarathiV/omnipix/releases/latest)**. Android için deneysel [Termux rehberine](docs/en/install/02-android-termux.md) bakın.
 
 Docker Compose, yerel geliştirme, bildirimsel başlangıç yapılandırması, üretim derlemeleri, yerel ağ erişimi ve yedeklemeler için **[kurulum rehberine](docs/en/install/01-install.md)** bakın.
 
@@ -196,7 +196,7 @@ Docker Compose, yerel geliştirme, bildirimsel başlangıç yapılandırması, �
 
 ![OmniPix masaüstü uygulaması](repo-assets/desktop.png)
 
-**[Releases bölümünden indirin](https://github.com/YOUR-GITHUB-USER/omnipix/releases/latest)** — her sürüme macOS `.dmg` ve Windows `.exe` yükleyicileri eklenir. Hesap veya parola oluşturmanız gerekmez; ihtiyacınız olan tek kimlik bilgisi tepsi panelindeki birleşik API anahtarıdır. Kaynaktan derleme adımları ve veri konumları: [masaüstü uygulaması rehberi](docs/en/install/01-install.md#desktop-app).
+**[Releases bölümünden indirin](https://github.com/VedasarathiV/omnipix/releases/latest)** — her sürüme macOS `.dmg` ve Windows `.exe` yükleyicileri eklenir. Hesap veya parola oluşturmanız gerekmez; ihtiyacınız olan tek kimlik bilgisi tepsi panelindeki birleşik API anahtarıdır. Kaynaktan derleme adımları ve veri konumları: [masaüstü uygulaması rehberi](docs/en/install/01-install.md#desktop-app).
 
 macOS 12 Monterey ve sonrası için **arm64 (Apple Silicon)** veya **x64 (Intel)** sürümünü seçin. Her iki Mac derlemesinin ZIP paketi de sunulur.
 

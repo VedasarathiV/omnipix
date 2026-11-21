@@ -5,9 +5,9 @@
   "author": {
     "name": "OmniPix",
     "email": "YOUR-EMAIL-HERE",
-    "url": "https://github.com/YOUR-GITHUB-USER/omnipix"
+    "url": "https://github.com/VedasarathiV/omnipix"
   },
-  "homepage": "https://github.com/YOUR-GITHUB-USER/omnipix",
+  "homepage": "https://github.com/VedasarathiV/omnipix",
   "private": true,
   "type": "module",
   "main": "build/main.mjs",

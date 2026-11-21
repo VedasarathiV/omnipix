@@ -18,7 +18,7 @@ re-pull `:latest`).
 ## Reporting a vulnerability
 
 **Preferred:** GitHub private vulnerability reporting — go to the
-[Security tab](https://github.com/YOUR-GITHUB-USER/omnipix/security) and click
+[Security tab](https://github.com/VedasarathiV/omnipix/security) and click
 **Report a vulnerability**. That opens a private thread with the maintainer and
 keeps the details out of public issues.
 
