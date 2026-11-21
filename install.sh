@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# OmniPix one-line installer (opencode-parity I1).
+# OmniPix one-line installer.
 #
 #   curl -fsSL https://omnipix.co/install.sh | bash
 #   curl -fsSL https://omnipix.co/install.sh | bash -s -- --cli

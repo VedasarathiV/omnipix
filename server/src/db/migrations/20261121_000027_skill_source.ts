@@ -1,4 +1,4 @@
-// Migration: file-managed skills (opencode-parity M1).
+// Migration: file-managed skills (file-first sync).
 //
 // source_path marks rows synced from SKILL.md files on disk. File-managed
 // rows refresh when their file changes and delete when it disappears;

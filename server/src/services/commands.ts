@@ -2,7 +2,7 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, resolve, sep } from 'node:path';
 import { defaultConfigDirs } from './skills-sync.js';
 
-// File-defined slash commands (opencode parity M2): markdown files at
+// File-defined slash commands: markdown files at
 // <config>/{command,commands}/**/*.md expand a leading `/name args` into
 // prompt text. Deliberately smaller than opencode: no `!shell` auto-exec
 // (the agent already has shell_exec behind approvals) and no session

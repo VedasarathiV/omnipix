@@ -4,7 +4,7 @@ import { homedir } from 'node:os';
 import { getDb } from '../db/index.js';
 import { parseSkillFile, scanSkillFiles, type ParsedSkill } from './skill-files.js';
 
-// File-first skills (opencode parity M1): SKILL.md files on disk sync into
+// File-first skills: SKILL.md files on disk sync into
 // the skills table at boot and refresh on change, so dropping a skill file
 // into a watched directory installs it with no import step. Precedence,
 // low to high: global dir, compat dir (~/.codex/skills, where agent packs

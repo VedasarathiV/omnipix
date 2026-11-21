@@ -96,7 +96,7 @@ export function parseSkillFile(content: string): ParsedSkill {
   return { name, description, instructions, enabled: enabledRaw !== 'false', bundle };
 }
 
-/** Max SKILL.md scan depth below a scan root (opencode parity: BFS depth 6). */
+/** Max SKILL.md scan depth below a scan root. */
 export const SKILL_SCAN_MAX_DEPTH = 6;
 
 const SKIP_DIRS = new Set(['.git', 'node_modules']);

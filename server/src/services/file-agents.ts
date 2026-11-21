@@ -2,7 +2,7 @@ import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, resolve, sep } from 'node:path';
 import { defaultConfigDirs } from './skills-sync.js';
 
-// File-defined agent presets (opencode parity M2): markdown files at
+// File-defined agent presets: markdown files at
 // <config>/{agent,agents}/**/*.md name a reusable run preset (skills,
 // tools, model, planMode). Explicit request fields always win over the
 // preset; unknown agent names fail the request like unknown skills.
