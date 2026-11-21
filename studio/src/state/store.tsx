@@ -51,6 +51,9 @@ interface StudioState {
   setEditDraft: (d: { text: string; seq: number } | null) => void;
   selectedFile: string | null;
   setSelectedFile: (path: string | null) => void;
+  /** Host folder root for browsing real source; null means run workspace. */
+  fileRoot: string | null;
+  setFileRoot: (root: string | null) => void;
 }
 
 const StudioContext = createContext<StudioState | null>(null);
@@ -148,6 +151,9 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     setSelectedFileState(path);
     writeHash();
   }, [writeHash]);
+  // Session-only on purpose: a persisted root plus a run-linked hash file
+  // would open the wrong backend on boot. Folder browsing is explicit.
+  const [fileRoot, setFileRoot] = useState<string | null>(null);
 
   const pushToast = useCallback((kind: Toast['kind'], text: string) => {
     const id = toastSeq++;
@@ -186,10 +192,11 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     streamingReply, setStreamingReply, dictation, setDictation,
     editDraft, setEditDraft,
     selectedFile, setSelectedFile,
+    fileRoot, setFileRoot,
   }), [
     rail, mode, model, rightOpen, rightTab, sidebarOpen, sidebarTab,
     paletteOpen, settingsOpen, welcomeOpen, acceptedFiles, toasts,
-    agentEditor, conversationId, activeRunId, streamingReply, dictation, editDraft, selectedFile,
+    agentEditor, conversationId, activeRunId, streamingReply, dictation, editDraft, selectedFile, fileRoot,
     acceptFile, acceptAll, pushToast, dismissToast,
   ]);
 

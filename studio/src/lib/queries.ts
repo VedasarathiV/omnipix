@@ -451,6 +451,22 @@ export function useRunFiles(runId: number | null) {
   });
 }
 
+export function useFolderFiles(root: string | null) {
+  return useQuery<{ root: string; entries: WorkspaceEntry[]; truncated: boolean }>({
+    queryKey: ['folder-files', root],
+    queryFn: () => apiFetch(`/api/fs/list?root=${encodeURIComponent(root ?? '')}`),
+    enabled: root !== null,
+  });
+}
+
+export function useFolderFileContent(root: string | null, path: string | null) {
+  return useQuery<FileContent>({
+    queryKey: ['folder-file', root, path],
+    queryFn: () => apiFetch(`/api/fs/read?root=${encodeURIComponent(root ?? '')}&path=${encodeURIComponent(path ?? '')}`),
+    enabled: root !== null && path !== null,
+  });
+}
+
 export interface DiffLine {
   kind: 'context' | 'add' | 'del';
   oldNo: number | null;

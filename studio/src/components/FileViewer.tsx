@@ -3,21 +3,23 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Check, FileText } from 'lucide-react';
 import { useStudio } from '../state/store';
 import { apiFetch } from '../lib/api';
-import { useRunFileContent } from '../lib/queries';
+import { useFolderFileContent, useRunFileContent } from '../lib/queries';
 
 /** Workspace file editor: breadcrumbs, dirty tracking, save (⌘S). */
 export function FileViewer() {
-  const { activeRunId, selectedFile, pushToast } = useStudio();
+  const { activeRunId, selectedFile, fileRoot, pushToast } = useStudio();
   const queryClient = useQueryClient();
-  const { data, isLoading } = useRunFileContent(activeRunId, selectedFile);
+  const runContent = useRunFileContent(fileRoot ? null : activeRunId, selectedFile);
+  const folderContent = useFolderFileContent(fileRoot, selectedFile);
+  const { data, isLoading } = fileRoot ? folderContent : runContent;
   const [draft, setDraft] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     setDraft(null);
-  }, [activeRunId, selectedFile]);
+  }, [activeRunId, selectedFile, fileRoot]);
 
-  if (activeRunId === null || !selectedFile) {
+  if (!selectedFile || (!fileRoot && activeRunId === null)) {
     return (
       <div className="flex h-full flex-col items-center justify-center gap-2 px-6 py-12 text-center">
         <div className="mb-1 flex size-11 items-center justify-center rounded-xl bg-base-2 text-ink-dim">
@@ -25,9 +27,9 @@ export function FileViewer() {
         </div>
         <p className="text-sm font-medium">No file open</p>
         <p className="max-w-xs text-xs leading-relaxed text-ink-dim">
-          {activeRunId === null
-            ? 'Start an agent run, then pick a file from its workspace tree.'
-            : 'Pick a file from the workspace tree to read and edit it here.'}
+          {activeRunId === null && !fileRoot
+            ? 'Open a folder or start an agent run, then pick a file to read and edit it here.'
+            : 'Pick a file from the tree to read and edit it here.'}
         </p>
       </div>
     );
@@ -44,18 +46,30 @@ export function FileViewer() {
   const crumbs = selectedFile.split('/');
 
   async function save() {
-    if (!dirty || activeRunId === null || !selectedFile) return;
+    if (!dirty || !selectedFile) return;
+    if (!fileRoot && activeRunId === null) return;
     setSaving(true);
     try {
-      await apiFetch(`/api/agents/runs/${activeRunId}/files/content`, {
-        method: 'PUT',
-        body: JSON.stringify({ path: selectedFile, content: text }),
-      });
-      setDraft(null);
-      pushToast('ok', `Saved ${selectedFile}`);
-      void queryClient.invalidateQueries({ queryKey: ['run-file', activeRunId, selectedFile] });
-      void queryClient.invalidateQueries({ queryKey: ['run-diff'] });
-      void queryClient.invalidateQueries({ queryKey: ['run-files'] });
+      if (fileRoot) {
+        await apiFetch('/api/fs/write', {
+          method: 'PUT',
+          body: JSON.stringify({ root: fileRoot, path: selectedFile, content: text }),
+        });
+        setDraft(null);
+        pushToast('ok', `Saved ${selectedFile}`);
+        void queryClient.invalidateQueries({ queryKey: ['folder-file', fileRoot, selectedFile] });
+        void queryClient.invalidateQueries({ queryKey: ['folder-files', fileRoot] });
+      } else {
+        await apiFetch(`/api/agents/runs/${activeRunId}/files/content`, {
+          method: 'PUT',
+          body: JSON.stringify({ path: selectedFile, content: text }),
+        });
+        setDraft(null);
+        pushToast('ok', `Saved ${selectedFile}`);
+        void queryClient.invalidateQueries({ queryKey: ['run-file', activeRunId, selectedFile] });
+        void queryClient.invalidateQueries({ queryKey: ['run-diff'] });
+        void queryClient.invalidateQueries({ queryKey: ['run-files'] });
+      }
     } catch (err) {
       pushToast('error', err instanceof Error ? err.message : 'Save failed');
     } finally {
@@ -66,7 +80,8 @@ export function FileViewer() {
   return (
     <div className="flex h-full flex-col">
       <div className="flex items-center gap-1 border-b border-line px-3 py-1.5">
-        <nav aria-label="Breadcrumb" className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto font-mono text-[11px] text-ink-dim">
+        <nav aria-label="Breadcrumb" title={fileRoot ?? undefined} className="flex min-w-0 flex-1 items-center gap-1 overflow-x-auto font-mono text-[11px] text-ink-dim">
+          {fileRoot && <span className="shrink-0 text-ink-faint">folder ·</span>}
           {crumbs.map((part, i) => (
             <span key={i} className="flex shrink-0 items-center gap-1">
               {i > 0 && <span className="text-ink-faint">/</span>}
