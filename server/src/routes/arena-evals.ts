@@ -292,7 +292,12 @@ evalRouter.post('/suites', (req: Request, res: Response) => {
 });
 
 evalRouter.patch('/suites/:name', (req: Request, res: Response) => {
-  const parsed = suiteSchema.partial().omit({ name: true }).safeParse(req.body);
+  // No `.partial()`: it would fill the schema's `description` default and
+  // wipe the stored description on every items-only patch.
+  const parsed = z.object({
+    description: z.string().max(500).optional(),
+    items: z.array(itemSchema).min(1).max(EVAL_MAX_ITEMS).optional(),
+  }).safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: { message: parsed.error.issues.map(e => e.message).join(', ') } });
     return;

@@ -190,6 +190,9 @@ describe('arena evals', () => {
     const updated = await call('PATCH', '/api/arena/suites/capitals', { description: 'Updated.' });
     expect(updated.status).toBe(200);
     expect(updated.body.suite.description).toBe('Updated.');
+    const itemsOnly = await call('PATCH', '/api/arena/suites/capitals', { items: SUITE.items });
+    expect(itemsOnly.status).toBe(200);
+    expect(itemsOnly.body.suite.description).toBe('Updated.');
     expect((await call('PATCH', '/api/arena/suites/nope', { description: 'x' })).status).toBe(404);
 
     expect((await call('DELETE', '/api/arena/suites/capitals')).status).toBe(200);

@@ -44,6 +44,30 @@ export function ChatView() {
     stopSpeech();
   }, [conversationId]);
 
+  // Announce-runs toggle: speak terminal run states and fresh approvals.
+  const announcedRef = useRef('');
+  useEffect(() => {
+    if (!voiceSettings?.autoSpeakRuns || !keyData?.apiKey) return;
+    if (liveApproval) {
+      const key = `approval:${liveApproval.id}`;
+      if (announcedRef.current !== key) {
+        announcedRef.current = key;
+        void speakText(`Approval needed: ${liveApproval.tool}.`, keyData.apiKey, voiceSettings.ttsModel, voiceSettings.ttsVoice || undefined).catch(() => {});
+      }
+      return;
+    }
+    if (!run || run.status === 'running') return;
+    const key = `run:${run.id}:${run.status}`;
+    if (announcedRef.current === key) return;
+    announcedRef.current = key;
+    const phrase = run.status === 'done'
+      ? `Run ${run.id} finished.`
+      : run.status === 'error'
+        ? `Run ${run.id} failed.`
+        : run.status === 'stopped' ? `Run ${run.id} stopped.` : null;
+    if (phrase) void speakText(phrase, keyData.apiKey, voiceSettings.ttsModel, voiceSettings.ttsVoice || undefined).catch(() => {});
+  }, [run, liveApproval, voiceSettings, keyData]);
+
   function refreshConversation() {
     void queryClient.invalidateQueries({ queryKey: ['conversations'] });
     if (conversationId !== null) void queryClient.invalidateQueries({ queryKey: ['conversation', conversationId] });

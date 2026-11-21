@@ -52,4 +52,11 @@ describe('voice settings', () => {
     const { status } = await call('PUT', '/api/settings/voice', { autoSpeakChat: 'yes-please' });
     expect(status).toBe(400);
   });
+
+  it('merges sequential patches without wiping siblings', async () => {
+    await call('PUT', '/api/settings/voice', { ttsVoice: 'nova' });
+    const second = await call('PUT', '/api/settings/voice', { autoSpeakRuns: true });
+    expect(second.status).toBe(200);
+    expect(second.body).toMatchObject({ ttsVoice: 'nova', autoSpeakRuns: true });
+  });
 });

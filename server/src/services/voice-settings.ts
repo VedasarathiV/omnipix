@@ -22,6 +22,18 @@ export const voiceSettingsSchema = z.object({
 
 export type VoiceSettings = z.infer<typeof voiceSettingsSchema>;
 
+/**
+ * Patch schema WITHOUT defaults: `.partial()` on a defaulted schema fills
+ * absent keys with defaults, which would wipe stored values on merge.
+ */
+export const voiceSettingsPatchSchema = z.object({
+  ttsModel: z.string().trim().min(1).max(120).optional(),
+  ttsVoice: z.string().trim().max(120).optional(),
+  sttModel: z.string().trim().min(1).max(120).optional(),
+  autoSpeakChat: z.boolean().optional(),
+  autoSpeakRuns: z.boolean().optional(),
+});
+
 export const DEFAULT_VOICE_SETTINGS: VoiceSettings = {
   ttsModel: 'auto',
   ttsVoice: '',

@@ -39,7 +39,7 @@ import { getMcpAllowlist } from '../services/mcp-servers.js';
 import { MCP_ALLOWED_COMMANDS_SETTING } from '../lib/mcp-allowlist.js';
 import { z } from 'zod';
 import { getAppVersion } from '../lib/app-version.js';
-import { getVoiceSettings, setVoiceSettings, voiceSettingsSchema } from '../services/voice-settings.js';
+import { getVoiceSettings, setVoiceSettings, voiceSettingsPatchSchema } from '../services/voice-settings.js';
 import {
   UNIFIED_MAX_TOKENS_SETTING,
   UNIFIED_MAX_TOKENS_AUTO,
@@ -567,7 +567,7 @@ settingsRouter.get('/voice', (_req: Request, res: Response) => {
 });
 
 settingsRouter.put('/voice', (req: Request, res: Response) => {
-  const parsed = voiceSettingsSchema.partial().safeParse(req.body);
+  const parsed = voiceSettingsPatchSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: { message: 'Invalid voice settings', type: 'invalid_request_error' } });
     return;

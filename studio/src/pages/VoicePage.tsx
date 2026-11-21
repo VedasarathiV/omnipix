@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Copy, KeyRound, Mic, Play } from 'lucide-react';
 import { useStudio } from '../state/store';
 import { apiFetch } from '../lib/api';
-import { speakText, startDictationRecording, transcribeAudio, type DictationRecorder } from '../lib/voice';
+import { speakText, startDictationRecording, stopSpeech, transcribeAudio, type DictationRecorder } from '../lib/voice';
 import { useKeys, useMedia, useUnifiedKey, useVoiceSettings } from '../lib/queries';
 
 export function VoicePage() {
@@ -20,15 +20,45 @@ export function VoicePage() {
       pushToast('error', 'Add a provider key first.');
       return;
     }
+    setPlaying(true);
     try {
       await speakText('Hello from OmniPix Studio.', keyData.apiKey, voice?.ttsModel, voice?.ttsVoice || undefined);
     } catch (err) {
       pushToast('error', err instanceof Error ? err.message : 'Sample failed');
+    } finally {
+      setPlaying(false);
+    }
+  }
+
+  async function registerCustom() {
+    if (!custom.baseUrl.trim() || !custom.model.trim()) {
+      pushToast('error', 'Base URL and model are required');
+      return;
+    }
+    try {
+      await apiFetch('/api/media/custom', {
+        method: 'POST',
+        body: JSON.stringify({
+          baseUrl: custom.baseUrl.trim(),
+          model: custom.model.trim(),
+          modality: custom.modality,
+          ...(custom.apiKey.trim() ? { apiKey: custom.apiKey.trim() } : {}),
+          ...(custom.label.trim() ? { label: custom.label.trim() } : {}),
+        }),
+      });
+      pushToast('ok', 'Local speech server registered');
+      setCustom({ baseUrl: '', model: '', modality: 'transcription', apiKey: '', label: '' });
+      void queryClient.invalidateQueries({ queryKey: ['media'] });
+    } catch (err) {
+      pushToast('error', err instanceof Error ? err.message : 'Registration failed');
     }
   }
   const [recorder, setRecorder] = useState<DictationRecorder | null>(null);
   const [transcribing, setTranscribing] = useState(false);
   const [transcript, setTranscript] = useState('');
+  const [playing, setPlaying] = useState(false);
+  const [custom, setCustom] = useState({ baseUrl: '', model: '', modality: 'transcription', apiKey: '', label: '' });
+  const [voiceDraft, setVoiceDraft] = useState<string | null>(null);
   const models = media?.models ?? [];
   const stt = models.filter(m => m.modality === 'transcription' && m.enabled);
   const tts = models.filter(m => m.modality === 'audio' && m.enabled);
@@ -158,6 +188,24 @@ export function VoicePage() {
         </div>
         <div className="flex items-center justify-between gap-3 py-3">
           <div>
+            <p className="text-[13px] font-medium">Voice</p>
+            <p className="text-xs text-ink-dim">Provider voice id (empty = default)</p>
+          </div>
+          <input
+            value={voiceDraft ?? voice?.ttsVoice ?? ''}
+            onChange={e => setVoiceDraft(e.target.value)}
+            onBlur={() => {
+              if (voiceDraft !== null && voiceDraft !== (voice?.ttsVoice ?? '')) void save({ ttsVoice: voiceDraft });
+              setVoiceDraft(null);
+            }}
+            onKeyDown={e => { if (e.key === 'Enter') (e.target as HTMLInputElement).blur(); }}
+            placeholder="default"
+            aria-label="TTS voice"
+            className="w-40 rounded-lg border border-line bg-base-1 px-2 py-1.5 font-mono text-xs outline-none placeholder:text-ink-faint focus-visible:ring-2 focus-visible:ring-accent"
+          />
+        </div>
+        <div className="flex items-center justify-between gap-3 py-3">
+          <div>
             <p className="text-[13px] font-medium">Read chats aloud</p>
             <p className="text-xs text-ink-dim">Speak new assistant messages</p>
           </div>
@@ -174,16 +222,65 @@ export function VoicePage() {
         </div>
         <div className="flex items-center justify-between gap-3 py-3">
           <div>
-            <p className="text-[13px] font-medium">Sample</p>
-            <p className="text-xs text-ink-dim">Hear the current voice</p>
+            <p className="text-[13px] font-medium">Announce runs</p>
+            <p className="text-xs text-ink-dim">Speak run completion, failure, and approvals</p>
           </div>
           <button
             type="button"
-            onClick={() => void playSample()}
-            className="flex items-center gap-1 rounded-lg border border-line px-2.5 py-1.5 text-xs outline-none hover:bg-base-2 focus-visible:ring-2 focus-visible:ring-accent"
+            role="switch"
+            aria-checked={!!voice?.autoSpeakRuns}
+            aria-label="Announce runs"
+            onClick={() => void save({ autoSpeakRuns: !voice?.autoSpeakRuns })}
+            className={`relative h-5 w-9 shrink-0 rounded-full outline-none focus-visible:ring-2 focus-visible:ring-accent ${voice?.autoSpeakRuns ? 'bg-accent' : 'bg-base-2'}`}
           >
-            <Play className="size-3.5" strokeWidth={1.5} /> Play
+            <span className={`absolute top-0.5 size-4 rounded-full bg-white transition-all ${voice?.autoSpeakRuns ? 'left-[18px]' : 'left-0.5'}`} />
           </button>
+        </div>
+        <div className="flex items-center justify-between gap-3 py-3">
+          <div>
+            <p className="text-[13px] font-medium">Sample</p>
+            <p className="text-xs text-ink-dim">Hear the current voice</p>
+          </div>
+          <span className="flex items-center gap-1.5">
+            {playing && (
+              <button
+                type="button"
+                onClick={() => { stopSpeech(); setPlaying(false); }}
+                aria-label="Stop sample"
+                className="rounded-lg border border-line px-2.5 py-1.5 text-xs outline-none hover:bg-base-2 focus-visible:ring-2 focus-visible:ring-accent"
+              >
+                Stop
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => void playSample()}
+              className="flex items-center gap-1 rounded-lg border border-line px-2.5 py-1.5 text-xs outline-none hover:bg-base-2 focus-visible:ring-2 focus-visible:ring-accent"
+            >
+              <Play className="size-3.5" strokeWidth={1.5} /> Play
+            </button>
+          </span>
+        </div>
+      </div>
+      <div className="mt-3 rounded-xl border border-line bg-base-1 px-4 py-3">
+        <p className="text-[13px] font-medium">Local speech server</p>
+        <p className="mt-0.5 text-xs text-ink-dim">
+          Keyless on-device option: point at an OpenAI-compatible endpoint (e.g. a local whisper server).
+          Ollama itself serves no audio API, so local transcription goes through here.
+        </p>
+        <div className="mt-2 space-y-2">
+          <div className="flex gap-2">
+            <input value={custom.baseUrl} onChange={e => setCustom({ ...custom, baseUrl: e.target.value })} placeholder="http://127.0.0.1:8080" aria-label="Custom endpoint base URL" className="w-full rounded-lg border border-line bg-base-0 px-2.5 py-2 font-mono text-xs outline-none placeholder:text-ink-faint focus-visible:ring-2 focus-visible:ring-accent" />
+            <select value={custom.modality} onChange={e => setCustom({ ...custom, modality: e.target.value })} aria-label="Custom endpoint modality" className="rounded-lg border border-line bg-base-1 px-2 py-2 text-xs outline-none focus-visible:ring-2 focus-visible:ring-accent">
+              <option value="transcription">transcription</option>
+              <option value="audio">speech</option>
+            </select>
+          </div>
+          <div className="flex gap-2">
+            <input value={custom.model} onChange={e => setCustom({ ...custom, model: e.target.value })} placeholder="model id" aria-label="Custom endpoint model" className="w-full rounded-lg border border-line bg-base-0 px-2.5 py-2 font-mono text-xs outline-none placeholder:text-ink-faint focus-visible:ring-2 focus-visible:ring-accent" />
+            <input value={custom.apiKey} onChange={e => setCustom({ ...custom, apiKey: e.target.value })} placeholder="api key (optional)" aria-label="Custom endpoint API key" className="w-full rounded-lg border border-line bg-base-0 px-2.5 py-2 font-mono text-xs outline-none placeholder:text-ink-faint focus-visible:ring-2 focus-visible:ring-accent" />
+          </div>
+          <button type="button" onClick={() => void registerCustom()} className="rounded-lg bg-accent px-3 py-1.5 text-xs font-semibold text-base-0 outline-none hover:opacity-90 focus-visible:ring-2 focus-visible:ring-accent">Register endpoint</button>
         </div>
       </div>
     </div>

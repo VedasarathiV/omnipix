@@ -51,7 +51,10 @@ export async function transcribeAudio(blob: Blob, filename: string, apiKey: stri
   if (blob.size === 0) throw new Error('nothing was recorded');
   const form = new FormData();
   form.append('file', blob, filename);
-  form.append('model', model && model !== 'auto' ? model : 'whisper-large-v3-turbo');
+  // Pass the selection through untouched: the server auto-routes exactly
+  // 'auto' (and whisper-1). Rewriting it to a concrete id 400s when that
+  // model row is absent.
+  form.append('model', model && model.trim() ? model.trim() : 'auto');
   form.append('response_format', 'json');
   const res = await fetch('/v1/audio/transcriptions', {
     method: 'POST',
