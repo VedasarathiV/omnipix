@@ -17,7 +17,11 @@ await build({
   format: 'esm',
   target: 'node20',
   outfile: path.resolve(__dirname, '../build/server.mjs'),
-  external: ['better-sqlite3', 'sharp'],
+  // pdf-parse and officeparser stay external: pdf.js polyfills DOMMatrix
+  // from @napi-rs/canvas at import time, and inlining the legacy build
+  // crashes the main process (the native canvas module cannot be bundled).
+  // External requires resolve from desktop/node_modules exactly like dev.
+  external: ['better-sqlite3', 'sharp', 'pdf-parse', 'officeparser', '@napi-rs/canvas'],
   define: {
     'process.env.OMNIPIX_COMMIT_SHA': JSON.stringify(hasBuildIdentity ? githubSha : ''),
     'process.env.OMNIPIX_INSTALL_METHOD': JSON.stringify(hasBuildIdentity ? 'desktop' : ''),
