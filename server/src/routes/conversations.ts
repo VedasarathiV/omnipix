@@ -17,11 +17,12 @@ import { getDb } from '../db/index.js';
 export const conversationsRouter = Router();
 
 const MAX_TITLE_LEN = 200;
-// A conversation is prose plus, occasionally, inlined image data URIs. 2 MB of
-// serialised JSON is far more than any readable chat and still small enough to
-// hand back on every switch without thinking about it. Over that we refuse the
-// write rather than silently truncating someone's history.
-export const MAX_MESSAGES_BYTES = 2 * 1024 * 1024;
+// A conversation is prose plus, occasionally, inlined media data URIs
+// (vision attachments, generated images, short video/audio clips). 16 MB of
+// serialised JSON holds several generated results and is still cheap to hand
+// back on every switch in a local-first app. Over that we refuse the write
+// rather than silently truncating someone's history.
+export const MAX_MESSAGES_BYTES = 16 * 1024 * 1024;
 
 // Mirrors the client's ChatMessage. Kept permissive on `content` (an empty
 // assistant bubble is legitimate mid-fusion) and strict on `role`, which is the
@@ -48,9 +49,20 @@ const metaSchema = z.object({
   }).optional(),
 });
 
+// Array content carries vision attachments and generation results as typed
+// parts alongside text. The part union is closed: unknown part shapes are
+// rejected at the gate instead of persisting unrenderable transcripts.
+const contentPartSchema = z.union([
+  z.string(),
+  z.object({ type: z.literal('text'), text: z.string() }),
+  z.object({ type: z.literal('image_url'), image_url: z.object({ url: z.string().min(1) }) }),
+  z.object({ type: z.literal('video_url'), video_url: z.object({ url: z.string().min(1) }) }),
+  z.object({ type: z.literal('audio_url'), audio_url: z.object({ url: z.string().min(1) }) }),
+]);
+
 const messageSchema = z.object({
   role: z.enum(['user', 'assistant']),
-  content: z.string(),
+  content: z.union([z.string(), z.array(contentPartSchema)]),
   images: z.array(z.string()).optional(),
   isError: z.boolean().optional(),
   reasoning: z.string().optional(),

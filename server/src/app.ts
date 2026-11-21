@@ -257,7 +257,11 @@ export function createApp(config?: Config) {
     ['/v1', '/v1beta', '/mcp', '/api/chat', '/api/generate', '/api/embed', '/api/embeddings'],
     express.json({ limit: cfg.requestBodyLimitBytes }),
   );
-  app.use(express.json({ limit: '10mb' }));
+  // 20mb, not 10: conversation transcripts carry inlined media data URIs
+  // (routes/conversations caps them at 16mb), so the parser ceiling must sit
+  // above the feature cap or oversized saves 413 with the parser's generic
+  // error instead of the route's clear one.
+  app.use(express.json({ limit: '20mb' }));
 
   // Gateway-side content guardrails (PII redaction + operator blocklist).
   // Runs after the body parsers (it reads req.body) and before every

@@ -108,10 +108,9 @@ export function ProvidersPage() {
                 <GripVertical className="size-4 cursor-grab text-ink-faint" strokeWidth={1.5} />
                 <span className={`size-2 rounded-full ${healthy ? 'bg-ok' : hasKey ? 'bg-bad' : 'bg-ink-faint'}`} />
                 <ProviderIcon platform={id} />
-                <p className="text-sm font-semibold">{titleCase(id)}</p>
-                {freeTier && <span className="rounded-md bg-ok/15 px-1.5 py-0.5 text-[10px] font-semibold text-ok">FREE TIER</span>}
-                <span className="flex-1" />
-                <span className="font-mono text-[11px] text-ink-dim">{platformModels.length} models</span>
+                <p className="min-w-0 flex-1 truncate text-sm font-semibold">{titleCase(id)}</p>
+                {freeTier && <span className="shrink-0 rounded-md bg-ok/15 px-1.5 py-0.5 text-[10px] font-semibold text-ok">FREE TIER</span>}
+                <span className="shrink-0 font-mono text-[11px] whitespace-nowrap text-ink-dim">{platformModels.length} models</span>
               </div>
               <div className="mt-3 flex gap-1.5">
                 {!hasKey ? (

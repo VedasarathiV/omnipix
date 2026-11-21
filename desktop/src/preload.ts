@@ -45,6 +45,11 @@ contextBridge.exposeInMainWorld('__OMNIPIX_PLATFORM__', process.platform);
 // runs as.
 contextBridge.exposeInMainWorld('__OMNIPIX_SESSION__', () => ipcRenderer.invoke('omnipix:session-token'));
 
+// Native folder picker for the Files tab: resolves to the chosen absolute
+// directory path, or null when the user cancels. Absent outside the desktop
+// shell, where the manual path field remains the only way in.
+contextBridge.exposeInMainWorld('__OMNIPIX_PICK_FOLDER__', () => ipcRenderer.invoke('omnipix:pick-folder'));
+
 // Push-to-talk dictation: the global hotkey (main process) toggles recording
 // in the dashboard; the renderer reports which accelerator actually stuck so
 // the UI can name it.

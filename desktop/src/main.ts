@@ -157,6 +157,16 @@ if (!app.requestSingleInstanceLock()) {
     getPopoverWindow()?.webContents.send('omnipix:refresh');
   });
   ipcMain.handle('omnipix:open-dashboard', () => openDashboard(resolvedPort, sessionToken));
+  // Dashboard → native folder picker for the Files tab (preload
+  // __OMNIPIX_PICK_FOLDER__). Returns the chosen absolute path or null
+  // when the user cancels. Parented to the dashboard window when open.
+  ipcMain.handle('omnipix:pick-folder', async () => {
+    const win = getDashboardWindow();
+    const { canceled, filePaths } = win
+      ? await dialog.showOpenDialog(win, { properties: ['openDirectory', 'createDirectory'] })
+      : await dialog.showOpenDialog({ properties: ['openDirectory', 'createDirectory'] });
+    return canceled || filePaths.length === 0 ? null : filePaths[0];
+  });
   ipcMain.handle('omnipix:copy-base-url', (_e, kind: unknown) =>
     clipboard.writeText(gatewayBaseUrl(resolvedPort, parseBaseUrlKind(kind))));
   ipcMain.handle('omnipix:copy-api-key', () => clipboard.writeText(getUnifiedApiKey()));

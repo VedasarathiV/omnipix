@@ -3,6 +3,7 @@ import {
   buildChipContext,
   distinctiveWords,
   expandFileTemplate,
+  extractMessageMedia,
   fuzzyScore,
   parseCommandName,
   parseSlashCommand,
@@ -69,7 +70,20 @@ describe('renderMessageContent', () => {
     expect(renderMessageContent([
       { type: 'text', text: 'see this' },
       { type: 'image_url', image_url: { url: 'data:…' } },
-    ])).toBe('see this\n[image attached]');
+    ])).toBe('see this');
+    expect(extractMessageMedia([
+      { type: 'text', text: 'see this' },
+      { type: 'image_url', image_url: { url: 'data:img' } },
+      { type: 'video_url', video_url: { url: 'data:vid' } },
+      { type: 'audio_url', audio_url: { url: 'data:aud' } },
+      { type: 'file_url', file_url: { url: 'x' } },
+    ])).toEqual([
+      { kind: 'image', url: 'data:img' },
+      { kind: 'video', url: 'data:vid' },
+      { kind: 'audio', url: 'data:aud' },
+    ]);
+    expect(extractMessageMedia('hi')).toEqual([]);
+    expect(extractMessageMedia(null)).toEqual([]);
     expect(renderMessageContent([{ type: 'text' }])).toBe('');
     expect(renderMessageContent(null)).toBe('');
     expect(renderMessageContent(42)).toBe('');

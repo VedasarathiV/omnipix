@@ -120,8 +120,10 @@ export function buildChipContext(goal: string, resolved: ResolvedChip[]): string
   return `${blocks.join('\n\n')}\n\n--- user request ---\n${goal}`;
 }
 
-/** Render a conversation message part: plain strings as-is, array content
- *  (vision turns) as its text parts plus an image marker per image part. */
+/** Render a conversation message part: plain strings as-is, array content as
+ *  its text parts. Media parts contribute no marker text — the bubble renders
+ *  the playable media itself (extractMessageMedia), so a marker would just
+ *  double up under every generated image. */
 export function renderMessageContent(content: unknown): string {
   if (typeof content === 'string') return content;
   if (!Array.isArray(content)) return '';
@@ -132,8 +134,33 @@ export function renderMessageContent(content: unknown): string {
     } else if (part && typeof part === 'object') {
       const p = part as { type?: string; text?: string };
       if (p.type === 'text' && typeof p.text === 'string') out.push(p.text);
-      else if (p.type === 'image_url') out.push('[image attached]');
     }
   }
   return out.join('\n');
+}
+
+interface MediaPart {
+  type?: string;
+  image_url?: { url?: string };
+  video_url?: { url?: string };
+  audio_url?: { url?: string };
+}
+
+/** Pull playable media out of array message content (generation turns and
+ *  vision attachments). Unknown parts are ignored, never rendered. */
+export function extractMessageMedia(content: unknown): Array<{ kind: 'image' | 'video' | 'audio'; url: string }> {
+  if (!Array.isArray(content)) return [];
+  const out: Array<{ kind: 'image' | 'video' | 'audio'; url: string }> = [];
+  for (const part of content) {
+    if (!part || typeof part !== 'object') continue;
+    const p = part as MediaPart;
+    if (p.type === 'image_url' && typeof p.image_url?.url === 'string' && p.image_url.url) {
+      out.push({ kind: 'image', url: p.image_url.url });
+    } else if (p.type === 'video_url' && typeof p.video_url?.url === 'string' && p.video_url.url) {
+      out.push({ kind: 'video', url: p.video_url.url });
+    } else if (p.type === 'audio_url' && typeof p.audio_url?.url === 'string' && p.audio_url.url) {
+      out.push({ kind: 'audio', url: p.audio_url.url });
+    }
+  }
+  return out;
 }

@@ -295,6 +295,17 @@ export function InputBar() {
     } else if (slash.kind === 'expand') {
       goal = slash.text;
     }
+    if (mode === 'image' || mode === 'video' || mode === 'audio') {
+      if (image) {
+        pushToast('error', 'Generation modes take a text prompt only — remove the attachment first.');
+        return;
+      }
+      await sendMedia(mode, goal);
+      setText('');
+      setMenu(null);
+      setHistIdx(-1);
+      return;
+    }
     setSending(true);
     try {
       const resolved = await resolveChips(chips, goal);
@@ -327,6 +338,127 @@ export function InputBar() {
     } finally {
       setSending(false);
     }
+  }
+
+  /** Blob → base64 data URL (generation results persist inside the message). */
+  function blobToDataUrl(blob: Blob): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(String(reader.result));
+      reader.onerror = () => reject(new Error('read failed'));
+      reader.readAsDataURL(blob);
+    });
+  }
+
+  /** Image / video / audio generation turns: prompt in, playable media out,
+   *  persisted as message parts so results survive reloads. No CLI needed. */
+  async function sendMedia(kind: 'image' | 'video' | 'audio', prompt: string) {
+    const apiKey = keyData?.apiKey;
+    if (!apiKey) {
+      pushToast('error', 'No unified API key — add a provider key first.');
+      return;
+    }
+    const label = kind === 'image' ? 'image' : kind === 'video' ? 'video' : 'audio';
+    let convId = conversationId;
+    if (convId === null) {
+      const created = await apiFetch<Conversation>('/api/conversations', {
+        method: 'POST',
+        body: JSON.stringify({ title: prompt.slice(0, 80), model, messages: [] }),
+      });
+      convId = created.id;
+      setConversationId(convId);
+    }
+    const base = (conversation?.messages ?? []).map(m => ({ role: m.role, content: m.content }));
+    const withUser = [...base, { role: 'user', content: prompt }];
+    await apiFetch(`/api/conversations/${convId}`, { method: 'PUT', body: JSON.stringify({ messages: withUser }) });
+    void queryClient.invalidateQueries({ queryKey: ['conversations'] });
+    void queryClient.invalidateQueries({ queryKey: ['conversation', convId] });
+    setStreamingReply(`Generating ${label}…`);
+    // First image on a fresh install: no anonymous rows exist yet. The send
+    // itself is the opt-in — enable free image generation once, say so, and
+    // retry. Audio and video keep their honest errors (anonymous TTS flakes
+    // upstream 401s, so it is not promised keyless; video needs a real key).
+    let enabledOnce = false;
+    const enableFree = async () => {
+      if (enabledOnce || kind !== 'image') return false;
+      enabledOnce = true;
+      await apiFetch('/api/media/keyless', { method: 'POST' });
+      pushToast('info', 'Free image generation on — no key needed.');
+      return true;
+    };
+    try {
+      let part: unknown;
+      if (kind === 'image') {
+        const runImage = async () => {
+          const res = await fetch('/v1/images/generations', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+            body: JSON.stringify({ prompt, n: 1 }),
+          });
+          const data = await res.json().catch(() => null) as { data?: Array<{ b64_json?: string; url?: string }>; error?: { message?: string } } | null;
+          if ((res.status === 502 || res.status === 503) && (await enableFree())) return runImage();
+          if (!res.ok) throw new Error(data?.error?.message ?? `Image failed (${res.status})`);
+          return data;
+        };
+        const data = await runImage();
+        const first = data?.data?.[0];
+        let url = first?.url;
+        if (!url && first?.b64_json) {
+          // Providers return PNG, JPEG, or WebP bytes — sniff the magic so
+          // the data URL carries the true MIME (JPEG bytes labeled PNG fail
+          // to paint in some renderers).
+          const head = first.b64_json.slice(0, 16);
+          const mime = head.startsWith('iVBOR') ? 'image/png'
+            : head.startsWith('/9j/') ? 'image/jpeg'
+            : head.startsWith('UklGR') ? 'image/webp'
+            : 'image/png';
+          url = `data:${mime};base64,${first.b64_json}`;
+        }
+        if (!url) throw new Error('The provider returned no image');
+        part = { type: 'image_url', image_url: { url } };
+      } else if (kind === 'video') {
+        const res = await fetch('/v1/videos/generations', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+          body: JSON.stringify({ prompt }),
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => null) as { error?: { message?: string } } | null;
+          throw new Error(data?.error?.message ?? `Video failed (${res.status})`);
+        }
+        const blob = await res.blob();
+        if (blob.size > 12 * 1024 * 1024) throw new Error('Video is over the 12 MB chat cap — try a shorter prompt');
+        const url = await blobToDataUrl(blob);
+        part = { type: 'video_url', video_url: { url } };
+      } else {
+        const res = await fetch('/v1/audio/speech', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${apiKey}` },
+          body: JSON.stringify({
+            input: prompt.slice(0, 2000),
+            ...(voiceSettings?.ttsVoice ? { voice: voiceSettings.ttsVoice } : {}),
+          }),
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => null) as { error?: { message?: string } } | null;
+          throw new Error(data?.error?.message ?? `Audio failed (${res.status})`);
+        }
+        const url = await blobToDataUrl(await res.blob());
+        part = { type: 'audio_url', audio_url: { url } };
+      }
+      await apiFetch(`/api/conversations/${convId}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          messages: [...withUser, { role: 'assistant', content: [{ type: 'text', text: `${label[0].toUpperCase()}${label.slice(1)} for: "${prompt.slice(0, 200)}"` }, part] }],
+        }),
+      });
+    } catch (err) {
+      pushToast('error', err instanceof Error ? err.message : 'Generation failed');
+    } finally {
+      setStreamingReply(null);
+    }
+    void queryClient.invalidateQueries({ queryKey: ['conversations'] });
+    void queryClient.invalidateQueries({ queryKey: ['conversation', convId] });
   }
 
   async function sendChat(goal: string, imageDataUrl: string | null) {
@@ -527,7 +659,12 @@ export function InputBar() {
             if (e.key === 'Escape') setMenu(null);
           }}
           rows={2}
-          placeholder="Ask, plan, or instruct the agent… (@ for files, / for commands)"
+          placeholder={
+            mode === 'image' ? 'Describe the image to generate…'
+              : mode === 'video' ? 'Describe the video to generate…'
+                : mode === 'audio' ? 'Text to speak…'
+                  : 'Ask, plan, or instruct the agent… (@ for files, / for commands)'
+          }
           aria-label="Message input"
           className="w-full resize-none rounded-xl border border-line bg-base-0 px-3 pt-2.5 pb-11 text-sm outline-none placeholder:text-ink-faint focus:border-ink-faint"
         />
@@ -556,6 +693,9 @@ export function InputBar() {
             <option value="ask">Ask</option>
             <option value="plan">Plan</option>
             <option value="agent">Agent</option>
+            <option value="image">Image</option>
+            <option value="video">Video</option>
+            <option value="audio">Audio</option>
           </select>
           <ModelPicker compact />
           <div className="flex-1" />

@@ -6,7 +6,7 @@ import { maskKey } from '../lib/crypto.js';
 import { deleteUnusedCustomEndpointKey } from '../lib/custom-provider-cleanup.js';
 import { resolveCustomEndpointKey } from '../services/custom-endpoint.js';
 import { registerCustomMediaModel } from '../services/custom-media-register.js';
-import { listAllMediaModels } from '../services/media.js';
+import { enableKeylessMedia, listAllMediaModels } from '../services/media.js';
 
 export const mediaRouter = Router();
 
@@ -53,6 +53,14 @@ mediaRouter.get('/', (_req: Request, res: Response) => {
 // rows are logged the same way (request_type='transcription', see
 // logMedia), so the Audio tab's STT section can show the same per-model
 // counts instead of dead-ending on a 400.
+// One-tap free generation for installs with no anonymous media rows:
+// inserts keyless Pollinations image + audio rows (video always needs a
+// real key, so it stays out). The chat composer calls this on the first
+// generation tap and says so on screen.
+mediaRouter.post('/keyless', (_req: Request, res: Response) => {
+  res.json(enableKeylessMedia());
+});
+
 mediaRouter.get('/usage', (req: Request, res: Response) => {
   const parsed = z.enum(['image', 'video', 'audio', 'transcription']).safeParse(req.query.modality);
   if (!parsed.success) {

@@ -13,6 +13,9 @@ const MODES: Array<{ id: AgentMode; label: string; hint: string }> = [
   { id: 'ask', label: 'Ask', hint: 'Answer questions, no edits (⌘.)' },
   { id: 'plan', label: 'Plan', hint: 'Draft a plan for approval first' },
   { id: 'agent', label: 'Agent', hint: 'Edit, run, and verify autonomously' },
+  { id: 'image', label: 'Image', hint: 'Generate an image from a prompt' },
+  { id: 'video', label: 'Video', hint: 'Generate a video from a prompt' },
+  { id: 'audio', label: 'Audio', hint: 'Speak text as audio' },
 ];
 
 export function TopBar() {
@@ -57,7 +60,7 @@ export function TopBar() {
   }
 
   return (
-    <header className="traffic-pad titlebar-drag flex h-12 shrink-0 items-center gap-2 overflow-x-auto border-b border-line bg-base-1 px-3">
+    <header className="traffic-pad titlebar-drag relative z-40 flex h-12 shrink-0 items-center gap-2 border-b border-line bg-base-1 px-3">
       <div className="titlebar-nodrag hidden items-center gap-1 md:flex">
         <button
           type="button"

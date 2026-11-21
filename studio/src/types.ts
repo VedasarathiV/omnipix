@@ -1,7 +1,7 @@
 // Shared domain types for the studio workspace UI. Shapes mirror the live
 // OmniPix API responses; see lib/queries.ts for the fetch layer.
 
-export type AgentMode = 'ask' | 'plan' | 'agent';
+export type AgentMode = 'ask' | 'plan' | 'agent' | 'image' | 'video' | 'audio';
 export type RunStatus = 'idle' | 'thinking' | 'running' | 'waiting' | 'done' | 'failed';
 export type StepStatus = 'pending' | 'running' | 'done' | 'failed';
 export type StepKind =
@@ -39,6 +39,7 @@ export interface ChatMessage {
   text: string;
   ts: string;
   model?: string;
+  media?: Array<{ kind: 'image' | 'video' | 'audio'; url: string }>;
 }
 
 export interface Approval {

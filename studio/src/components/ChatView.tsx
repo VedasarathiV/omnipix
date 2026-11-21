@@ -1,7 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { Sparkles } from 'lucide-react';
 import { useQueryClient } from '@tanstack/react-query';
-import { MessageBubble, renderMessageContent } from './MessageBubble';
+import { extractMessageMedia, MessageBubble, renderMessageContent } from './MessageBubble';
 import { PlanCard } from './PlanCard';
 import { RunTimeline } from './RunTimeline';
 import { ApprovalPrompt } from './ApprovalPrompt';
@@ -192,6 +192,7 @@ export function ChatView() {
               text: renderMessageContent(m.content),
               ts: '',
               model: conversation?.model ?? undefined,
+              media: extractMessageMedia(m.content),
             }}
             onDelete={() => void deleteMessage(i)}
             onBranch={m.role === 'user' ? undefined : () => void branchFrom(i)}

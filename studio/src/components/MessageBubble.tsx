@@ -2,9 +2,9 @@ import { useState } from 'react';
 import { Check, Copy, GitBranch, Pencil, Trash2, WrapText } from 'lucide-react';
 import type { ChatMessage } from '../types';
 import { useStudio } from '../state/store';
-import { renderMessageContent } from '../lib/compose';
+import { extractMessageMedia, renderMessageContent } from '../lib/compose';
 
-export { renderMessageContent };
+export { extractMessageMedia, renderMessageContent };
 
 export function MessageBubble({
   message,
@@ -37,6 +37,15 @@ export function MessageBubble({
   return (
     <div className={`group flex flex-col ${mine ? 'items-end' : 'items-start'}`}>
       <div className={`max-w-[85%] rounded-xl px-3.5 py-2.5 text-[13px] leading-relaxed ${mine ? 'bg-accent text-white' : 'bg-base-1'}`}>
+        {(message.media ?? []).map((m, i) =>
+          m.kind === 'image' ? (
+            <img key={i} src={m.url} alt="Generated image" className="mb-2 max-h-80 rounded-lg object-contain" />
+          ) : m.kind === 'video' ? (
+            <video key={i} src={m.url} controls className="mb-2 max-h-80 w-full rounded-lg" />
+          ) : (
+            <audio key={i} src={m.url} controls className="mb-2 w-full" />
+          ),
+        )}
         {message.text.split('\n').map((line, i) => (
           <span key={i} className={wrapped ? '' : 'block truncate-0'}>
             {line.startsWith('```') ? null : line}

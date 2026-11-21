@@ -65,6 +65,21 @@ export function FileTree() {
     setSelectedFile(null);
   }
 
+  const canBrowse = typeof (window as unknown as { __OMNIPIX_PICK_FOLDER__?: unknown }).__OMNIPIX_PICK_FOLDER__ === 'function';
+
+  async function browseRoot() {
+    try {
+      const pick = (window as unknown as { __OMNIPIX_PICK_FOLDER__: () => Promise<string | null> }).__OMNIPIX_PICK_FOLDER__;
+      const dir = await pick();
+      if (!dir) return;
+      setDraftRoot(dir);
+      setFileRoot(dir);
+      setSelectedFile(null);
+    } catch {
+      // Dialog unavailable — the manual path field stays usable.
+    }
+  }
+
   const switcher = activeRunId !== null ? (
     <div className="flex gap-1 border-b border-line p-2" role="tablist" aria-label="File source">
       <button
@@ -151,6 +166,17 @@ export function FileTree() {
             autoComplete="off"
             className="w-full bg-transparent font-mono text-xs outline-none placeholder:text-ink-faint"
           />
+          {canBrowse && (
+            <button
+              type="button"
+              onClick={() => void browseRoot()}
+              title="Choose a folder…"
+              aria-label="Browse for folder"
+              className="shrink-0 rounded-md border border-line px-2 py-1 text-[11px] outline-none hover:bg-base-2 focus-visible:ring-2 focus-visible:ring-accent"
+            >
+              Browse…
+            </button>
+          )}
           <button
             type="button"
             onClick={openRoot}

@@ -7,7 +7,7 @@
 // across the providers serving the same modality. The rows are maintained in the
 // published catalog and arrive via catalog-sync (premium on the live tier within
 // ~12h, free once each model is 30 days old) — never seeded by migrations.
-import { getDb } from '../db/index.js';
+import { getDb, getSetting, setSetting } from '../db/index.js';
 import { parseRetryAfterMs } from '../providers/base.js';
 import { RetryHintTracker } from '../lib/retry-hint.js';
 import { secondsUntilNextMonth } from './key-budget.js';
@@ -229,6 +229,53 @@ const VIDEO_FETCH_TIMEOUT_MS = 5 * 60_000;
  *  second one, when the chain fails over to the next provider. */
 function throwIfClientGone(signal?: AbortSignal): void {
   if (signal?.aborted) throw new MediaError('client closed the request', 499);
+}
+
+/**
+ * Keyless media: fresh installs carry no image rows, so the chat image mode
+ * would 503 out of the box. The chat composer opts in on the first image
+ * tap (with an on-screen note); this inserts the anonymous Pollinations
+ * rows the adapters serve keylessly. The audio row rides along for keyed
+ * users and Models-page visibility, but anonymous TTS flakes upstream 401s
+ * and is never promised keyless — audio without keys fails honestly. Video
+ * is excluded entirely: every video adapter needs a real key.
+ * Idempotent. Image/audio rows are never catalog-pruned, so unlike keyless
+ * search this needs no catalog-sync hook.
+ */
+export const KEYLESS_MEDIA_SETTING = 'keyless_media_enabled';
+
+const KEYLESS_MEDIA_ROWS = [
+  { platform: 'pollinations', modelId: 'flux', displayName: 'Flux (Pollinations)', modality: 'image', priority: 4, quotaLabel: 'Free, no key needed' },
+  { platform: 'pollinations', modelId: 'openai-audio', displayName: 'OpenAI Audio (Pollinations)', modality: 'audio', priority: 5, quotaLabel: 'Free, no key needed' },
+] as const;
+
+export function keylessMediaEnabled(): boolean {
+  return getSetting(KEYLESS_MEDIA_SETTING) === '1';
+}
+
+/** Insert any missing keyless media rows. Returns the model ids now present. */
+export function ensureKeylessMedia(): string[] {
+  const db = getDb();
+  const present: string[] = [];
+  for (const row of KEYLESS_MEDIA_ROWS) {
+    const exists = db.prepare(
+      'SELECT id FROM media_models WHERE modality = ? AND platform = ? AND model_id = ?',
+    ).get(row.modality, row.platform, row.modelId);
+    if (!exists) {
+      db.prepare(`
+        INSERT INTO media_models (platform, model_id, display_name, modality, priority, enabled, quota_label, meta_json)
+        VALUES (?, ?, ?, ?, ?, 1, ?, '{}')
+      `).run(row.platform, row.modelId, row.displayName, row.modality, row.priority, row.quotaLabel);
+    }
+    present.push(row.modelId);
+  }
+  return present;
+}
+
+/** Persist the opt-in and ensure the rows. */
+export function enableKeylessMedia(): { models: string[] } {
+  setSetting(KEYLESS_MEDIA_SETTING, '1');
+  return { models: ensureKeylessMedia() };
 }
 
 export function listMediaModels(modality: MediaModality): MediaModelRow[] {

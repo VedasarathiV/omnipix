@@ -233,6 +233,28 @@ describe('playground conversations', () => {
       const { status } = await request(app, 'POST', '/api/conversations', { token: dashToken, body: { messages } });
       expect(status).toBe(201);
     });
+
+    it('accepts array content with vision and generated-media parts', async () => {
+      const created = await create();
+      const messages = [
+        { role: 'user', content: [{ type: 'text', text: 'what is this' }, { type: 'image_url', image_url: { url: 'data:image/png;base64,xx' } }] },
+        { role: 'assistant', content: [{ type: 'text', text: 'Image for: "x"' }, { type: 'image_url', image_url: { url: 'data:image/jpeg;base64,yy' } }] },
+        { role: 'assistant', content: [{ type: 'text', text: 'Video for: "x"' }, { type: 'video_url', video_url: { url: 'data:video/mp4;base64,zz' } }] },
+        { role: 'assistant', content: [{ type: 'text', text: 'Audio for: "x"' }, { type: 'audio_url', audio_url: { url: 'data:audio/mpeg;base64,ww' } }] },
+      ];
+      const put = await request(app, 'PUT', `/api/conversations/${created.id}`, { token: dashToken, body: { messages } });
+      expect(put.status).toBe(200);
+      expect(put.body.messages).toHaveLength(4);
+    });
+
+    it('rejects unknown content part shapes', async () => {
+      const created = await create();
+      const put = await request(app, 'PUT', `/api/conversations/${created.id}`, {
+        token: dashToken,
+        body: { messages: [{ role: 'assistant', content: [{ type: 'file_url', file_url: { url: 'x' } }] }] },
+      });
+      expect(put.status).toBe(400);
+    });
   });
 
   describe('auth', () => {
