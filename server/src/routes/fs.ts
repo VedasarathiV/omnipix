@@ -4,6 +4,7 @@ import { Router } from 'express';
 import type { Request, Response } from 'express';
 import { z } from 'zod';
 import { resolveInRoot } from '../lib/workspace.js';
+import { grepTree } from '../services/run-workspace.js';
 
 export const fsRouter = Router();
 
@@ -88,6 +89,21 @@ fsRouter.get('/list', (req: Request, res: Response) => {
     return;
   }
   res.json({ root, ...walk(root) });
+});
+
+fsRouter.get('/grep', (req: Request, res: Response) => {
+  let root: string;
+  try {
+    root = resolveRoot(req.query.root);
+  } catch (err) {
+    res.status(400).json({ error: { message: err instanceof Error ? err.message : String(err) } });
+    return;
+  }
+  try {
+    res.json({ hits: grepTree(root, typeof req.query.q === 'string' ? req.query.q : '') });
+  } catch (err) {
+    res.status(400).json({ error: { message: err instanceof Error ? err.message : String(err) } });
+  }
 });
 
 fsRouter.get('/read', (req: Request, res: Response) => {

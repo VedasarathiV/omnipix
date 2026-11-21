@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { AtSign, Image as ImageIcon, LayoutTemplate, Mic, Paperclip, Send, Slash, X } from 'lucide-react';
+import { AtSign, FileText, Image as ImageIcon, LayoutTemplate, Mic, Paperclip, Send, Slash, X } from 'lucide-react';
 import { useStudio } from '../state/store';
 import { ModelPicker } from './ModelPicker';
 import { apiFetch, streamChat } from '../lib/api';
@@ -16,7 +16,7 @@ import {
 } from '../lib/compose';
 import { readSampling } from './SettingsModal';
 import { startDictationRecording, transcribeAudio, type DictationRecorder } from '../lib/voice';
-import { useCommands, useConversation, useDocs, useSkills, useUnifiedKey, useVoiceSettings, type AgentRun, type Conversation, type DocRow } from '../lib/queries';
+import { useCommands, useConversation, useDocs, useMentionFiles, useSkills, useUnifiedKey, useVoiceSettings, type AgentRun, type Conversation, type DocRow, type FileContent } from '../lib/queries';
 
 // Slash menu entries come from lib/compose (single source with the parser).
 const SLASH = SLASH_COMMANDS;
@@ -38,6 +38,7 @@ export function InputBar() {
   const {
     mode, setMode, model, pushToast, conversationId, setConversationId,
     setActiveRunId, setStreamingReply, dictation, editDraft, setEditDraft,
+    activeRunId, fileRoot,
   } = useStudio();
   const queryClient = useQueryClient();
   const { data: keyData } = useUnifiedKey();
@@ -115,6 +116,9 @@ export function InputBar() {
   const [dragOver, setDragOver] = useState(false);
   const [histIdx, setHistIdx] = useState(-1);
   const [sending, setSending] = useState(false);
+  const mentionToken = /@(\w*)$/.exec(text)?.[1] ?? '';
+  const { data: mentionFileData } = useMentionFiles(activeRunId, fileRoot, mentionToken);
+  const mentionFileHits = (mentionFileData?.hits ?? []).slice(0, 8);
   const boxRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
@@ -155,6 +159,26 @@ export function InputBar() {
 
   function handleAttachClick() {
     fileRef.current?.click();
+  }
+
+  /** Inline a workspace/folder file picked from the @ menu. */
+  async function attachWorkspaceFile(path: string) {
+    setText(t => t.replace(/@\w*$/, ''));
+    setMenu(null);
+    try {
+      const file = fileRoot
+        ? await apiFetch<FileContent>(`/api/fs/read?root=${encodeURIComponent(fileRoot)}&path=${encodeURIComponent(path)}`)
+        : await apiFetch<FileContent>(`/api/agents/runs/${activeRunId}/files/content?path=${encodeURIComponent(path)}`);
+      if (file.binary || !file.content) {
+        pushToast('error', 'That file has no readable text.');
+        return;
+      }
+      inlineText(path, file.content);
+    } catch (err) {
+      pushToast('error', err instanceof Error ? err.message : 'Could not read file');
+    } finally {
+      boxRef.current?.focus();
+    }
   }
 
   async function handleAttachFile(file: File) {
@@ -443,14 +467,32 @@ export function InputBar() {
         )}
         {menu === 'mention' && (
           <Menu onClose={() => setMenu(null)}>
-            {mentionFiles.length === 0 && (
-              <p className="px-2 py-1.5 text-xs text-ink-faint">No ingested docs — add URLs on the Docs page.</p>
-            )}
-            {mentionFiles.map(f => (
+            {mentionFiles.filter(f => f.toLowerCase().includes(mentionToken.toLowerCase())).map(f => (
               <button key={f} type="button" onClick={() => { setChips(list => [...new Set([...list, f])]); setText(t => t.replace(/@\w*$/, '')); setMenu(null); boxRef.current?.focus(); }} className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left font-mono text-xs outline-none hover:bg-base-2">
                 <AtSign className="size-3.5 text-accent" strokeWidth={1.5} />{f}
               </button>
             ))}
+            {mentionFileHits.length > 0 && (
+              <p className="px-2 pt-2 pb-1 text-[10px] font-semibold tracking-wider text-ink-faint uppercase">
+                {fileRoot ? 'Folder files' : 'Workspace files'}
+              </p>
+            )}
+            {mentionFileHits.map(h => (
+              <button key={`${h.path}:${h.line}`} type="button" onClick={() => void attachWorkspaceFile(h.path)} className="flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left outline-none hover:bg-base-2">
+                <FileText className="size-3.5 shrink-0 text-ink-dim" strokeWidth={1.5} />
+                <span className="min-w-0">
+                  <span className="block truncate font-mono text-xs">{h.path}:{h.line}</span>
+                  <span className="block truncate font-mono text-[11px] text-ink-dim">{h.text.trim()}</span>
+                </span>
+              </button>
+            ))}
+            {mentionFiles.length === 0 && mentionFileHits.length === 0 && (
+              <p className="px-2 py-1.5 text-xs text-ink-faint">
+                {mentionToken.length >= 2 && activeRunId === null && !fileRoot
+                  ? 'Open a folder or start a run to search files.'
+                  : 'No ingested docs — add URLs on the Docs page.'}
+              </p>
+            )}
           </Menu>
         )}
         {menu === 'templates' && (

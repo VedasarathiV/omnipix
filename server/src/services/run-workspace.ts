@@ -421,7 +421,11 @@ const SEARCH_MAX_HITS = 100;
 
 /** Ripgrep-style workspace search over text files (fixed strings only). */
 export function searchWorkspace(runId: number, query: string): SearchHit[] {
-  const root = workspaceDir(runId);
+  return grepTree(workspaceDir(runId), query);
+}
+
+/** Same grep over any jailed root (folder browsing reuses it). */
+export function grepTree(root: string, query: string): SearchHit[] {
   const needle = query.trim();
   if (!needle || needle.length > 200) throw new Error('Send q (1-200 chars)');
   // Short flags only: BSD grep (macOS) lacks GNU's long options.

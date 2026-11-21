@@ -74,6 +74,18 @@ describe('folder fs api', () => {
     expect((await call('GET', `/api/fs/read?root=${encodeURIComponent(root)}&path=${encodeURIComponent('nope.ts')}`)).status).toBe(404);
   });
 
+  it('greps file contents under the root', async () => {
+    const res = await call('GET', `/api/fs/grep?root=${encodeURIComponent(root)}&q=${encodeURIComponent('export const a')}`);
+    expect(res.status).toBe(200);
+    expect(res.body.hits).toMatchObject([{ path: 'src/a.ts', line: 1 }]);
+    expect(res.body.hits[0].text).toContain('export const a');
+    const empty = await call('GET', `/api/fs/grep?root=${encodeURIComponent(root)}&q=${encodeURIComponent('zzz-no-match')}`);
+    expect(empty.status).toBe(200);
+    expect(empty.body.hits).toEqual([]);
+    expect((await call('GET', `/api/fs/grep?root=${encodeURIComponent(root)}&q=`)).status).toBe(400);
+    expect((await call('GET', `/api/fs/grep?root=/no/such/dir&q=x`)).status).toBe(400);
+  });
+
   it('jails escapes, absolute paths, and symlink exits', async () => {
     const esc = await call('GET', `/api/fs/read?root=${encodeURIComponent(root)}&path=${encodeURIComponent('../outside.ts')}`);
     expect(esc.status).toBe(400);

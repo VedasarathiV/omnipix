@@ -443,6 +443,24 @@ export function useRunFileContent(runId: number | null, path: string | null) {
   });
 }
 
+export interface FileHit {
+  path: string;
+  line: number;
+  text: string;
+}
+
+/** @-mention file hits: run workspace first, else the open folder. */
+export function useMentionFiles(runId: number | null, root: string | null, token: string) {
+  return useQuery<{ hits: FileHit[] }>({
+    queryKey: ['mention-files', runId, root, token],
+    queryFn: () => runId !== null
+      ? apiFetch(`/api/agents/runs/${runId}/search?q=${encodeURIComponent(token)}`)
+      : apiFetch(`/api/fs/grep?root=${encodeURIComponent(root ?? '')}&q=${encodeURIComponent(token)}`),
+    enabled: token.length >= 2 && (runId !== null || root !== null),
+    staleTime: 30000,
+  });
+}
+
 export function useRunFiles(runId: number | null) {
   return useQuery<{ files: WorkspaceEntry[] }>({
     queryKey: ['run-files', runId],
