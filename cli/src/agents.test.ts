@@ -67,6 +67,20 @@ describe('agent', () => {
     expect(JSON.parse(seenBody)).toMatchObject({ maxTokens: 5000 });
   });
 
+  it('passes the file agent through on run', async () => {
+    let seenBody = '';
+    stubFetch((path, init) => {
+      if (path === '/api/agents/runs' && init.method === 'POST') {
+        seenBody = String(init.body);
+        return Response.json(RUNNING, { status: 202 });
+      }
+      if (path === '/api/agents/runs/3') return Response.json(DONE);
+      throw new Error(`Unexpected request: ${path}`);
+    });
+    expect(await main(['agent', 'run', '--goal', 'Say hi', '--agent', 'reviewer'])).toBe(0);
+    expect(JSON.parse(seenBody)).toMatchObject({ agent: 'reviewer' });
+  });
+
   it('exits 1 when the run errors', async () => {
     stubFetch((path, init) => {
       if (path === '/api/agents/runs' && init.method === 'POST') return Response.json(RUNNING, { status: 202 });

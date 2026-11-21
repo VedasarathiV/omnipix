@@ -27,6 +27,7 @@ export interface AgentCommandOptions {
   tasksJson?: string;
   crewMode?: string;
   preset?: string;
+  agent?: string;
   inputsJson?: string;
   budget?: number;
   name?: string;
@@ -42,7 +43,7 @@ export interface AgentCommandOptions {
 export function agentHelp(): string {
   return [
     'Agent runs (dashboard authentication):',
-    '  omnipix agent run --goal "..." [--model ID] [--tools a,b] [--skills a,b] [--max-steps N] [--max-tokens N] [--compactions N] [--session ID] [--plan] [--json]',
+    '  omnipix agent run --goal "..." [--model ID] [--tools a,b] [--skills a,b] [--agent NAME] [--max-steps N] [--max-tokens N] [--compactions N] [--session ID] [--plan] [--json]',
     '  omnipix agent list',
     '  omnipix agent show <id>',
     '  omnipix agent search <words...>',
@@ -66,6 +67,7 @@ export function agentHelp(): string {
     'run follows the run to completion and exits 1 when the run errors or is',
     'stopped; a run parked for approval exits 2 so scripts can tell the states apart.',
     '--plan drafts a plan first and parks it for approval before any tool runs.',
+    '--agent applies a file-defined agent preset (agents/*.md); explicit flags win.',
     '--json prints NDJSON (one JSON object per line) for CI pipelines.',
     'group-create --wait follows the group to completion; exit 0 on done, 1 otherwise.',
   ].join('\n');
@@ -333,6 +335,7 @@ export async function runAgent(
       sessionId: options.sessionId,
       planMode: options.plan ?? false,
       compactions: options.compactions,
+      agent: options.agent,
     });
     const asJson = options.json === true;
     if (!asJson) write(`run ${created.id} (${created.status})`);

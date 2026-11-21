@@ -37,6 +37,24 @@ export function defaultSkillScanDirs(cwd = process.cwd(), home = homedir()): str
   return dirs;
 }
 
+/**
+ * Config dirs: the parents of the skill scan dirs. Command and agent
+ * markdown lives beside skills (`<config>/{command,commands}/**\/*.md`,
+ * `<config>/{agent,agents}/**\/*.md`), opencode layout parity.
+ */
+export function defaultConfigDirs(cwd = process.cwd(), home = homedir()): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const dir of defaultSkillScanDirs(cwd, home)) {
+    const parent = dirname(resolve(dir));
+    if (!seen.has(parent)) {
+      seen.add(parent);
+      out.push(parent);
+    }
+  }
+  return out;
+}
+
 export interface SkillsSyncResult {
   added: number;
   updated: number;

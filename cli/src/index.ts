@@ -58,6 +58,7 @@ interface CliOptions extends KeyCommandOptions {
   tasksJson?: string;
   crewMode?: string;
   preset?: string;
+  agent?: string;
   inputsJson?: string;
   budget?: number;
   value?: string;
@@ -154,7 +155,7 @@ export function parseArgs(argv: string[]): { command?: string; options: CliOptio
       || flag === '--transport' || flag === '--command' || flag === '--cmd-args'
       || flag === '--server-url' || flag === '--env' || flag === '--headers'
       || flag === '--tool' || flag === '--tool-args' || flag === '--as'
-      || flag === '--tasks' || flag === '--budget' || flag === '--mode' || flag === '--preset' || flag === '--inputs'
+      || flag === '--tasks' || flag === '--budget' || flag === '--mode' || flag === '--preset' || flag === '--agent' || flag === '--inputs'
       || flag === '--value' || flag === '--scope' || flag === '--project'
       || flag === '--importance' || flag === '--schedule'
       || flag === '--event'
@@ -245,6 +246,7 @@ export function parseArgs(argv: string[]): { command?: string; options: CliOptio
       else if (flag === '--tasks') options.tasksJson = value;
       else if (flag === '--mode') options.crewMode = value;
       else if (flag === '--preset') options.preset = value;
+      else if (flag === '--agent') options.agent = value;
       else if (flag === '--inputs') options.inputsJson = value;
       else if (flag === '--budget') {
         const budget = Number(value);
@@ -631,7 +633,7 @@ const COMMAND_FLAGS: Record<string, readonly string[]> = {
   launch: ['--url', '--api-key', '--model', '--profile', '--timeout'],
   'launch-codex': ['--url', '--api-key', '--model', '--timeout'],
   'setup-cursor': [],
-  agent: ['--url', '--token', '--timeout', '--goal', '--model', '--tools', '--skills', '--max-steps', '--max-tokens', '--compactions', '--session', '--auto', '--plan', '--tasks', '--budget', '--mode', '--preset', '--inputs', '--json', '--wait'],
+  agent: ['--url', '--token', '--timeout', '--goal', '--model', '--tools', '--skills', '--agent', '--max-steps', '--max-tokens', '--compactions', '--session', '--auto', '--plan', '--tasks', '--budget', '--mode', '--preset', '--inputs', '--json', '--wait'],
   skills: ['--url', '--token', '--timeout', '--name', '--description', '--instructions', '--bundle'],
   hooks: ['--url', '--token', '--timeout', '--name', '--event', '--tool', '--command'],
   scan: ['--url', '--token', '--timeout', '--schedule'],

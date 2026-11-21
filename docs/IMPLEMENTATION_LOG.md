@@ -155,3 +155,32 @@ backend reality check.
   (remote is the source of truth); bare `omnipix` already help+exit 0
   (verified). Still user-side: npm publish, omnipix.co hosting,
   Docker Hub push, GitHub release.
+
+## 2026-11-21 — Opencode parity Q1–Q3 + M2 (this session)
+
+- **Q1–Q3 skills pack**: 14 `skills/<name>/SKILL.md` ports from
+  500-ai-agents-projects (every agent.py body read; prompts rewritten
+  for OmniPix tools, no builtin collisions — `code-reviewer` port is
+  named `code-review-checklist`); `skills/README.md` install guide
+  (M1 auto-discovery: copy to `~/.config/omnipix/skills` or set
+  `OMNIPIX_SKILLS_DIR`, or `skills import-dir`); 3 pack-validation
+  tests (exact set, unique/valid names, no builtin shadow).
+- **M2 file commands + agents**: `services/commands.ts`
+  (`{command,commands}/**/*.md`, path-derived names, $1..$N with
+  greedy-last + $ARGUMENTS + append rules, optional agent/model
+  frontmatter) and `services/file-agents.ts`
+  (`{agent,agents}/**/*.md` presets: skills/tools/model/planMode);
+  resolved live from disk per run beside the M1 scan dirs (no DB,
+  no sync lag); POST /runs expands leading /commands then applies
+  presets under explicit fields (unknown agent → 400, preset typos
+  fail via existing validators); CLI `agent run --agent NAME`;
+  seed `commands/` (review, tests) + `agents/` (reviewer, coder) +
+  README + 3 pack tests. Deliberate v1 limits: no `!shell`
+  auto-exec (shell_exec + approvals instead), no session
+  agent-switching (delegate tool covers subagents).
+- UI research (opencode TUI bodies read): gap list U-G1..U-G6 —
+  workspace @file finder, in-prompt @skill/@agent chips, file
+  commands in / menu, palette fuzzy + skills/commands/settings
+  entries (placeholder over-promises today), slimmer entry,
+  discoverable keymap. Not built; queued as U1–U2.
+- Suites: server 6053, cli 246 — all green.

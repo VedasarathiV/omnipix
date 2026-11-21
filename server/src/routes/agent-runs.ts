@@ -20,6 +20,8 @@ import {
   subscribeRun,
 } from '../services/agent-runtime.js';
 import { createSession, getSession, touchSession } from '../services/agent-sessions.js';
+import { expandFileCommand } from '../services/commands.js';
+import { applyAgentPreset, resolveFileAgent, type AgentPreset } from '../services/file-agents.js';
 import { createCheckpoint, getCheckpoint, listCheckpoints, restoreCheckpoint } from '../services/checkpoints.js';
 import { diffWorkspace, execInWorkspace, listWorkspaceFiles, readWorkspaceFile, revertWorkspaceFile, searchWorkspace, workspaceGitBranch, workspaceGitCommit, workspaceGitStatus, writeWorkspaceFile } from '../services/run-workspace.js';
 import { listProposals, resolveProposal, searchRuns } from '../services/learning-loop.js';
@@ -38,6 +40,7 @@ const createRunSchema = z.object({
   projectKey: z.string().trim().min(1).max(128).optional(),
   planMode: z.boolean().optional(),
   compactions: z.number().int().min(0).max(AGENT_MAX_COMPACTIONS).optional(),
+  agent: z.string().trim().min(1).max(128).optional(),
 });
 
 // Unknown tool/skill names fail the whole request so a typo can't silently
@@ -71,11 +74,15 @@ export function unknownMcpTools(wanted: string[] | undefined): string | null {
 }
 
 agentRunsRouter.post('/runs', (req: Request, res: Response) => {
-  // Slash invocation first: leading /names attach skills, and the stored
+  // File commands first: a leading /command expands to prompt text (plus an
+  // optional agent/model preset). Unknown /names fall through to /skills,
+  // so the skill errors below keep working unchanged.
+  const rawGoal = typeof req.body?.goal === 'string' ? req.body.goal : '';
+  const expanded = expandFileCommand(rawGoal);
+  // Slash invocation next: leading /names attach skills, and the stored
   // goal is the stripped text (the trace reads clean; skills_json keeps
   // the record of what was invoked).
-  const rawGoal = typeof req.body?.goal === 'string' ? req.body.goal : '';
-  const { skills: slashSkills, goal: strippedGoal } = parseSlashSkills(rawGoal);
+  const { skills: slashSkills, goal: strippedGoal } = parseSlashSkills(expanded ? expanded.goal : rawGoal);
   if (slashSkills.length && !strippedGoal.trim()) {
     res.status(400).json({ error: { message: 'Goal text is required after /commands.' } });
     return;
@@ -85,8 +92,30 @@ agentRunsRouter.post('/runs', (req: Request, res: Response) => {
     res.status(400).json({ error: { message: parsed.error.issues.map(e => e.message).join(', ') } });
     return;
   }
-  const { goal, model, tools, maxSteps, maxTokens, sessionId, projectKey, planMode, compactions } = parsed.data;
-  const skills = [...new Set([...(parsed.data.skills ?? []), ...slashSkills])];
+  // File-agent presets: the body's agent wins over the command's agent,
+  // and explicit fields win over both. Unknown names fail like skills.
+  const preset: AgentPreset = {};
+  for (const source of [expanded?.agent, parsed.data.agent] as const) {
+    if (source === undefined) continue;
+    const found = resolveFileAgent(source);
+    if (!found) {
+      res.status(400).json({ error: { message: `Unknown agent: ${source}.` } });
+      return;
+    }
+    if (found.skills !== undefined) preset.skills = found.skills;
+    if (found.tools !== undefined) preset.tools = found.tools;
+    if (found.model !== undefined) preset.model = found.model;
+    if (found.planMode !== undefined) preset.planMode = found.planMode;
+  }
+  const merged = applyAgentPreset(preset, {
+    skills: parsed.data.skills,
+    tools: parsed.data.tools,
+    model: parsed.data.model ?? expanded?.model,
+    planMode: parsed.data.planMode,
+  });
+  const { goal, maxSteps, maxTokens, sessionId, projectKey, compactions } = parsed.data;
+  const { model, tools, planMode } = merged;
+  const skills = [...new Set([...(merged.skills ?? []), ...slashSkills])];
   if (sessionId !== undefined && !getSession(sessionId)) {
     res.status(400).json({ error: { message: `Unknown session: ${sessionId}.` } });
     return;
