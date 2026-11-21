@@ -205,3 +205,32 @@ backend reality check.
 - Web verdict (asked): agent runs browse via fetch_url (keyless,
   live-verified) + web_search (keyless Parallel/Keenable engines);
   Ask mode cannot (no tools by design); api-anything not needed.
+
+## 2026-11-21 — UI functionality audit B1–B6 (this session)
+
+8-agent read-only audit (chat/panels/settings/voice/shell/skills +
+critic + synthesis): core flows traced WORKING; 45 broken/stub
+verdicts kept with file:line evidence. Fixed in batches, each
+browser-verified:
+- **B1 shell**: TopBar panel toggles, Cmd+B/Cmd+Opt+B, web Cmd+N,
+  Cmd+M palette, palette hints, ws dropdown dismiss, StatusBar
+  clicks, FileTree filter collapse, chats copy, mobile collapse
+  hidden, #/settings modal redirect (14/14 probe).
+- **B2 settings truth**: theme persists (+system tracking, boot
+  script, favicon recolor), diff default shared, diagnostics
+  download, dictation select, dead web-search toggle removed,
+  voice-output auto-speak, desktop silent sign-in, single-card
+  onboarding CTA, model persist (8/8 probe; journey tour updated).
+- **B3 panels**: arguments-aware timeline titles, per-step status
+  from paired results, hook-tolerant pairing, Files tab tree
+  guide, preview URL+iframe, log filters+follow (6/6 probe).
+- **B4 authoring**: POST /api/skills/import-url (guarded),
+  skills/MCP/registry-env/webhooks CRUD UI, POST /api/commands +
+  /api/agents/presets authoring routes, Commands/Presets tabs,
+  AgentEditor preset picker, WelcomeModal checklist (14/14 probe).
+- **B5 voice**: auto model passthrough, ttsVoice input,
+  autoSpeakRuns toggle + announcements, sample stop, local
+  speech-server registration; FIXED patch-with-defaults wiping
+  siblings (voice + eval suites) with regression tests (6/6 probe).
+- **B6 folder open**: jailed /api/fs list/read/write, Files tab
+  workspace/folder switcher, folder edit+save (5/5 probe).

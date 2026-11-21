@@ -175,16 +175,20 @@ check('tour CTA opens usable keys page', step0 === 'Add a provider key'
 // Re-run the tour for the walk/back/finish path.
 await evaluate(ws, `localStorage.removeItem('studio:onboarded')`);
 await rpc(ws, 'Page.reload', {});
-await sleep(3000);
-await evaluate(ws, `[...document.querySelectorAll('[role="dialog"] button')].find(b => b.textContent === 'Skip tour').click()`);
+for (let i = 0; i < 15; i++) {
+  const found = await evaluate(ws, `[...document.querySelectorAll('[role="dialog"] button')].some(b => (b.textContent ?? '').trim() === 'Skip tour')`);
+  if (found) break;
+  await sleep(1000);
+}
+await evaluate(ws, `[...document.querySelectorAll('[role="dialog"] button')].find(b => (b.textContent ?? '').trim() === 'Skip tour')?.click()`);
 await sleep(700);
-check('tour skip dismisses + persists', await evaluate(ws, `document.querySelector('[role="dialog"]') === null && localStorage.getItem('studio:onboarded') === '1'`));
+check('tour skip dismisses + persists', await evaluate(ws, `document.querySelector('[role="dialog"][aria-label="Welcome to OmniPix"]') === null && localStorage.getItem('studio:onboarded') === '1'`));
 await evaluate(ws, `localStorage.removeItem('studio:onboarded')`);
 await rpc(ws, 'Page.reload', {});
 await sleep(3000);
 await evaluate(ws, `[...document.querySelectorAll('[role="dialog"] button')].find(b => b.textContent === 'Add a key').click()`);
 await sleep(700);
-check('tour CTA re-runnable after reset', await evaluate(ws, `document.querySelector('[role="dialog"]') === null`));
+check('tour CTA re-runnable after reset', await evaluate(ws, `document.querySelector('[role="dialog"][aria-label="Welcome to OmniPix"]') === null && localStorage.getItem('studio:onboarded') === '1'`));
 
 // ---------- 3. providers + models render live ----------
 await timed('rail-keys', () => railTo(ws, 'Provider keys'));
