@@ -1,21 +1,21 @@
-import { useCallback, useEffect, useState } from 'react';
-import type { ReactNode } from 'react';
-import { IconRail } from './IconRail';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
+import { useStudio } from '../state/store';
 import { TopBar } from './TopBar';
 import { StatusBar } from './StatusBar';
-import { useStudio } from '../state/store';
+import { IconRail } from './IconRail';
+import { BottomPanel, FileModal } from './BottomPanel';
 
 function stored(key: string, fallback: number): number {
   try {
-    const raw = window.localStorage.getItem(key);
-    const parsed = raw ? Number(raw) : NaN;
-    return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+    const raw = localStorage.getItem(key);
+    const n = raw === null ? NaN : Number(raw);
+    return Number.isFinite(n) ? n : fallback;
   } catch {
     return fallback;
   }
 }
 
-function Divider({ label, onResize, onReset, showAt }: { label: string; onResize: (e: React.MouseEvent) => void; onReset: () => void; showAt: 'md:flex' | 'lg:flex' }) {
+function VDivider({ label, onResize, onReset }: { label: string; onResize: (e: React.MouseEvent) => void; onReset: () => void }) {
   return (
     <div
       role="separator"
@@ -24,41 +24,69 @@ function Divider({ label, onResize, onReset, showAt }: { label: string; onResize
       title="Drag to resize · double-click to reset"
       onMouseDown={onResize}
       onDoubleClick={onReset}
-      className={`group hidden w-3 shrink-0 cursor-col-resize items-stretch justify-center ${showAt}`}
+      className="group hidden w-3 shrink-0 cursor-col-resize items-stretch justify-center md:flex"
     >
       <div className="mx-auto w-px bg-line transition-colors group-hover:w-0.5 group-hover:bg-accent" />
     </div>
   );
 }
 
-export function AppShell({ sidebar, main, right }: { sidebar: ReactNode; main: ReactNode; right: ReactNode }) {
-  const { sidebarOpen, rightOpen, rail } = useStudio();
-  // The inspector shows run state (changes, files, terminal, preview, logs):
-  // on library pages it is a permanent "No run selected" dead zone, so it
-  // only renders where runs live.
-  const showRight = rightOpen && (rail === 'chat' || rail === 'agents');
+function HDivider({ label, onResize, onReset }: { label: string; onResize: (e: React.MouseEvent) => void; onReset: () => void }) {
+  return (
+    <div
+      role="separator"
+      aria-orientation="horizontal"
+      aria-label={label}
+      title="Drag to resize · double-click to reset"
+      onMouseDown={onResize}
+      onDoubleClick={onReset}
+      className="group flex h-3 w-full shrink-0 cursor-row-resize items-center justify-center"
+    >
+      <div className="h-px w-full bg-line transition-colors group-hover:h-0.5 group-hover:bg-accent" />
+    </div>
+  );
+}
+
+export function AppShell({ sidebar, main }: { sidebar: ReactNode; main: ReactNode }) {
+  const { sidebarOpen, panelOpen, rail } = useStudio();
   const [sideWidth, setSideWidth] = useState(() => stored('studio:side-w', 260));
-  const [rightWidth, setRightWidth] = useState(() => stored('studio:right-w', 340));
+  const [panelHeight, setPanelHeight] = useState(() => stored('studio:panel-h', 260));
+  // The panel shows run state (changes, terminal, preview, logs): on library
+  // pages it would be dead weight, so it only renders where runs live.
+  const showPanel = panelOpen && (rail === 'chat' || rail === 'agents');
 
   useEffect(() => {
     try {
-      window.localStorage.setItem('studio:side-w', String(sideWidth));
-      window.localStorage.setItem('studio:right-w', String(rightWidth));
+      localStorage.setItem('studio:side-w', String(sideWidth));
+      localStorage.setItem('studio:panel-h', String(panelHeight));
     } catch {
-      // Private mode: sizes just don't persist.
+      // Private mode: preference just doesn't persist.
     }
-  }, [sideWidth, rightWidth]);
+  }, [sideWidth, panelHeight]);
 
-  const drag = useCallback((set: (w: number) => void, min: number, max: number, flip: boolean) => (e: React.MouseEvent) => {
+  const dragX = useCallback((set: (w: number) => void, min: number, max: number) => (e: React.MouseEvent) => {
     e.preventDefault();
     const startX = e.clientX;
-    // The divider sits between the panels: measure the aside it touches, not
-    // the row (measuring the row snapped every drag straight to the max).
-    const panel = flip ? e.currentTarget.nextElementSibling : e.currentTarget.previousElementSibling;
-    const startEl = panel?.getBoundingClientRect().width ?? (flip ? 340 : 260);
+    const panel = e.currentTarget.previousElementSibling;
+    const startEl = panel?.getBoundingClientRect().width ?? 260;
     function onMove(ev: MouseEvent) {
-      const delta = flip ? startX - ev.clientX : ev.clientX - startX;
-      set(Math.min(max, Math.max(min, startEl + delta)));
+      set(Math.min(max, Math.max(min, startEl + ev.clientX - startX)));
+    }
+    function onUp() {
+      window.removeEventListener('mousemove', onMove);
+      window.removeEventListener('mouseup', onUp);
+    }
+    window.addEventListener('mousemove', onMove);
+    window.addEventListener('mouseup', onUp);
+  }, []);
+
+  const dragY = useCallback((set: (h: number) => void, min: number, max: number) => (e: React.MouseEvent) => {
+    e.preventDefault();
+    const startY = e.clientY;
+    const panel = e.currentTarget.nextElementSibling;
+    const startEl = panel?.getBoundingClientRect().height ?? 260;
+    function onMove(ev: MouseEvent) {
+      set(Math.min(max, Math.max(min, startEl + startY - ev.clientY)));
     }
     function onUp() {
       window.removeEventListener('mousemove', onMove);
@@ -78,20 +106,23 @@ export function AppShell({ sidebar, main, right }: { sidebar: ReactNode; main: R
             <aside style={{ width: sideWidth }} className="hidden min-h-0 shrink-0 flex-col border-r border-line bg-base-1 md:flex">
               {sidebar}
             </aside>
-            <Divider label="Resize sidebar" showAt="md:flex" onResize={drag(setSideWidth, 200, 420, false)} onReset={() => setSideWidth(260)} />
+            <VDivider label="Resize sidebar" onResize={dragX(setSideWidth, 200, 420)} onReset={() => setSideWidth(260)} />
           </>
         )}
-        <main className="flex min-w-0 flex-1 flex-col bg-base-0">{main}</main>
-        {showRight && (
-          <>
-            <Divider label="Resize inspector" showAt="lg:flex" onResize={drag(setRightWidth, 300, 640, true)} onReset={() => setRightWidth(340)} />
-            <aside style={{ width: rightWidth }} className="hidden min-h-0 shrink-0 flex-col border-l border-line bg-base-1 lg:flex">
-              {right}
-            </aside>
-          </>
-        )}
+        <main className="flex min-w-0 flex-1 flex-col bg-base-0">
+          <div className="flex min-h-0 flex-1 flex-col">{main}</div>
+          {showPanel && (
+            <>
+              <HDivider label="Resize panel" onResize={dragY(setPanelHeight, 160, 520)} onReset={() => setPanelHeight(260)} />
+              <section style={{ height: panelHeight }} className="shrink-0 border-t border-line bg-base-1" aria-label="Panel">
+                <BottomPanel />
+              </section>
+            </>
+          )}
+        </main>
       </div>
       <StatusBar />
+      <FileModal />
     </div>
   );
 }

@@ -10,7 +10,7 @@ const RAIL_ORDER: RailId[] = ['chat', 'agents', 'skills', 'keys', 'models', 'eva
 export function useShortcuts() {
   const {
     setPaletteOpen, setSettingsOpen, setRail, setMode, mode, paletteOpen, settingsOpen,
-    activeRunId, pushToast, sidebarOpen, setSidebarOpen, rightOpen, setRightOpen,
+    activeRunId, pushToast, sidebarOpen, setSidebarOpen, panelOpen, setPanelOpen,
     setConversationId, setActiveRunId,
   } = useStudio();
   const queryClient = useQueryClient();
@@ -48,7 +48,7 @@ export function useShortcuts() {
       }
       if (mod && e.altKey && e.key.toLowerCase() === 'b') {
         e.preventDefault();
-        setRightOpen(!rightOpen);
+        setPanelOpen(!panelOpen);
         return;
       }
       if (typing) return;
@@ -81,5 +81,5 @@ export function useShortcuts() {
     }
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [paletteOpen, settingsOpen, mode, activeRunId, sidebarOpen, rightOpen, setPaletteOpen, setSettingsOpen, setRail, setMode, pushToast, queryClient, setSidebarOpen, setRightOpen, setConversationId, setActiveRunId]);
+  }, [paletteOpen, settingsOpen, mode, activeRunId, sidebarOpen, panelOpen, setPaletteOpen, setSettingsOpen, setRail, setMode, pushToast, queryClient, setSidebarOpen, setPanelOpen, setConversationId, setActiveRunId]);
 }

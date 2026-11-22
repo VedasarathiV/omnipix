@@ -140,7 +140,7 @@ export interface Notice {
   read: boolean;
 }
 
-export type RightTab = 'changes' | 'files' | 'terminal' | 'preview' | 'logs';
+export type PanelTab = 'changes' | 'terminal' | 'preview' | 'logs';
 export type RailId =
   | 'chat'
   | 'agents'

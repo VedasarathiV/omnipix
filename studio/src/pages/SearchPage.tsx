@@ -21,7 +21,7 @@ export function SearchPage() {
   const [runHits, setRunHits] = useState<RunHit[] | null>(null);
   const [fileHits, setFileHits] = useState<FileHit[] | null>(null);
   const { data: conversations = [] } = useConversations();
-  const { setConversationId, setActiveRunId, setRail, pushToast, activeRunId, setSelectedFile, setRightTab, setRightOpen } = useStudio();
+  const { setConversationId, setActiveRunId, setRail, pushToast, activeRunId, setSelectedFile, setFileViewerOpen } = useStudio();
 
   const q = query.toLowerCase().trim();
   const chatHits = q
@@ -127,7 +127,7 @@ export function SearchPage() {
           <button
             key={`${hit.path}:${hit.line}:${i}`}
             type="button"
-            onClick={() => { setSelectedFile(hit.path); setRightTab('files'); setRightOpen(true); setRail('chat'); }}
+            onClick={() => { setSelectedFile(hit.path); setFileViewerOpen(true); setRail('chat'); }}
             className="flex w-full items-start gap-2.5 rounded-xl border border-line bg-base-1 px-3.5 py-2.5 text-left outline-none hover:border-accent/50 focus-visible:ring-2 focus-visible:ring-accent"
           >
             <FileText className="mt-0.5 size-4 shrink-0 text-ink-dim" strokeWidth={1.5} />

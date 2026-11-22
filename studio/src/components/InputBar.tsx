@@ -710,12 +710,16 @@ export function InputBar() {
             onChange={e => setMode(e.target.value as typeof mode)}
             className="rounded-md bg-transparent px-1 py-1 text-xs text-ink-dim outline-none focus-visible:ring-2 focus-visible:ring-accent"
           >
-            <option value="ask">Ask</option>
-            <option value="plan">Plan</option>
-            <option value="agent">Agent</option>
-            <option value="image">Image</option>
-            <option value="video">Video</option>
-            <option value="audio">Audio</option>
+            <optgroup label="Chat">
+              <option value="ask">Ask</option>
+              <option value="plan">Plan</option>
+              <option value="agent">Agent</option>
+            </optgroup>
+            <optgroup label="Generate">
+              <option value="image">Image</option>
+              <option value="video">Video</option>
+              <option value="audio">Audio</option>
+            </optgroup>
           </select>
           <ModelPicker compact />
           <div className="flex-1" />

@@ -37,7 +37,7 @@ function buildTree(paths: string[]): Node {
 }
 
 export function FileTree() {
-  const { activeRunId, setAgentEditor, fileRoot, setFileRoot, setSelectedFile, setRightTab, setRightOpen } = useStudio();
+  const { activeRunId, setAgentEditor, fileRoot, setFileRoot, setSelectedFile, setFileViewerOpen } = useStudio();
   const [query, setQuery] = useState('');
   const [folderMode, setFolderMode] = useState(activeRunId === null);
   const [draftRoot, setDraftRoot] = useState(fileRoot ?? '');
@@ -48,14 +48,12 @@ export function FileTree() {
   function openRunFile(path: string) {
     setFileRoot(null);
     setSelectedFile(path);
-    setRightTab('files');
-    setRightOpen(true);
+    setFileViewerOpen(true);
   }
 
   function openFolderFile(path: string) {
     setSelectedFile(path);
-    setRightTab('files');
-    setRightOpen(true);
+    setFileViewerOpen(true);
   }
 
   function openRoot() {
@@ -153,7 +151,7 @@ export function FileTree() {
   return (
     <div className="flex h-full flex-col">
       {switcher}
-      <div className="border-b border-line p-2">
+      <div className="space-y-1.5 border-b border-line p-2">
         <div className="flex items-center gap-1.5 rounded-lg bg-base-0 px-2 py-1.5">
           <FolderOpen className="size-3.5 shrink-0 text-ink-faint" strokeWidth={1.5} />
           <input
@@ -164,15 +162,17 @@ export function FileTree() {
             aria-label="Folder root"
             spellCheck={false}
             autoComplete="off"
-            className="w-full bg-transparent font-mono text-xs outline-none placeholder:text-ink-faint"
+            className="w-full min-w-0 bg-transparent font-mono text-xs outline-none placeholder:text-ink-faint"
           />
+        </div>
+        <div className="flex gap-1.5">
           {canBrowse && (
             <button
               type="button"
               onClick={() => void browseRoot()}
               title="Choose a folder…"
               aria-label="Browse for folder"
-              className="shrink-0 rounded-md border border-line px-2 py-1 text-[11px] outline-none hover:bg-base-2 focus-visible:ring-2 focus-visible:ring-accent"
+              className="flex-1 rounded-lg border border-line px-2 py-1.5 text-xs outline-none hover:bg-base-2 focus-visible:ring-2 focus-visible:ring-accent"
             >
               Browse…
             </button>
@@ -180,7 +180,7 @@ export function FileTree() {
           <button
             type="button"
             onClick={openRoot}
-            className="shrink-0 rounded-md bg-accent px-2 py-1 text-[11px] font-semibold text-base-0 outline-none hover:opacity-90 focus-visible:ring-2 focus-visible:ring-accent"
+            className="flex-1 rounded-lg bg-accent px-2 py-1.5 text-xs font-semibold text-base-0 outline-none hover:opacity-90 focus-visible:ring-2 focus-visible:ring-accent"
           >
             Open
           </button>

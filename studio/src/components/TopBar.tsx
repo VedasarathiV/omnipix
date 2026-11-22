@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Check, ChevronDown, FolderGit2, GitBranch, PanelLeft, PanelRight } from 'lucide-react';
+import { Check, ChevronDown, FolderGit2, GitBranch, PanelBottom, PanelLeft } from 'lucide-react';
 import { StatusDot, statusLabel } from './StatusDot';
 import { ModelPicker } from './ModelPicker';
 import { useStudio } from '../state/store';
@@ -9,7 +9,7 @@ import { useGroups, useRun, useRuns } from '../lib/queries';
 import type { RunStatus } from '../types';
 
 export function TopBar() {
-  const { activeRunId, setActiveRunId, setConversationId, pushToast, streamingReply, sidebarOpen, setSidebarOpen, rightOpen, setRightOpen } = useStudio();
+  const { activeRunId, setActiveRunId, setConversationId, pushToast, streamingReply, sidebarOpen, setSidebarOpen, panelOpen, setPanelOpen } = useStudio();
   const queryClient = useQueryClient();
   const { data: runsData } = useRuns();
   const { data: groupsData } = useGroups();
@@ -64,13 +64,13 @@ export function TopBar() {
         </button>
         <button
           type="button"
-          title={rightOpen ? 'Hide inspector (⌘⌥B)' : 'Show inspector (⌘⌥B)'}
-          aria-label={rightOpen ? 'Hide inspector' : 'Show inspector'}
-          aria-pressed={rightOpen}
-          onClick={() => setRightOpen(!rightOpen)}
+          title={panelOpen ? 'Hide panel (⌘⌥B)' : 'Show panel (⌘⌥B)'}
+          aria-label={panelOpen ? 'Hide panel' : 'Show panel'}
+          aria-pressed={panelOpen}
+          onClick={() => setPanelOpen(!panelOpen)}
           className="rounded-md p-1.5 text-ink-dim outline-none hover:bg-base-2 hover:text-ink focus-visible:ring-2 focus-visible:ring-accent"
         >
-          <PanelRight className="size-4" strokeWidth={1.5} />
+          <PanelBottom className="size-4" strokeWidth={1.5} />
         </button>
       </div>
       <div className="titlebar-nodrag relative">

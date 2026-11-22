@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import type { AgentMode, RailId, RightTab } from '../types';
+import type { AgentMode, RailId, PanelTab } from '../types';
 
 
 export interface Toast {
@@ -16,10 +16,12 @@ interface StudioState {
   setMode: (m: AgentMode) => void;
   model: string;
   setModel: (m: string) => void;
-  rightOpen: boolean;
-  setRightOpen: (open: boolean) => void;
-  rightTab: RightTab;
-  setRightTab: (t: RightTab) => void;
+  panelOpen: boolean;
+  setPanelOpen: (open: boolean) => void;
+  panelTab: PanelTab;
+  setPanelTab: (t: PanelTab) => void;
+  fileViewerOpen: boolean;
+  setFileViewerOpen: (open: boolean) => void;
   sidebarOpen: boolean;
   setSidebarOpen: (open: boolean) => void;
   sidebarTab: 'chats' | 'files';
@@ -120,8 +122,9 @@ export function StudioProvider({ children }: { children: ReactNode }) {
       // Private mode: preference just doesn't persist.
     }
   }, []);
-  const [rightOpen, setRightOpen] = useState(true);
-  const [rightTab, setRightTab] = useState<RightTab>('changes');
+  const [panelOpen, setPanelOpen] = useState(true);
+  const [panelTab, setPanelTab] = useState<PanelTab>('changes');
+  const [fileViewerOpen, setFileViewerOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [sidebarTab, setSidebarTab] = useState<'chats' | 'files'>('chats');
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -182,7 +185,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<StudioState>(() => ({
     rail, setRail, mode, setMode, model, setModel,
-    rightOpen, setRightOpen, rightTab, setRightTab,
+    panelOpen, setPanelOpen, panelTab, setPanelTab, fileViewerOpen, setFileViewerOpen,
     sidebarOpen, setSidebarOpen, sidebarTab, setSidebarTab,
     paletteOpen, setPaletteOpen, settingsOpen, setSettingsOpen, welcomeOpen, setWelcomeOpen,
     acceptedFiles, acceptFile, acceptAll,
@@ -194,7 +197,7 @@ export function StudioProvider({ children }: { children: ReactNode }) {
     selectedFile, setSelectedFile,
     fileRoot, setFileRoot,
   }), [
-    rail, mode, model, rightOpen, rightTab, sidebarOpen, sidebarTab,
+    rail, mode, model, panelOpen, panelTab, fileViewerOpen, sidebarOpen, sidebarTab,
     paletteOpen, settingsOpen, welcomeOpen, acceptedFiles, toasts,
     agentEditor, conversationId, activeRunId, streamingReply, dictation, editDraft, selectedFile, fileRoot,
     acceptFile, acceptAll, pushToast, dismissToast,

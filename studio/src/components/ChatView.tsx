@@ -12,6 +12,35 @@ import { apiFetch } from '../lib/api';
 import { speakText, stopSpeech } from '../lib/voice';
 import { useApprovals, useConversation, useRun, useUnifiedKey, useVoiceSettings, type Conversation } from '../lib/queries';
 
+/** A model that answers with a bare tool call ({name, arguments}) instead of
+ *  prose gets pretty-printed JSON rather than a confusing one-liner. */
+function formatFinalAnswer(answer: string): string {
+  const trimmed = answer.trim();
+  if (trimmed.startsWith('{')) {
+    try {
+      const parsed = JSON.parse(trimmed) as { name?: unknown; arguments?: unknown };
+      if (typeof parsed.name === 'string') {
+        return `The model returned a tool call instead of a written answer:\n\n\`\`\`json\n${JSON.stringify(parsed, null, 2)}\n\`\`\``;
+      }
+    } catch {
+      // Not JSON — render as prose.
+    }
+  }
+  return answer;
+}
+
+function formatTs(value: string | null | undefined): string {
+  if (!value) return '';
+  const ms = /^\d+$/.test(value) ? Number(value) : Date.parse(value);
+  if (!Number.isFinite(ms)) return '';
+  const mins = Math.max(0, Math.round((Date.now() - ms) / 60000));
+  if (mins < 1) return 'just now';
+  if (mins < 60) return `${mins}m ago`;
+  const hours = Math.floor(mins / 60);
+  if (hours < 24) return `${hours}h ago`;
+  return new Date(ms).toLocaleDateString();
+}
+
 export function ChatView() {
   const { conversationId, activeRunId, streamingReply, setDictation, setConversationId, setEditDraft, pushToast } = useStudio();
   const queryClient = useQueryClient();
@@ -181,7 +210,7 @@ export function ChatView() {
         {run && planItems.length > 0 && <PlanCard key={run.id} steps={planItems} />}
         {run && <RunTimeline steps={run.steps} runStatus={run.status} runId={run.id} />}
         {run?.final_answer && (
-          <MessageBubble message={{ id: `final-${run.id}`, role: 'assistant', text: run.final_answer, ts: run.finished_at ?? '' }} />
+          <MessageBubble message={{ id: `final-${run.id}`, role: 'assistant', text: formatFinalAnswer(run.final_answer), ts: formatTs(run.finished_at), model: run.model ?? undefined }} />
         )}
         {messages.map((m, i) => (
           <MessageBubble

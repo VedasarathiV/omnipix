@@ -10,7 +10,7 @@ import { AppShell } from './components/AppShell';
 import { Sidebar } from './components/Sidebar';
 import { ChatView } from './components/ChatView';
 import { InputBar } from './components/InputBar';
-import { RightPanel } from './components/RightPanel';
+import { BottomPanel, FileModal } from './components/BottomPanel';
 import { CommandPalette } from './components/CommandPalette';
 import { SettingsModal } from './components/SettingsModal';
 import { AgentEditor } from './components/AgentEditor';
@@ -80,14 +80,15 @@ function Shell() {
         <div className="flex min-h-0 flex-1 flex-col">
           {pane === 'chat' && <MainPane />}
           {pane === 'files' && <Sidebar />}
-          {pane === 'changes' && <RightPanel />}
+          {pane === 'changes' && <BottomPanel />}
         </div>
         <MobileBar pane={pane} setPane={setPane} />
+        <FileModal />
       </div>
     );
   }
 
-  return <AppShell sidebar={<Sidebar />} main={<MainPane />} right={<RightPanel />} />;
+  return <AppShell sidebar={<Sidebar />} main={<MainPane />} />;
 }
 
 const queryClient = new QueryClient({
