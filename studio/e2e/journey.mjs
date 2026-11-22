@@ -315,9 +315,13 @@ if (!ollama) {
   execFileSync('sqlite3', [dbPath,
     `INSERT INTO doc_chunks (project_key, source_url, title, chunk_index, section, content) VALUES ('e2e','https://e2e.test/guide','E2E Guide',0,'Guide','The token lives in local storage.');`]);
   await railTo(ws, 'Chat');
-  // Mode resets to the Agent default on reload: choose Ask explicitly,
-  // exactly as a user would (this also covers the mode pill itself).
-  await evaluate(ws, `[...document.querySelectorAll('[role="tablist"] button')].find(b => b.textContent === 'Ask').click()`);
+  // Mode resets to the Agent default on reload: choose Ask explicitly via the
+  // composer's mode switch (the only mode switch), exactly as a user would.
+  await evaluate(ws, `(() => {
+    const sel = document.querySelector('select[aria-label="Input mode"]');
+    sel.value = 'ask';
+    sel.dispatchEvent(new Event('change', { bubbles: true }));
+  })()`);
   await sleep(500);
   // @-mention the doc, attach the chip, send with Ollama behind it.
   await evaluate(ws, `(() => {
@@ -342,7 +346,7 @@ if (!ollama) {
   await sleep(15000);
   const toastText = await evaluate(ws, `document.body.innerText.slice(-300)`);
   console.log('diag tail text:', JSON.stringify(toastText).slice(0, 200));
-  console.log('diag mode pill:', await evaluate(ws, `[...document.querySelectorAll('[role="tablist"] button')].map(b => b.textContent + (b.getAttribute('aria-selected') === 'true' ? '*' : '')).join('|')`));
+  console.log('diag mode select:', await evaluate(ws, `document.querySelector('select[aria-label="Input mode"]')?.value ?? 'none'`));
   console.log('diag runs:', JSON.stringify(api('GET', '/api/agents/runs?limit=5')).slice(0, 150));
   const convs = api('GET', '/api/conversations');
   console.log('diag conv count:', convs.length);
