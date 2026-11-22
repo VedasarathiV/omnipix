@@ -1,5 +1,8 @@
 import os from 'node:os';
 import { ipcMain, type BrowserWindow, type IpcMainInvokeEvent } from 'electron';
+// NOTE: the CLI pulls in jsonc-parser (UMD with a dynamic require), which
+// esbuild cannot inline — it must stay --external in build:main (with the
+// package in desktop dependencies) or every launch dies in the main process.
 import { getTool } from '../../cli/src/tools.js';
 import { applyGeneratedFiles } from '../../cli/src/config-files.js';
 import type { CatalogModel } from '../../cli/src/types.js';
