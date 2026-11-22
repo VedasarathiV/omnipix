@@ -52,9 +52,10 @@ export function AppShell({ sidebar, main, right }: { sidebar: ReactNode; main: R
   const drag = useCallback((set: (w: number) => void, min: number, max: number, flip: boolean) => (e: React.MouseEvent) => {
     e.preventDefault();
     const startX = e.clientX;
-    const startEl = flip
-      ? (e.currentTarget.parentElement?.getBoundingClientRect().width ?? 380)
-      : (e.currentTarget.parentElement?.previousElementSibling?.getBoundingClientRect().width ?? 256);
+    // The divider sits between the panels: measure the aside it touches, not
+    // the row (measuring the row snapped every drag straight to the max).
+    const panel = flip ? e.currentTarget.nextElementSibling : e.currentTarget.previousElementSibling;
+    const startEl = panel?.getBoundingClientRect().width ?? (flip ? 340 : 260);
     function onMove(ev: MouseEvent) {
       const delta = flip ? startX - ev.clientX : ev.clientX - startX;
       set(Math.min(max, Math.max(min, startEl + delta)));
