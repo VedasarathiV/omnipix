@@ -13,7 +13,7 @@
   "main": "build/main.mjs",
   "scripts": {
     "bundle:server": "node scripts/bundle-server.mjs",
-    "build:main": "esbuild src/main.ts --bundle --platform=node --format=esm --external:electron --external:electron-updater --external:./server.mjs --external:jsonc-parser --outfile=build/main.mjs",
+    "build:main": "esbuild src/main.ts --bundle --platform=node --format=esm --external:electron --external:electron-updater --external:./server.mjs --external:jsonc-parser --external:yaml --outfile=build/main.mjs",
     "build:preload": "esbuild src/preload.ts src/preload-popover.ts --bundle --platform=node --format=cjs --external:electron --outdir=build --out-extension:.js=.cjs",
     "build:all": "npm run bundle:server && npm run build:main && npm run build:preload",
     "stage:client": "node scripts/stage-client.mjs",
@@ -34,7 +34,8 @@
     "jsonc-parser": "^3.3.1",
     "officeparser": "^7.8.0",
     "pdf-parse": "^2.4.5",
-    "sharp": "^0.35.3"
+    "sharp": "^0.35.3",
+    "yaml": "^2.9.0"
   },
   "devDependencies": {
     "@electron/rebuild": "^3.7.0",
