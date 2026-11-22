@@ -69,7 +69,9 @@ export function useConversations() {
 
 export interface ConversationMessage {
   role: string;
-  content: string;
+  content: unknown;
+  isError?: boolean;
+  meta?: { latency?: number };
 }
 
 export interface Conversation {

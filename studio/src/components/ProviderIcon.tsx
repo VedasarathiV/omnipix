@@ -1,22 +1,27 @@
 import {
   siAnthropic,
+  siBaidu,
   siCloudflare,
   siDeepseek,
-  siGoogle,
+  siGooglegemini,
   siHuggingface,
+  siKimi,
   siMeta,
+  siMinimax,
   siMistralai,
   siNvidia,
   siOllama,
   siOpencode,
   siOpenrouter,
   siOvh,
+  siPerplexity,
+  siQwen,
 } from 'simple-icons';
 
 // Brand mark per provider. simple-icons covers the big names; everything else
 // gets a deterministic letter tile so unknown providers still look designed.
 const BRANDS: Record<string, { path: string; hex: string }> = {
-  google: siGoogle,
+  google: siGooglegemini,
   cloudflare: siCloudflare,
   huggingface: siHuggingface,
   nvidia: siNvidia,
@@ -28,6 +33,12 @@ const BRANDS: Record<string, { path: string; hex: string }> = {
   mistral: siMistralai,
   anthropic: siAnthropic,
   meta: siMeta,
+  qwen: siQwen,
+  moonshot: siKimi,
+  kimi: siKimi,
+  minimax: siMinimax,
+  baidu: siBaidu,
+  perplexity: siPerplexity,
 };
 
 function hueFor(platform: string): number {

@@ -40,6 +40,8 @@ export interface ChatMessage {
   ts: string;
   model?: string;
   media?: Array<{ kind: 'image' | 'video' | 'audio'; url: string }>;
+  isError?: boolean;
+  latencyMs?: number;
 }
 
 export interface Approval {

@@ -6,20 +6,10 @@ import { ModelPicker } from './ModelPicker';
 import { useStudio } from '../state/store';
 import { apiFetch } from '../lib/api';
 import { useGroups, useRun, useRuns } from '../lib/queries';
-import type { AgentMode } from '../types';
 import type { RunStatus } from '../types';
 
-const MODES: Array<{ id: AgentMode; label: string; hint: string }> = [
-  { id: 'ask', label: 'Ask', hint: 'Answer questions, no edits (⌘.)' },
-  { id: 'plan', label: 'Plan', hint: 'Draft a plan for approval first' },
-  { id: 'agent', label: 'Agent', hint: 'Edit, run, and verify autonomously' },
-  { id: 'image', label: 'Image', hint: 'Generate an image from a prompt' },
-  { id: 'video', label: 'Video', hint: 'Generate a video from a prompt' },
-  { id: 'audio', label: 'Audio', hint: 'Speak text as audio' },
-];
-
 export function TopBar() {
-  const { mode, setMode, activeRunId, setActiveRunId, setConversationId, pushToast, streamingReply, sidebarOpen, setSidebarOpen, rightOpen, setRightOpen } = useStudio();
+  const { activeRunId, setActiveRunId, setConversationId, pushToast, streamingReply, sidebarOpen, setSidebarOpen, rightOpen, setRightOpen } = useStudio();
   const queryClient = useQueryClient();
   const { data: runsData } = useRuns();
   const { data: groupsData } = useGroups();
@@ -142,24 +132,6 @@ export function TopBar() {
       </div>
 
       <div className="flex-1" />
-
-      <div className="titlebar-nodrag hidden items-center gap-1 rounded-lg bg-base-2 p-0.5 md:flex" role="tablist" aria-label="Agent mode">
-        {MODES.map(m => (
-          <button
-            key={m.id}
-            type="button"
-            role="tab"
-            aria-selected={mode === m.id}
-            title={m.hint}
-            onClick={() => setMode(m.id)}
-            className={`rounded-md px-2.5 py-1 text-xs font-medium outline-none focus-visible:ring-2 focus-visible:ring-accent ${
-              mode === m.id ? 'bg-base-0 text-ink shadow' : 'text-ink-dim hover:text-ink'
-            }`}
-          >
-            {m.label}
-          </button>
-        ))}
-      </div>
 
       <div className="titlebar-nodrag flex items-center">
         <ModelPicker />

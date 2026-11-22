@@ -15,10 +15,30 @@ function stored(key: string, fallback: number): number {
   }
 }
 
+function Divider({ label, onResize, onReset, showAt }: { label: string; onResize: (e: React.MouseEvent) => void; onReset: () => void; showAt: 'md:flex' | 'lg:flex' }) {
+  return (
+    <div
+      role="separator"
+      aria-orientation="vertical"
+      aria-label={label}
+      title="Drag to resize · double-click to reset"
+      onMouseDown={onResize}
+      onDoubleClick={onReset}
+      className={`group hidden w-3 shrink-0 cursor-col-resize items-stretch justify-center ${showAt}`}
+    >
+      <div className="mx-auto w-px bg-line transition-colors group-hover:w-0.5 group-hover:bg-accent" />
+    </div>
+  );
+}
+
 export function AppShell({ sidebar, main, right }: { sidebar: ReactNode; main: ReactNode; right: ReactNode }) {
-  const { sidebarOpen, rightOpen } = useStudio();
-  const [sideWidth, setSideWidth] = useState(() => stored('studio:side-w', 256));
-  const [rightWidth, setRightWidth] = useState(() => stored('studio:right-w', 380));
+  const { sidebarOpen, rightOpen, rail } = useStudio();
+  // The inspector shows run state (changes, files, terminal, preview, logs):
+  // on library pages it is a permanent "No run selected" dead zone, so it
+  // only renders where runs live.
+  const showRight = rightOpen && (rail === 'chat' || rail === 'agents');
+  const [sideWidth, setSideWidth] = useState(() => stored('studio:side-w', 260));
+  const [rightWidth, setRightWidth] = useState(() => stored('studio:right-w', 340));
 
   useEffect(() => {
     try {
@@ -57,25 +77,13 @@ export function AppShell({ sidebar, main, right }: { sidebar: ReactNode; main: R
             <aside style={{ width: sideWidth }} className="hidden min-h-0 shrink-0 flex-col border-r border-line bg-base-1 md:flex">
               {sidebar}
             </aside>
-            <div
-              role="separator"
-              aria-orientation="vertical"
-              aria-label="Resize sidebar"
-              onMouseDown={drag(setSideWidth, 200, 420, false)}
-              className="hidden w-1 shrink-0 cursor-col-resize hover:bg-accent/40 md:block"
-            />
+            <Divider label="Resize sidebar" showAt="md:flex" onResize={drag(setSideWidth, 200, 420, false)} onReset={() => setSideWidth(260)} />
           </>
         )}
         <main className="flex min-w-0 flex-1 flex-col bg-base-0">{main}</main>
-        {rightOpen && (
+        {showRight && (
           <>
-            <div
-              role="separator"
-              aria-orientation="vertical"
-              aria-label="Resize inspector"
-              onMouseDown={drag(setRightWidth, 300, 640, true)}
-              className="hidden w-1 shrink-0 cursor-col-resize hover:bg-accent/40 lg:block"
-            />
+            <Divider label="Resize inspector" showAt="lg:flex" onResize={drag(setRightWidth, 300, 640, true)} onReset={() => setRightWidth(340)} />
             <aside style={{ width: rightWidth }} className="hidden min-h-0 shrink-0 flex-col border-l border-line bg-base-1 lg:flex">
               {right}
             </aside>

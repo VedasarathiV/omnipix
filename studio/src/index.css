@@ -191,3 +191,32 @@ html.desktop .titlebar-drag .titlebar-nodrag,
 html.desktop .titlebar-nodrag {
   -webkit-app-region: no-drag;
 }
+
+/* Reply code blocks: highlight.js token colours (see lib/highlight.ts). */
+.code-highlight { color: inherit; }
+.code-highlight .hljs-comment, .code-highlight .hljs-quote { color: #6a737d; font-style: italic; }
+.code-highlight .hljs-keyword, .code-highlight .hljs-selector-tag, .code-highlight .hljs-built_in,
+.code-highlight .hljs-type, .code-highlight .hljs-literal, .code-highlight .hljs-doctag,
+.code-highlight .hljs-meta { color: #7c5cd6; }
+.code-highlight .hljs-tag, .code-highlight .hljs-name, .code-highlight .hljs-selector-class,
+.code-highlight .hljs-selector-id, .code-highlight .hljs-section, .code-highlight .hljs-title { color: #3b82f6; }
+.code-highlight .hljs-attr, .code-highlight .hljs-attribute, .code-highlight .hljs-variable,
+.code-highlight .hljs-template-variable, .code-highlight .hljs-property, .code-highlight .hljs-params { color: #b07a2a; }
+.code-highlight .hljs-string, .code-highlight .hljs-regexp, .code-highlight .hljs-addition,
+.code-highlight .hljs-template-tag, .code-highlight .hljs-symbol, .code-highlight .hljs-bullet { color: #1a9e54; }
+.code-highlight .hljs-number, .code-highlight .hljs-link { color: #c25e2a; }
+.code-highlight .hljs-deletion { color: #d64545; }
+.code-highlight .hljs-emphasis { font-style: italic; }
+.code-highlight .hljs-strong { font-weight: 600; }
+.dark .code-highlight .hljs-comment, .dark .code-highlight .hljs-quote { color: #8b949e; }
+.dark .code-highlight .hljs-keyword, .dark .code-highlight .hljs-selector-tag, .dark .code-highlight .hljs-built_in,
+.dark .code-highlight .hljs-type, .dark .code-highlight .hljs-literal, .dark .code-highlight .hljs-doctag,
+.dark .code-highlight .hljs-meta { color: #c792ea; }
+.dark .code-highlight .hljs-tag, .dark .code-highlight .hljs-name, .dark .code-highlight .hljs-selector-class,
+.dark .code-highlight .hljs-selector-id, .dark .code-highlight .hljs-section, .dark .code-highlight .hljs-title { color: #7aa2f7; }
+.dark .code-highlight .hljs-attr, .dark .code-highlight .hljs-attribute, .dark .code-highlight .hljs-variable,
+.dark .code-highlight .hljs-template-variable, .dark .code-highlight .hljs-property, .dark .code-highlight .hljs-params { color: #e0af68; }
+.dark .code-highlight .hljs-string, .dark .code-highlight .hljs-regexp, .dark .code-highlight .hljs-addition,
+.dark .code-highlight .hljs-template-tag, .dark .code-highlight .hljs-symbol, .dark .code-highlight .hljs-bullet { color: #9ece6a; }
+.dark .code-highlight .hljs-number, .dark .code-highlight .hljs-link { color: #ff9e64; }
+.dark .code-highlight .hljs-deletion { color: #f7768e; }

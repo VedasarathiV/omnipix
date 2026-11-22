@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { AtSign, FileText, Image as ImageIcon, LayoutTemplate, Mic, Paperclip, Send, Slash, X } from 'lucide-react';
+import { AtSign, FileText, Image as ImageIcon, LayoutTemplate, Mic, Paperclip, Send, Slash, Square, X } from 'lucide-react';
 import { useStudio } from '../state/store';
 import { ModelPicker } from './ModelPicker';
 import { apiFetch, streamChat } from '../lib/api';
@@ -121,6 +121,7 @@ export function InputBar() {
   const mentionFileHits = (mentionFileData?.hits ?? []).slice(0, 8);
   const boxRef = useRef<HTMLTextAreaElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const abortRef = useRef<AbortController | null>(null);
 
   function docFor(url: string): DocRow | undefined {
     return docs.find(d => d.source_url === url);
@@ -492,6 +493,10 @@ export function InputBar() {
       body: JSON.stringify({ messages }),
     });
     setStreamingReply('');
+    abortRef.current?.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+    const start = Date.now();
     try {
       const sampling = readSampling();
       const system = conversation?.systemPrompt?.trim();
@@ -502,12 +507,27 @@ export function InputBar() {
         ...(sampling.topP[0] ? { top_p: sampling.topP[1] } : {}),
         ...(sampling.maxTok[0] ? { max_tokens: sampling.maxTok[1] } : {}),
       };
-      const full = await streamChat('/v1/chat/completions', apiKey, payload, setStreamingReply);
+      const full = await streamChat('/v1/chat/completions', apiKey, payload, setStreamingReply, controller.signal);
       await apiFetch(`/api/conversations/${convId}`, {
         method: 'PUT',
-        body: JSON.stringify({ messages: [...messages, { role: 'assistant', content: full }] }),
+        body: JSON.stringify({ messages: [...messages, { role: 'assistant', content: full, meta: { latency: Date.now() - start } }] }),
       });
+    } catch (err) {
+      // Stopping is deliberate — keep the prompt, drop the stream, no noise.
+      if (err instanceof Error && err.name === 'AbortError') return;
+      // Failures persist as error turns (red bubble) instead of vanishing and
+      // leaving the user's message hanging with no reply.
+      const message = err instanceof Error ? err.message : 'Send failed';
+      try {
+        await apiFetch(`/api/conversations/${convId}`, {
+          method: 'PUT',
+          body: JSON.stringify({ messages: [...messages, { role: 'assistant', content: message, isError: true }] }),
+        });
+      } catch {
+        pushToast('error', message);
+      }
     } finally {
+      if (abortRef.current === controller) abortRef.current = null;
       setStreamingReply(null);
     }
     void queryClient.invalidateQueries({ queryKey: ['conversations'] });
@@ -707,15 +727,27 @@ export function InputBar() {
               <Mic className={`size-4 ${recorder ? 'text-bad' : ''}`} strokeWidth={1.5} />
             </IconBtn>
           </span>
-          <button
-            type="button"
-            aria-label="Send (Enter)"
-            onClick={() => void send()}
-            disabled={(!text.trim() && !image) || sending}
-            className="flex size-8 items-center justify-center rounded-lg bg-accent text-base-0 outline-none hover:opacity-90 focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-40"
-          >
-            <Send className="size-4" strokeWidth={1.5} />
-          </button>
+          {sending ? (
+            <button
+              type="button"
+              aria-label="Stop response"
+              title="Stop response"
+              onClick={() => abortRef.current?.abort()}
+              className="flex size-8 items-center justify-center rounded-lg bg-bad text-base-0 outline-none hover:opacity-90 focus-visible:ring-2 focus-visible:ring-accent"
+            >
+              <Square className="size-4" strokeWidth={1.5} />
+            </button>
+          ) : (
+            <button
+              type="button"
+              aria-label="Send (Enter)"
+              onClick={() => void send()}
+              disabled={!text.trim() && !image}
+              className="flex size-8 items-center justify-center rounded-lg bg-accent text-base-0 outline-none hover:opacity-90 focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-40"
+            >
+              <Send className="size-4" strokeWidth={1.5} />
+            </button>
+          )}
         </div>
       </div>
       <p className="mt-1.5 text-center text-[11px] text-ink-faint">Enter to send · Shift+Enter newline · ↑ prompt history</p>

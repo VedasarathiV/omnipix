@@ -193,6 +193,8 @@ export function ChatView() {
               ts: '',
               model: conversation?.model ?? undefined,
               media: extractMessageMedia(m.content),
+              isError: m.isError,
+              latencyMs: typeof m.meta?.latency === 'number' ? m.meta.latency : undefined,
             }}
             onDelete={() => void deleteMessage(i)}
             onBranch={m.role === 'user' ? undefined : () => void branchFrom(i)}
