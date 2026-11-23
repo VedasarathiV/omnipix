@@ -1,0 +1,171 @@
+import { beforeEach, describe, expect, it } from 'vitest';
+import { initDb, getDb } from '../../db/index.js';
+import { __testing, agentToolByName, AGENT_TOOLS } from '../../services/agent-tools.js';
+
+const { evaluateExpression, isBlockedFetchUrl } = __testing;
+
+describe('calculator', () => {
+  it.each([
+    ['2+2', 4],
+    ['(12 + 8) / 4', 5],
+    ['2 * 3 + 4 * 5', 26],
+    ['2^10', 1024],
+    ['-3 + 2', -1],
+    ['10 % 3', 1],
+    ['1.5 * 2', 3],
+  ])('%s = %s', (expr, expected) => {
+    expect(evaluateExpression(expr)).toBe(expected);
+  });
+
+  it.each(['', '2+', '(2', '2/0', 'a+1', 'process.exit()', '2**3'])('rejects %s', (expr) => {
+    expect(() => evaluateExpression(expr)).toThrow();
+  });
+});
+
+describe('fetch_url guards', () => {
+  it.each([
+    'http://localhost:8080/x',
+    'http://127.0.0.1/',
+    'http://10.0.0.5/',
+    'http://192.168.1.1/',
+    'http://172.16.0.9/',
+    'http://169.254.1.1/',
+    'http://[::1]/',
+    'file:///etc/passwd',
+    'not-a-url',
+  ])('blocks %s', (url) => {
+    expect(isBlockedFetchUrl(url)).toBeTruthy();
+  });
+
+  it.each(['https://example.com/page', 'http://example.com/'])('allows %s', (url) => {
+    expect(isBlockedFetchUrl(url)).toBeNull();
+  });
+});
+
+describe('tool registry', () => {
+  it('exposes the read, workspace, blackboard, memory, git, delegate, docs, browser, office, and firecrawl tools with function definitions', () => {
+    expect(AGENT_TOOLS.map(t => t.name).sort()).toEqual(
+      ['blackboard_read', 'blackboard_write', 'browser_click', 'browser_navigate', 'browser_screenshot', 'browser_snapshot', 'browser_type', 'calculator', 'current_time', 'delegate', 'edit_file', 'fetch_url', 'find_skill', 'firecrawl_crawl', 'firecrawl_extract', 'firecrawl_map', 'firecrawl_scrape', 'git_branch', 'git_clone', 'git_commit', 'git_diff', 'git_log', 'git_pr', 'git_status', 'grep_search', 'memory_read', 'memory_write', 'read_file', 'read_office', 'recall_docs', 'recall_memory', 'remember', 'repo_map', 'run_check', 'shell_exec', 'shell_kill', 'shell_poll', 'shell_start', 'todo_write', 'web_search', 'write_docx', 'write_file', 'write_pptx', 'write_xlsx'],
+    );
+    for (const tool of AGENT_TOOLS) {
+      expect(tool.definition.type).toBe('function');
+      expect(tool.definition.function.name).toBe(tool.name);
+    }
+  });
+
+  it('keeps the default tool list in sync with the registry', async () => {
+    // AGENT_TOOL_NAMES is the default toolset: a tool missing here is never
+    // offered. Both lists must name exactly the same tools.
+    const { AGENT_TOOL_NAMES } = await import('../../services/agent-runtime.js');
+    expect([...AGENT_TOOL_NAMES].sort()).toEqual(AGENT_TOOLS.map(t => t.name).sort());
+  });
+
+  it('looks tools up by name', () => {
+    expect(agentToolByName('calculator')).toBeDefined();
+    expect(agentToolByName('shell_exec')).toBeDefined();
+    expect(agentToolByName('nuke_everything')).toBeUndefined();
+  });
+});
+
+describe('recall_docs', () => {
+  beforeEach(() => {
+    process.env.ENCRYPTION_KEY = '0'.repeat(64);
+    initDb(':memory:');
+    getDb().prepare(
+      'INSERT INTO doc_chunks (project_key, source_url, title, chunk_index, section, content) VALUES (?, ?, ?, ?, ?, ?)',
+    ).run('acme', 'https://docs.test/g', 'Guide', 0, 'Auth', 'Use bearer tokens for auth.');
+  });
+
+  it('searches the run project by default', async () => {
+    getDb().prepare(
+      "INSERT INTO agent_runs (goal, model, tools_json, skills_json, status, project_key) VALUES ('g', 'auto', '[]', '[]', 'running', 'acme')",
+    ).run();
+    const tool = agentToolByName('recall_docs')!;
+    const out = await tool.execute({ query: 'bearer tokens' }, { runId: 1 });
+    expect(out).toContain('bearer tokens');
+    expect(out).toContain('Relevant docs');
+    expect(await tool.execute({ query: 'nothing matches this' }, { runId: 1 })).toContain('no doc chunks match');
+  });
+
+  it('needs an explicit project when the run has none', async () => {
+    getDb().prepare(
+      "INSERT INTO agent_runs (goal, model, tools_json, skills_json, status, project_key) VALUES ('g', 'auto', '[]', '[]', 'running', '')",
+    ).run();
+    const tool = agentToolByName('recall_docs')!;
+    expect(await tool.execute({ query: 'bearer' }, { runId: 1 })).toContain('no project');
+    expect(await tool.execute({ query: 'bearer', project: 'acme' }, { runId: 1 })).toContain('bearer tokens');
+  });
+});
+
+describe('todo_write', () => {
+  beforeEach(() => {
+    process.env.ENCRYPTION_KEY = '0'.repeat(64);
+    initDb(':memory:');
+    getDb().prepare(
+      "INSERT INTO agent_runs (goal, model, tools_json, skills_json, status, project_key) VALUES ('g', 'auto', '[]', '[]', 'running', '')",
+    ).run();
+  });
+
+  it('stores and renders the task list', async () => {
+    const tool = agentToolByName('todo_write')!;
+    const out = await tool.execute({ todos: [
+      { content: 'Explore', status: 'completed' },
+      { content: 'Implement', status: 'in_progress', activeForm: 'Implementing' },
+      { content: 'Verify', status: 'pending' },
+    ] }, { runId: 1 });
+    expect(out).toContain('[x] Explore');
+    expect(out).toContain('[>] Implement');
+    expect(out).toContain('[ ] Verify');
+    const row = getDb().prepare("SELECT value FROM agent_memory WHERE run_id = 1 AND key = '__todos'").get() as { value: string };
+    expect(JSON.parse(row.value)).toHaveLength(3);
+  });
+
+  it('validates shape and single in-progress', async () => {
+    const tool = agentToolByName('todo_write')!;
+    await expect(tool.execute({ todos: [] }, { runId: 1 })).rejects.toThrow('non-empty');
+    await expect(tool.execute({ todos: [{ content: 'x', status: 'done' }] }, { runId: 1 })).rejects.toThrow('status must be');
+    await expect(tool.execute({ todos: [
+      { content: 'a', status: 'in_progress' },
+      { content: 'b', status: 'in_progress' },
+    ] }, { runId: 1 })).rejects.toThrow('at most one');
+  });
+});
+
+describe('find_skill', () => {
+  beforeEach(() => {
+    process.env.ENCRYPTION_KEY = '0'.repeat(64);
+    initDb(':memory:');
+    getDb().prepare(
+      "INSERT INTO agent_runs (goal, model, tools_json, skills_json, status, project_key) VALUES ('g', 'auto', '[]', '[]', 'running', '')",
+    ).run();
+  });
+
+  it('searches the library by keyword with full text on demand', async () => {
+    const tool = agentToolByName('find_skill')!;
+    const names = await tool.execute({ query: 'penetration' }, { runId: 1 });
+    expect(names).toContain('penetration-tester');
+    expect(names).not.toContain('## ');
+    const full = await tool.execute({ query: 'penetration', full: true }, { runId: 1 });
+    expect(full.length).toBeGreaterThan(names.length);
+    expect(await tool.execute({ query: 'zzz-no-such-skill' }, { runId: 1 })).toContain('no skills match');
+  });
+});
+
+describe('remember', () => {
+  beforeEach(() => {
+    process.env.ENCRYPTION_KEY = '0'.repeat(64);
+    initDb(':memory:');
+    getDb().prepare(
+      "INSERT INTO agent_runs (goal, model, tools_json, skills_json, status, project_key) VALUES ('g', 'auto', '[]', '[]', 'running', '')",
+    ).run();
+  });
+
+  it('quarantines durable writes as proposals instead of writing direct', async () => {
+    const tool = agentToolByName('remember')!;
+    const out = await tool.execute({ key: 'commit-style', value: 'Short subjects.' }, { runId: 1 });
+    expect(out).toContain('queued for operator review');
+    expect(getDb().prepare('SELECT COUNT(*) AS n FROM memories').get()).toMatchObject({ n: 0 });
+    const proposal = getDb().prepare("SELECT * FROM learning_proposals WHERE kind = 'memory'").get() as { title: string; status: string };
+    expect(proposal).toMatchObject({ title: 'commit-style', status: 'pending' });
+  });
+});

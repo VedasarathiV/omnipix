@@ -1,0 +1,249 @@
+import { useRecentAgents } from './useRecentAgents'
+import { DesktopAgentsPage, desktopAgentBridge } from './DesktopAgentsPage'
+import { useState } from 'react'
+import { useQuery } from '@tanstack/react-query'
+import { useSearchParams } from 'react-router-dom'
+import { CheckCircle2, ExternalLink, Globe } from 'lucide-react'
+import { apiFetch } from '@/lib/api'
+import { useI18n } from '@/i18n'
+import { PageHeader } from '@/components/page-header'
+import { CopyButton } from '@/components/copy-button'
+import { AgentIcon } from '@/components/agent-icons'
+import { AgentRunsPanel } from '@/components/agents/runs-panel'
+import { HooksPanel } from '@/components/agents/hooks-panel'
+import { SkillsPanel } from '@/components/agents/skills-panel'
+import { CommandsPanel } from '@/components/agents/commands-panel'
+import { ApprovalsPanel } from '@/components/agents/approvals-panel'
+import { McpPanel } from '@/components/agents/mcp-panel'
+import { GroupsPanel } from '@/components/agents/groups-panel'
+import { AutomationsPanel, DocsPanel, MemoryPanel, ScansPanel } from '@/components/agents/assistant-panels'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { SegmentedControl } from '@/components/ui/segmented-control'
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card'
+import toolCatalog from '@/data/agent-tools.json'
+
+interface KeyResponse {
+  apiKey: string
+}
+
+// Agents whose built-in web search tool the gateway serves from the search
+// keys (#1174): Claude Code's WebSearch and Codex's web_search.
+const WEB_SEARCH_TOOL_KEYS: Record<string, string> = {
+  claude: 'search.agentsBadgeClaude',
+  codex: 'search.agentsBadgeCodex',
+}
+
+function masked(value: string): string {
+  if (value.length < 12) return '••••••••'
+  return `${value.slice(0, 8)}${'•'.repeat(12)}${value.slice(-4)}`
+}
+
+type AgentsTab = 'connect' | 'runs' | 'hooks' | 'skills' | 'commands' | 'approvals' | 'mcp' | 'groups' | 'assistant'
+
+export default function AgentsPage() {
+  const { t } = useI18n()
+  const [searchParams] = useSearchParams()
+  const [revealKey, setRevealKey] = useState(false)
+  const [tab, setTab] = useState<AgentsTab>('connect')
+
+  // Deep links (?tab=runs) from the palette and chat select the tab, applied
+  // during render: the previous-link state applies each link exactly once,
+  // including Back-button navigations, with no extra commit.
+  const [consumedTabLink, setConsumedTabLink] = useState<string | null>(null)
+  const linkedTab = searchParams.get('tab')
+  if (linkedTab !== consumedTabLink) {
+    setConsumedTabLink(linkedTab)
+    if (linkedTab === 'connect' || linkedTab === 'runs' || linkedTab === 'hooks' || linkedTab === 'skills' || linkedTab === 'commands' || linkedTab === 'approvals' || linkedTab === 'mcp' || linkedTab === 'groups' || linkedTab === 'assistant') {
+      setTab(linkedTab)
+    }
+  }
+  const bridge = desktopAgentBridge()
+  // The desktop connect screen carries its own header; every other tab (and
+  // the web connect catalog) shares the shell header below.
+  const bareConnect = tab === 'connect' && bridge !== null
+
+  return (
+    <div>
+      {!bareConnect && (
+        <PageHeader
+          title={t(`agents.header${tab[0].toUpperCase()}${tab.slice(1)}Title`)}
+          description={t(`agents.header${tab[0].toUpperCase()}${tab.slice(1)}Desc`)}
+          actions={
+            tab === 'connect' ? (
+              <Button variant="outline" size="sm" onClick={() => setRevealKey(value => !value)}>
+                {revealKey ? t('common.hide') : t('common.show')} {t('agents.apiKey')}
+              </Button>
+            ) : undefined
+          }
+        />
+      )}
+
+      <div className="mb-6">
+        <SegmentedControl
+          value={tab}
+          onValueChange={setTab}
+          ariaLabel={t('agents.title')}
+          options={[
+            { value: 'connect', label: t('agents.tabConnect') },
+            { value: 'runs', label: t('agents.tabRuns') },
+            { value: 'hooks', label: t('agents.tabHooks') },
+            { value: 'skills', label: t('agents.tabSkills') },
+            { value: 'commands', label: t('agents.tabCommands') },
+            { value: 'approvals', label: t('agents.tabApprovals') },
+            { value: 'mcp', label: t('agents.tabMcp') },
+            { value: 'groups', label: t('agents.tabGroups') },
+            { value: 'assistant', label: t('agents.tabAssistant') },
+          ]}
+        />
+      </div>
+
+      {tab === 'runs' && <AgentRunsPanel />}
+      {tab === 'hooks' && <HooksPanel />}
+      {tab === 'skills' && <SkillsPanel />}
+      {tab === 'commands' && <CommandsPanel />}
+      {tab === 'approvals' && <ApprovalsPanel />}
+      {tab === 'mcp' && <McpPanel />}
+      {tab === 'groups' && <GroupsPanel />}
+      {tab === 'assistant' && (
+        <div className="flex flex-col gap-4">
+          <MemoryPanel />
+          <DocsPanel />
+          <AutomationsPanel />
+          <ScansPanel />
+        </div>
+      )}
+
+      {tab === 'connect' && (
+        bridge ? <DesktopAgentsPage bridge={bridge} /> : <WebAgentsPage revealKey={revealKey} />
+      )}
+    </div>
+  )
+}
+
+function WebAgentsPage({ revealKey }: { revealKey: boolean }) {
+  const { t } = useI18n()
+  const { data: keyData } = useQuery<KeyResponse>({
+    queryKey: ['api-key'],
+    queryFn: () => apiFetch('/api/settings/api-key'),
+  })
+  const seen = useRecentAgents()
+  const origin = import.meta.env.DEV
+    ? `http://${window.location.hostname}:${__SERVER_PORT__}`
+    : window.location.origin
+  const shownKey = keyData?.apiKey
+    ? (revealKey ? keyData.apiKey : masked(keyData.apiKey))
+    : '…'
+
+  return (
+    <div>
+      <section className="mb-6 rounded-3xl border bg-card p-5">
+        <h2 className="text-sm font-medium">{t('agents.quickstartTitle')}</h2>
+        <p className="mt-0.5 max-w-prose text-xs text-muted-foreground">{t('agents.quickstart')}</p>
+        <div className="mt-3 flex items-center gap-2 rounded-xl bg-muted/50 px-3 py-2">
+          <code className="min-w-0 flex-1 overflow-x-auto whitespace-nowrap font-mono text-xs">
+            npx omnipix setup-claude --url {origin}
+          </code>
+          <CopyButton
+            text={`npx omnipix setup-claude --url ${origin}`}
+            className="size-7 shrink-0"
+            label={t('common.copy')}
+          />
+        </div>
+        <div className="mt-2 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-muted-foreground">
+          <span>{t('agents.currentKey')}</span>
+          <code className="font-mono break-all">{shownKey}</code>
+        </div>
+      </section>
+
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        {toolCatalog.map(tool => {
+          const traffic = seen(tool.id)
+          const command = `npx omnipix ${tool.command} --url ${origin}`
+          const endpoint = tool.baseUrlSupport === 'root' ? origin : `${origin}/v1`
+          // The copied snippet is pasted into config files — keep it
+          // locale-independent.
+          const realConnection = `BASE_URL=${endpoint}\nAPI_KEY=${keyData?.apiKey ?? '<unified-key>'}`
+          const shownConnection = `BASE_URL=${endpoint}\nAPI_KEY=${shownKey}`
+          // What the tool actually is, in one plain sentence. `t` echoes the
+          // key back when neither the active locale nor English defines it, so
+          // a catalog entry added ahead of its copy falls back to the wire
+          // details rather than printing a dotted key at the reader.
+          const descriptionKey = `agents.descriptions.${tool.id}`
+          const description = t(descriptionKey)
+          return (
+            <Card key={tool.id} size="sm">
+              <CardHeader>
+                <AgentIcon id={tool.id} name={tool.name} className="mb-1.5" />
+                <CardTitle>{tool.name}</CardTitle>
+                <CardDescription className="text-xs">
+                  {description === descriptionKey
+                    ? `${tool.protocol} · ${tool.baseUrlSupport}`
+                    : description}
+                </CardDescription>
+                <CardAction>
+                  {traffic && (
+                    <Badge variant="outline" className="border-emerald-500/30 text-emerald-600 dark:text-emerald-400">
+                      <CheckCircle2 />
+                      {t('agents.seenRecently')}
+                    </Badge>
+                  )}
+                </CardAction>
+              </CardHeader>
+              <CardContent className="flex flex-1 flex-col gap-4">
+                {WEB_SEARCH_TOOL_KEYS[tool.id] && (
+                  <Badge
+                    variant="outline"
+                    className="h-auto w-fit whitespace-normal border-sky-600/30 py-0.5 text-[11px] text-sky-700 dark:text-sky-300"
+                  >
+                    <Globe />
+                    {t(WEB_SEARCH_TOOL_KEYS[tool.id])}
+                  </Badge>
+                )}
+                <div>
+                  <p className="text-xs font-medium">{t('agents.setupLabel')}</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    {tool.configType === 'guide' ? t('agents.setupGuideHint') : t('agents.setupHint')}
+                  </p>
+                  <div className="mt-2 flex items-center gap-2 rounded-xl bg-muted/50 px-3 py-2">
+                    <code className="min-w-0 flex-1 truncate font-mono text-[11px]">{command}</code>
+                    <CopyButton text={command} className="size-7 shrink-0" label={t('common.copy')} />
+                  </div>
+                </div>
+                <div>
+                  <p className="text-xs font-medium">{t('agents.manualLabel')}</p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">{t('agents.manualHint')}</p>
+                  <div className="mt-2 flex items-start gap-2 rounded-xl border px-3 py-2">
+                    <code className="min-w-0 flex-1 whitespace-pre-wrap break-all font-mono text-[11px]">
+                      {shownConnection}
+                    </code>
+                    <CopyButton
+                      text={realConnection}
+                      className="size-7 shrink-0"
+                      label={t('common.copy')}
+                    />
+                  </div>
+                </div>
+                <a
+                  href={tool.docsUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-auto inline-flex w-fit items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+                >
+                  {t('agents.documentation')} <ExternalLink className="size-3" />
+                </a>
+              </CardContent>
+            </Card>
+          )
+        })}
+      </div>
+    </div>
+  )
+}

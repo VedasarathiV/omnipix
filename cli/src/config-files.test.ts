@@ -1,0 +1,617 @@
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { parse } from 'jsonc-parser';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { applyGeneratedFile, applyGeneratedFiles, renderFile } from './config-files.js';
+
+const temporary: string[] = [];
+
+afterEach(() => {
+  for (const directory of temporary.splice(0)) {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+describe('safe config writes', () => {
+  it('writes a fresh env file without a leading blank line', () => {
+    const rendered = renderFile({ path: '/unused', format: 'env', content: 'OMNIPIX_API_KEY=k\n' }, '');
+    expect(rendered).toBe('OMNIPIX_API_KEY=k\n');
+    expect(renderFile({ path: '/unused', format: 'env', content: 'OMNIPIX_API_KEY=k\n' }, rendered)).toBe(rendered);
+  });
+
+  it('appends a new env key without leaving a blank line before it', () => {
+    const merged = renderFile(
+      { path: '/unused/.env', format: 'env', content: 'OMNIPIX_API_KEY=k\n' },
+      'DEEPSEEK_API_KEY=sk-keep\n',
+    );
+    expect(merged).toBe('DEEPSEEK_API_KEY=sk-keep\nOMNIPIX_API_KEY=k\n');
+  });
+
+  it('merges keyed JSON arrays per owner instead of replacing them (ZCode)', () => {
+    const existing = JSON.stringify({
+      schemaVersion: 1,
+      config: {
+        providerConfigRules: { providerRules: [
+          { providerId: 'local', providerName: 'Mine' },
+          { providerId: 'omnipix', providerName: 'Old' },
+        ] },
+        modelConfigRules: {
+          providerModelRules: [{ providerId: 'local', modelId: 'm' }, { providerId: 'omnipix', modelId: 'gone' }],
+          manualProviderModelRules: [{ providerId: 'omnipix', modelId: 'fast' }, { providerId: 'local', modelId: 'x' }],
+        },
+        providerOrder: ['local', 'omnipix'],
+      },
+    }, null, 2);
+    const file = {
+      path: '/unused/provider_config.json',
+      format: 'json' as const,
+      arrays: {
+        'config.providerConfigRules.providerRules': { ownedBy: { providerId: 'omnipix' } },
+        'config.modelConfigRules.providerModelRules': { ownedBy: { providerId: 'omnipix' } },
+        'config.modelConfigRules.manualProviderModelRules': { ownedBy: { providerId: 'omnipix' } },
+        'config.providerOrder': { union: true as const },
+      },
+      value: {
+        config: {
+          providerConfigRules: { providerRules: [{ providerId: 'omnipix', providerName: 'OmniPix' }] },
+          modelConfigRules: {
+            providerModelRules: [{ providerId: 'omnipix', modelId: 'fast' }],
+            manualProviderModelRules: [],
+          },
+          providerOrder: ['omnipix'],
+        },
+      },
+    };
+    const once = renderFile(file, existing);
+    const merged = parse(once).config;
+    expect(merged.providerConfigRules.providerRules).toEqual([
+      { providerId: 'local', providerName: 'Mine' },
+      { providerId: 'omnipix', providerName: 'OmniPix' },
+    ]);
+    expect(merged.modelConfigRules.providerModelRules).toEqual([
+      { providerId: 'local', modelId: 'm' },
+      { providerId: 'omnipix', modelId: 'fast' },
+    ]);
+    expect(merged.modelConfigRules.manualProviderModelRules).toEqual([{ providerId: 'local', modelId: 'x' }]);
+    expect(merged.providerOrder).toEqual(['local', 'omnipix']);
+    expect(renderFile(file, once)).toBe(once);
+  });
+
+  it('renders a fresh Continue config idempotently', () => {
+    const generated = [
+      '# omnipix:start',
+      'name: OmniPix',
+      'version: 1.0.0',
+      'schema: v1',
+      'models:',
+      '  - name: OmniPix',
+      '    provider: openai',
+      '    model: coder',
+      '# omnipix:end',
+      '',
+    ].join('\n');
+    const first = renderFile({
+      path: '/unused',
+      format: 'yaml',
+      content: generated,
+    });
+    const second = renderFile({
+      path: '/unused',
+      format: 'yaml',
+      content: generated,
+    }, first);
+    expect(second).toBe(first);
+    expect(first).not.toContain('omnipix:start');
+    expect(first.match(/^models:$/gm)).toHaveLength(1);
+  });
+
+  it('deep-merges JSONC and retains inline and leading comments', () => {
+    const existing = [
+      '// user configuration',
+      '{',
+      '  // keep the chosen theme',
+      '  "theme": "dark",',
+      '  "provider": {',
+      '    /* keep the unrelated provider */',
+      '    "other": true,',
+      '  },',
+      '}',
+      '',
+    ].join('\n');
+    const rendered = renderFile({
+      path: '/unused',
+      format: 'json',
+      value: { provider: { omnipix: true } },
+    }, existing);
+    expect(rendered).toContain('// user configuration');
+    expect(rendered).toContain('// keep the chosen theme');
+    expect(rendered).toContain('/* keep the unrelated provider */');
+    expect(parse(rendered)).toEqual({
+      theme: 'dark',
+      provider: { other: true, omnipix: true },
+    });
+  });
+
+  it('merges Continue into an existing config without replacing other models', () => {
+    const existing = [
+      '# personal config',
+      'name: Personal',
+      'version: 2.0.0',
+      'schema: v1',
+      'models:',
+      '  - name: Existing',
+      '    provider: ollama',
+      '    model: qwen',
+      'rules:',
+      '  - Keep this rule',
+      '',
+    ].join('\n');
+    const generated = [
+      '# omnipix:start',
+      'name: OmniPix',
+      'version: 1.0.0',
+      'schema: v1',
+      'models:',
+      '  - name: OmniPix',
+      '    provider: openai',
+      '    model: coder',
+      '# omnipix:end',
+      '',
+    ].join('\n');
+    const first = renderFile({
+      path: '/unused',
+      format: 'yaml',
+      content: generated,
+    }, existing);
+    const second = renderFile({
+      path: '/unused',
+      format: 'yaml',
+      content: generated,
+    }, first);
+    expect(second).toBe(first);
+    expect(first).toContain('# personal config');
+    expect(first).toContain('name: Personal');
+    expect(first).toContain('  - name: Existing');
+    expect(first).toContain('  - name: OmniPix');
+    expect(first).toContain('rules:\n  - Keep this rule');
+    expect(first.match(/^models:$/gm)).toHaveLength(1);
+  });
+
+  it('upgrades a previously marked Continue block without leaving duplicate keys', () => {
+    const existing = [
+      'name: Personal',
+      'version: 2.0.0',
+      'schema: v1',
+      'models:',
+      '  - name: Existing',
+      '    provider: ollama',
+      '    model: qwen',
+      '# omnipix:start',
+      'models:',
+      '  - name: OmniPix',
+      '    provider: openai',
+      '    model: old',
+      '# omnipix:end',
+      '',
+    ].join('\n');
+    const generated = [
+      '# omnipix:start',
+      'name: OmniPix',
+      'version: 1.0.0',
+      'schema: v1',
+      'models:',
+      '  - name: OmniPix',
+      '    provider: openai',
+      '    model: current',
+      '# omnipix:end',
+      '',
+    ].join('\n');
+    const rendered = renderFile({
+      path: '/unused',
+      format: 'yaml',
+      content: generated,
+    }, existing);
+    expect(rendered.match(/^name:/gm)).toHaveLength(1);
+    expect(rendered.match(/^version:/gm)).toHaveLength(1);
+    expect(rendered.match(/^schema:/gm)).toHaveLength(1);
+    expect(rendered.match(/^models:/gm)).toHaveLength(1);
+    expect(rendered).toContain('  - name: Existing');
+    expect(rendered).toContain('    model: current');
+    expect(rendered).not.toContain('    model: old');
+  });
+
+  it('replaces generated YAML scalar keys without creating duplicates', () => {
+    const existing = '# user config\nGOOSE_PROVIDER: old\nGOOSE_MODEL: old\nkeep: true\n';
+    const generated = [
+      '# omnipix:start',
+      'GOOSE_PROVIDER: omnipix',
+      'GOOSE_MODEL: coder',
+      '# omnipix:end',
+      '',
+    ].join('\n');
+    const first = renderFile({
+      path: '/unused',
+      format: 'yaml',
+      content: generated,
+    }, existing);
+    const second = renderFile({
+      path: '/unused',
+      format: 'yaml',
+      content: generated,
+    }, first);
+    expect(second).toBe(first);
+    expect(first).toContain('# user config');
+    expect(first).toContain('keep: true');
+    expect(first.match(/^GOOSE_PROVIDER:/gm)).toHaveLength(1);
+    expect(first.match(/^GOOSE_MODEL:/gm)).toHaveLength(1);
+  });
+
+  it('deep-merges structured YAML and retains sibling routes and comments', () => {
+    // DeepSeek Harness keeps every provider under one `llm-pi-ai.providers`
+    // dict. The marked-block YAML merge removes whole top-level keys it
+    // re-emits, which here would delete the user's other providers; the
+    // structured merge must touch only the path it sets.
+    const existing = [
+      '# my settings',
+      'llm-pi-ai:',
+      '  providers:',
+      '    anthropic:',
+      '      # keep me',
+      '      apiKeyEnv: ANTHROPIC_API_KEY',
+      '    omnipix:',
+      '      baseURL: http://old:1/v1',
+      '      models:',
+      '        - id: stale',
+      'agent-default-model:',
+      '  provider: anthropic',
+      '  model: claude-sonnet-4-5',
+      '  reasoningEffort: high',
+      'other: { a: 1 }',
+      '',
+    ].join('\n');
+    const file = {
+      path: '/tmp/settings.yaml',
+      format: 'yaml' as const,
+      value: {
+        'llm-pi-ai': {
+          providers: {
+            omnipix: {
+              baseURL: 'http://localhost:3001/v1',
+              models: [{ id: 'auto' }],
+            },
+          },
+        },
+        'agent-default-model': {
+          provider: 'omnipix',
+          model: 'auto',
+          reasoningEffort: undefined,
+        },
+      },
+    };
+    const once = renderFile(file, existing);
+    expect(once).toContain('# my settings');
+    expect(once).toContain('# keep me');
+    expect(once).toContain('apiKeyEnv: ANTHROPIC_API_KEY');
+    expect(once).toContain('baseURL: http://localhost:3001/v1');
+    expect(once).not.toContain('http://old:1/v1');
+    expect(once).not.toContain('stale');
+    expect(once).toContain('provider: omnipix');
+    expect(once).not.toContain('reasoningEffort');
+    expect(once).toContain('other: { a: 1 }');
+    expect(renderFile(file, once)).toBe(once);
+  });
+
+  it('renders structured YAML from an empty or comment-only document', () => {
+    const file = {
+      path: '/tmp/settings.yaml',
+      format: 'yaml' as const,
+      value: { a: { b: [1, 2] }, c: undefined },
+    };
+    expect(renderFile(file, '')).toBe('a:\n  b:\n    - 1\n    - 2\n');
+    expect(renderFile(file, '# only a comment\n')).toContain('a:\n  b:\n    - 1\n    - 2\n');
+  });
+
+  it('refuses to merge structured YAML into a document it cannot parse', () => {
+    const file = {
+      path: '/tmp/settings.yaml',
+      format: 'yaml' as const,
+      value: { a: 1 },
+    };
+    expect(() => renderFile(file, 'a: [1, 2\n')).toThrow(/cannot be parsed/);
+    expect(() => renderFile(file, '- just\n- a list\n')).toThrow(/not a mapping/);
+  });
+
+  it('replaces conflicting Codex TOML settings and retains unrelated tables', () => {
+    const existing = [
+      '# personal config',
+      'model = "old"',
+      'model_provider = "old"',
+      '',
+      '[model_providers.omnipix]',
+      'name = "Old"',
+      'base_url = "https://old.invalid/v1"',
+      '',
+      '[mcp_servers.personal]',
+      'command = "keep-me"',
+      '',
+    ].join('\n');
+    const generated = [
+      '# omnipix:start',
+      'model = "coder"',
+      'model_provider = "omnipix"',
+      '',
+      '[model_providers.omnipix]',
+      'name = "OmniPix"',
+      'base_url = "http://localhost:3000/v1"',
+      '# omnipix:end',
+      '',
+    ].join('\n');
+    const first = renderFile({
+      path: '/unused',
+      format: 'toml',
+      content: generated,
+    }, existing);
+    const second = renderFile({
+      path: '/unused',
+      format: 'toml',
+      content: generated,
+    }, first);
+    expect(second).toBe(first);
+    expect(first).toContain('# personal config');
+    expect(first).toContain('[mcp_servers.personal]\ncommand = "keep-me"');
+    expect(first.match(/^model =/gm)).toHaveLength(1);
+    expect(first.match(/^\[model_providers\.omnipix\]$/gm)).toHaveLength(1);
+  });
+
+  it('keeps generated root TOML keys in the root region when the file ends in a table', () => {
+    const existing = [
+      '# personal config',
+      'sandbox_mode = "workspace-write"',
+      '',
+      '[mcp_servers.personal]',
+      'command = "keep-me"',
+      'args = ["--serve"]',
+      '',
+    ].join('\n');
+    const generated = [
+      '# omnipix:start',
+      'model = "coder"',
+      'model_provider = "omnipix"',
+      '',
+      '[model_providers.omnipix]',
+      'name = "OmniPix"',
+      'base_url = "http://localhost:3000/v1"',
+      '# omnipix:end',
+      '',
+    ].join('\n');
+    const first = renderFile({
+      path: '/unused',
+      format: 'toml',
+      content: generated,
+    }, existing);
+    const second = renderFile({
+      path: '/unused',
+      format: 'toml',
+      content: generated,
+    }, first);
+    expect(second).toBe(first);
+
+    // Root-level keys must appear BEFORE the first table header, otherwise
+    // TOML assigns them to that table.
+    const lines = first.split('\n');
+    const firstHeader = lines.findIndex(line => /^\[[^\]]+\]$/.test(line));
+    const modelLine = lines.findIndex(line => line === 'model = "coder"');
+    const providerLine = lines.findIndex(line => line === 'model_provider = "omnipix"');
+    expect(firstHeader).toBeGreaterThan(-1);
+    expect(modelLine).toBeGreaterThan(-1);
+    expect(modelLine).toBeLessThan(firstHeader);
+    expect(providerLine).toBeGreaterThan(-1);
+    expect(providerLine).toBeLessThan(firstHeader);
+    expect(first).toContain('sandbox_mode = "workspace-write"');
+    expect(first).toContain('[mcp_servers.personal]\ncommand = "keep-me"\nargs = ["--serve"]');
+    expect(first).toContain('[model_providers.omnipix]');
+  });
+
+  it('only strips root TOML keys that the generated root region sets', () => {
+    const existing = [
+      'name = "my personal codex"',
+      'model = "old"',
+      '',
+      '[mcp_servers.personal]',
+      'command = "keep-me"',
+      '',
+    ].join('\n');
+    const generated = [
+      '# omnipix:start',
+      'model = "coder"',
+      '',
+      '[model_providers.omnipix]',
+      'name = "OmniPix"',
+      '# omnipix:end',
+      '',
+    ].join('\n');
+    const first = renderFile({
+      path: '/unused',
+      format: 'toml',
+      content: generated,
+    }, existing);
+    // The generated TABLE sets `name`, but the user's ROOT-level `name` is a
+    // different key and must survive.
+    expect(first).toContain('name = "my personal codex"');
+    expect(first.match(/^model =/gm)).toHaveLength(1);
+    expect(first).toContain('model = "coder"');
+  });
+
+  it('does not write any file when a later file in the batch fails to merge', () => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'omnipix-cli-'));
+    temporary.push(directory);
+    const good = path.join(directory, 'good.json');
+    const bad = path.join(directory, 'bad.json');
+    fs.writeFileSync(bad, '{ this is not json');
+    expect(() => applyGeneratedFiles([
+      { path: good, format: 'json', value: { enabled: true } },
+      { path: bad, format: 'json', value: { enabled: true } },
+    ], false)).toThrow('cannot be parsed safely');
+    expect(fs.existsSync(good)).toBe(false);
+    expect(fs.readFileSync(bad, 'utf8')).toBe('{ this is not json');
+  });
+
+  it('merges an AtomCode config: root key above existing tables, other providers kept', () => {
+    // A user with a DeepSeek provider already configured runs setup-atomcode:
+    // `default_provider` must land in the root region (a key appended after
+    // `[providers.deepseek]` would become that table's key), the deepseek
+    // table must survive, and a stale `[providers.omnipix]` is replaced.
+    const existing = [
+      'default_provider = "deepseek"',
+      'auto_update = true',
+      '',
+      '[providers.deepseek]',
+      'type = "openai"',
+      'api_key = "sk-keep"',
+      'model = "deepseek-chat"',
+      '',
+      '[providers.omnipix]',
+      'type = "openai"',
+      'model = "stale-model"',
+      '',
+    ].join('\n');
+    const generated = [
+      'default_provider = "omnipix"',
+      '',
+      '[providers.omnipix]',
+      'type = "openai"',
+      'base_url = "http://localhost:3000/v1"',
+      'api_key = "omnipix-test-key"',
+      'model = "fast-coder"',
+      'context_window = 131072',
+    ].join('\n');
+    const merged = renderFile({ path: '/unused', format: 'toml', content: generated }, existing);
+    const lines = merged.split('\n');
+    const firstTable = lines.findIndex(line => line.startsWith('['));
+    expect(lines.slice(0, firstTable)).toContain('default_provider = "omnipix"');
+    expect(lines.slice(0, firstTable)).toContain('auto_update = true');
+    expect(merged.match(/^default_provider =/gm)).toHaveLength(1);
+    expect(merged).toContain('[providers.deepseek]\ntype = "openai"\napi_key = "sk-keep"');
+    expect(merged.match(/^\[providers\.omnipix\]$/gm)).toHaveLength(1);
+    expect(merged).not.toContain('stale-model');
+    expect(merged).toContain('context_window = 131072');
+    expect(renderFile({ path: '/unused', format: 'toml', content: generated }, merged)).toBe(merged);
+  });
+
+  it('merges a Reasonix config: replaces only the [[providers]] entry with the same name', () => {
+    // Reasonix keeps every endpoint as a `[[providers]]` array entry. A rerun
+    // must swap the stale omnipix entry (and its sub-table) for the new one
+    // and leave the deepseek entry, the [desktop] table and root keys alone.
+    const existing = [
+      'config_version = 1',
+      'default_model = "deepseek/deepseek-flash"',
+      '',
+      '[desktop]',
+      'provider_access = ["deepseek"]',
+      '',
+      '[[providers]]',
+      'name        = "deepseek"',
+      'kind        = "openai"',
+      'api_key_env = "DEEPSEEK_API_KEY"',
+      '',
+      '[[providers]]',
+      "name = 'omnipix'",
+      'base_url = "http://stale:9/v1"',
+      '',
+      '[providers.model_overrides]',
+      'stale = { context_window = 1 }',
+      '',
+      '[[plugins]]',
+      'name = "omnipix"',
+      'command = "keep-me"',
+      '',
+    ].join('\n');
+    const generated = [
+      'default_model = "omnipix/auto"',
+      '',
+      '[[providers]]',
+      'name = "omnipix"',
+      'kind = "openai"',
+      'base_url = "http://localhost:3001/v1"',
+      'models = ["auto"]',
+    ].join('\n');
+    const merged = renderFile({ path: '/unused', format: 'toml', content: generated }, existing);
+    const lines = merged.split('\n');
+    const firstTable = lines.findIndex(line => line.startsWith('['));
+    expect(lines.slice(0, firstTable)).toContain('default_model = "omnipix/auto"');
+    expect(lines.slice(0, firstTable)).toContain('config_version = 1');
+    expect(merged.match(/^default_model =/gm)).toHaveLength(1);
+    expect(merged).toContain('[desktop]\nprovider_access = ["deepseek"]');
+    expect(merged).toContain('name        = "deepseek"\nkind        = "openai"');
+    expect(merged).toContain('[[plugins]]\nname = "omnipix"\ncommand = "keep-me"');
+    expect(merged.match(/^\[\[providers\]\]$/gm)).toHaveLength(2);
+    expect(merged).not.toContain('stale');
+    expect(merged).toContain('base_url = "http://localhost:3001/v1"');
+    expect(renderFile({ path: '/unused', format: 'toml', content: generated }, merged)).toBe(merged);
+  });
+
+  it('creates a timestamped backup before replacing a real file', () => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'omnipix-cli-'));
+    temporary.push(directory);
+    const target = path.join(directory, 'config.toml');
+    fs.writeFileSync(target, 'user_setting = true\n');
+    const result = applyGeneratedFile({
+      path: target,
+      format: 'toml',
+      content: '# omnipix:start\nmodel = "auto"\n# omnipix:end\n',
+    }, false);
+    expect(result.backupPath).toBeTruthy();
+    expect(fs.readFileSync(result.backupPath!, 'utf8')).toBe('user_setting = true\n');
+    expect(fs.readFileSync(target, 'utf8')).toContain('user_setting = true');
+    expect(fs.readFileSync(target, 'utf8')).toContain('model = "auto"');
+  });
+
+  it('merges Cordis profile overlays by id and keeps other providers and comments', () => {
+    const file = { format: 'yaml-entries' as const, path: 'cordis.patch.yml',
+      value: { 'llm-pi-ai': { providers: { omnipix: { apiKeyEnv: 'OMNIPIX_API_KEY' } } } } };
+    const existing = '# user overlay\n- id: llm-pi-ai\n  config:\n    providers:\n      existing: {apiKeyEnv: KEEP}\n- id: hmr\n  disabled: true\n';
+    const rendered = renderFile(file, existing);
+    expect(rendered).toContain('# user overlay');
+    expect(rendered).toContain('KEEP');
+    expect(rendered).toContain('disabled: true');
+    expect(rendered).toContain('OMNIPIX_API_KEY');
+    expect(renderFile(file, rendered)).toBe(rendered);
+    expect(() => renderFile(file, 'other: mapping')).toThrow('Expected a YAML patch sequence');
+  });
+
+  it('restores earlier files if a later replacement fails, and a retry succeeds', () => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'omnipix-cli-'));
+    temporary.push(directory);
+    const files = ['existing', 'new', 'locked'].map(name => ({
+      path: path.join(directory, name), format: 'env' as const, sensitive: true, content: 'KEY=new\n',
+    }));
+    fs.writeFileSync(files[0].path, 'KEY=old\n');
+    const renameSync = fs.renameSync;
+    const rename = vi.spyOn(fs, 'renameSync').mockImplementation((from, to) => {
+      if (to === files[2].path) throw new Error('file locked');
+      renameSync(from, to);
+    });
+    try {
+      expect(() => applyGeneratedFiles(files, false)).toThrow('file locked');
+    } finally { rename.mockRestore(); }
+    expect(fs.readFileSync(files[0].path, 'utf8')).toBe('KEY=old\n');
+    expect(fs.existsSync(files[1].path)).toBe(false);
+    expect(fs.existsSync(files[2].path)).toBe(false);
+    expect(fs.readdirSync(directory).some(file => file.endsWith('.tmp'))).toBe(false);
+    expect(applyGeneratedFiles(files, false).every(file => file.changed)).toBe(true);
+  });
+
+  it('does not write in dry-run mode', () => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'omnipix-cli-'));
+    temporary.push(directory);
+    const target = path.join(directory, 'new.json');
+    const result = applyGeneratedFile({
+      path: target,
+      format: 'json',
+      value: { enabled: true },
+    }, true);
+    expect(result.changed).toBe(true);
+    expect(fs.existsSync(target)).toBe(false);
+  });
+});
